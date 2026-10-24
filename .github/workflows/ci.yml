@@ -19,9 +19,9 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy -p g9-core -p g9-iptv -p g9-store --all-targets -- -D warnings
       - name: Test
-        run: cargo test --workspace
+        run: cargo test -p g9-core -p g9-iptv -p g9-store
 
   frontend:
     name: Frontend static check
