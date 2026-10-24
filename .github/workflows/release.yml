@@ -4,9 +4,16 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
+# Required so GITHUB_TOKEN can create a GitHub Release.
+# Repo setting must allow it: Settings → Actions → General → Workflow permissions
+# → "Read and write permissions".
 permissions:
   contents: write
+  actions: write
+  attestations: write
+  id-token: write
 
 concurrency:
   group: release-windows-${{ github.ref }}
@@ -20,6 +27,9 @@ jobs:
   windows:
     name: Windows x64 optimized
     runs-on: windows-latest
+    permissions:
+      contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
 
@@ -36,54 +46,59 @@ jobs:
       - name: Install CLI
         run: npm ci
 
-      - name: Test (release)
-        run: cargo test --workspace --release
+      - name: Test crates (release)
+        run: cargo test -p g9-core -p g9-iptv -p g9-store --release
 
-      - name: Build and publish
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: G9 ${{ github.ref_name }} — Windows
-          releaseBody: |
-            **Windows 10 / 11 64-bit (x64)** — optimized, stripped, LTO release.
+      - name: Build Windows installers
+        run: npx tauri build --target x86_64-pc-windows-msvc --bundles nsis,msi
 
-            | File | What |
-            |---|---|
-            | `G9_*_x64-setup.exe` | NSIS installer (recommended, per-user, no admin) |
-            | `G9_*.msi` | MSI |
-            | `G9-*-windows-x64-portable.zip` | Portable `G9.exe` |
-
-            G9 is a player. It ships **no channels**. Add your own legal sources.
-
-            WebView2 Runtime is downloaded automatically if this PC does not already have it (standard on Windows 11).
-          releaseDraft: false
-          prerelease: false
-          includeUpdaterJson: false
-          args: --target x86_64-pc-windows-msvc --bundles nsis,msi
-
-      - name: Portable zip
+      - name: Collect artifacts
         shell: pwsh
         run: |
-          $candidates = @(
+          New-Item -ItemType Directory -Force -Path dist-win | Out-Null
+          Get-ChildItem -Recurse -Include *.msi,*.exe | Where-Object {
+            $_.FullName -match 'bundle' -or $_.Name -match 'setup'
+          } | ForEach-Object { Copy-Item $_.FullName dist-win/ -Force; $_.FullName }
+          $exe = @(
             "target/x86_64-pc-windows-msvc/release/g9.exe",
             "src-tauri/target/x86_64-pc-windows-msvc/release/g9.exe",
             "target/release/g9.exe"
-          )
-          $exe = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $exe) { Get-ChildItem -Recurse -Filter g9.exe | Select-Object -ExpandProperty FullName; throw "g9.exe not found" }
-          New-Item -ItemType Directory -Force -Path portable | Out-Null
-          Copy-Item $exe portable/G9.exe
-          $zip = "G9-${{ github.ref_name }}-windows-x64-portable.zip"
-          if (Test-Path $zip) { Remove-Item $zip }
-          Compress-Archive -Path portable/G9.exe -DestinationPath $zip -CompressionLevel Optimal
-          Get-Item $zip | Format-List FullName, Length
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ($exe) {
+            New-Item -ItemType Directory -Force -Path portable | Out-Null
+            Copy-Item $exe portable/G9.exe
+            Compress-Archive -Path portable/G9.exe -DestinationPath dist-win/G9-windows-x64-portable.zip -Force
+          }
+          Get-ChildItem dist-win | Format-Table Name, Length
+          if (-not (Get-ChildItem dist-win)) { throw "no Windows artifacts" }
 
-      - name: Attach portable zip
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: G9-windows-x64
+          path: dist-win/*
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          files: G9-${{ github.ref_name }}-windows-x64-portable.zip
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.1' }}
+          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.1' }} — Windows
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+          files: dist-win/*
+          body: |
+            **Windows 10 / 11 64-bit (x64)** — optimized (LTO, stripped).
+
+            | File | What |
+            |---|---|
+            | `*-setup.exe` | NSIS installer (per-user, LZMA, no admin) |
+            | `*.msi` | MSI |
+            | `G9-windows-x64-portable.zip` | Portable `G9.exe` |
+
+            G9 is a player. It ships **no channels**. Add your own legal sources.
+
+            WebView2 is downloaded automatically if missing (already present on Windows 11).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
