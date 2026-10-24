@@ -1,0 +1,10 @@
+[package]
+name = "g9-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared types, errors, and version info for G9"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }

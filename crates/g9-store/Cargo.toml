@@ -1,0 +1,16 @@
+[package]
+name = "g9-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SQLite storage for G9 channels, sources, and history"
+
+[dependencies]
+g9-core = { workspace = true }
+g9-iptv = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

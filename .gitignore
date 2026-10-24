@@ -1,0 +1,15 @@
+/target
+/dist
+/node_modules
+/src-tauri/target
+/src-tauri/gen
+**/*.rs.bk
+.DS_Store
+.env
+.idea
+.vscode
+coverage
+*.log
+.cache
+.local
+}

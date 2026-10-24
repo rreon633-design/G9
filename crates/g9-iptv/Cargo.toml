@@ -1,0 +1,12 @@
+[package]
+name = "g9-iptv"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "M3U/M3U8 playlist parser and IPTV helpers for G9"
+
+[dependencies]
+g9-core = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }

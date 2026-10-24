@@ -1,0 +1,32 @@
+[package]
+name = "g9"
+version.workspace = true
+description = "G9 — files, streams, live TV. One player."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+default-run = "g9"
+
+[lib]
+name = "g9_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+g9-core = { workspace = true }
+g9-iptv = { workspace = true }
+g9-store = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "gzip"] }
+url = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

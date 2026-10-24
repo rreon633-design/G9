@@ -1,0 +1,10 @@
+#EXTM3U
+#PLAYLIST:G9 demo clips (not TV channels — Creative Commons samples)
+#EXTINF:-1 group-title="Demo clips",Big Buck Bunny (MP4)
+https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+#EXTINF:-1 group-title="Demo clips",Sintel (MP4)
+https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4
+#EXTINF:-1 group-title="Demo clips",Tears of Steel (MP4)
+https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4
+#EXTINF:-1 group-title="Demo clips",Mux HLS test stream
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8

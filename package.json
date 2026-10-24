@@ -1,0 +1,15 @@
+{
+  "name": "g9",
+  "private": true,
+  "version": "0.1.0",
+  "description": "G9 — files, streams, live TV. One player.",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "ci": "bash scripts/ci-local.sh"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.0"
+  }
+}
