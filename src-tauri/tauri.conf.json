@@ -30,7 +30,8 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "msi"],
+    "createUpdaterArtifacts": false,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -40,11 +41,18 @@
     ],
     "category": "Entertainment",
     "shortDescription": "Files, streams, live TV. One player.",
-    "longDescription": "G9 is a desktop media player for local files and live streams you supply. It ships no channels or playlists.",
+    "longDescription": "G9 is a desktop media player for local files and live streams you supply. It ships no channels or playlists. Windows 10/11 64-bit.",
     "copyright": "Copyright G9 contributors",
-    "linux": {
-      "appimage": {
-        "bundleMediaFramework": false
+    "windows": {
+      "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "compression": "lzma",
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
       }
     }
   }
