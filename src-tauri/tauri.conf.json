@@ -12,12 +12,14 @@
       {
         "label": "main",
         "title": "G9",
-        "width": 1320,
-        "height": 840,
+        "width": 1400,
+        "height": 820,
         "minWidth": 960,
-        "minHeight": 620,
-        "backgroundColor": "#f3f3f5",
-        "center": true
+        "minHeight": 580,
+        "backgroundColor": "#070b12",
+        "center": true,
+        "decorations": false,
+        "transparent": false
       }
     ],
     "security": {
