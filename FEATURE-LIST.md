@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.10.0** · source: `main`  
+Last updated: 2026-10-25 · release **v0.10.1** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -260,35 +260,94 @@ libplacebo-grade Anime4K/FSRCNNX chain does not. The rest are engine-level or ac
 
 ## Fun Mode (v0.10.0)
 
+### Shipped
+
 | Feature | State |
 |---|---|
-| Netflix-shaped wall (hero, Continue watching, ranked Top 10, rails) | shipped |
-| Movies · Web series · Anime · Drama · Manga/Manhwa/Manhua tabs | shipped |
-| Live search across every enabled source | shipped |
-| See all → grid with quality / newest / rating sort | shipped |
-| Details sheet: synopsis, source chips, episode & chapter lists, My List, Download | shipped |
-| Sources dialog: add/remove/toggle addons, feeds and MangaDex | shipped |
-| Stremio addon client (manifest, catalog, meta, stream, subtitles) | shipped |
-| RSS magnet feeds (Nyaa-style namespaces, seeders, size) | shipped |
-| yt-dlp resolver (`-J` → streams + required headers) | shipped |
-| MangaDex reader (search, chapters, pages, reading progress) | shipped |
-| Playback preferences (quality, subtitles, autoplay, fallback) | shipped |
-| My List in SQLite + a My List tab (sort by added / A–Z / newest) | shipped |
-| Watching tab that resumes the exact episode and second | shipped |
-| Real position tracking (8 s), auto *watched* at 90 % | shipped |
-| Watched ✓ / Following • marks on cards, Following rail | shipped |
-| Not interested (hidden) with a one-click Undo under the wall | shipped |
-| Merged search across sources, deduped, per-card source count | shipped |
-| Search recents, "What I added" scope, typo tolerance | shipped |
-| Filters on See all (genre / year / quality) with live counts | shipped |
-| More like this, cast row and person pages | shipped |
-| Keyboard navigation on the wall, right-click card menu | shipped |
-| Autoplay next episode (10 s card) + "Still watching?" | shipped |
-| Quality cap (data saver) and audio-language preference | shipped |
-| Sleep timer with a nav countdown chip | shipped |
-| Mini player bar (LIVE/PLAYING, pause, resume, stop) | shipped |
-| Settings hub, backup/restore JSON, cache clear, `g9://` links | shipped |
-| First-run wizard | shipped |
-| Torrent streaming for magnet results | planned, v0.11.0 |
-| Offline cache, profiles + PIN/Kids, collections, rail pinning | planned, v0.12.0 |
-| Community site scrapers (AnimePahe, AnimeHeaven, TokyoInsider) | opt-in, v0.13.0 |
+| Netflix-shaped wall (hero, Continue watching, ranked Top 10, rails) | shipped · 0.8.0 |
+| Movies · Web series · Anime · Drama · Manga tabs | shipped · 0.8.0 |
+| Live search across every enabled source | shipped · 0.8.0 |
+| See all → grid with quality / newest / rating sort | shipped · 0.8.0 |
+| Details sheet: synopsis, source chips, episode & chapter lists, My List, Download | shipped · 0.8.0 |
+| Sources dialog: add/remove/toggle addons, feeds and MangaDex | shipped · 0.8.0 |
+| Stremio addon client (manifest, catalog, meta, stream, subtitles) | shipped · 0.8.0 |
+| RSS magnet feeds (Nyaa-style namespaces, seeders, size) | shipped · 0.8.0 |
+| yt-dlp resolver (`-J` → streams + required headers) | shipped · 0.8.0 |
+| MangaDex reader (search, chapters, pages, reading progress) | shipped · 0.8.0 |
+| Playback preferences (quality, subtitles, autoplay, fallback) | shipped · 0.8.0 |
+| **Autoplay next episode + 10 s "Up next" card** | shipped · 0.10.0 |
+| **Per-episode resume** (position every 8 s, seeks back on open) | shipped · 0.10.0 |
+| **Watching page** (Continue watching tab) | shipped · 0.10.0 |
+| **Filters on See all** (genre / year / quality, live counts) | shipped · 0.10.0 |
+| **Merged search, dedupe, per-card source badges** | shipped · 0.10.0 |
+| **"More like this"** (genre + cast overlap) | shipped · 0.10.0 |
+| **Cast row + person pages** | shipped · 0.10.0 |
+| **Keyboard navigation on the wall** | shipped · 0.10.0 |
+| **My List in SQLite + My List tab** (schema v4) | shipped · 0.10.0 |
+| **Watched / unwatched marks, auto at 90 %** | shipped · 0.10.0 |
+| **"Not interested" + Undo** | shipped · 0.10.0 |
+| **Quality cap / data saver** (picks the stream) | shipped · 0.10.0 |
+| **Audio language preference** (matches stream labels) | shipped · 0.10.0 |
+| **Subtitle preference** (auto / language / off → the real picker) | shipped · 0.10.0 |
+| **Source fallback on error** (next stream, cap-aware) | shipped · 0.10.0 |
+| **Sleep timer + "Still watching?"** | shipped · 0.10.0 |
+| **Live playback badge** (mini bar) | shipped · 0.10.0 |
+| **Sort in My List + Watching** | shipped · 0.10.0 |
+| **Backup / restore JSON** (merge restore) | shipped · 0.10.0 |
+| **"New this week"** rail | shipped · 0.10.0 |
+| **Refresh chip** + **cache clear** | shipped · 0.10.0 |
+| **Fuller title page** (cast, genres, thumbs, more-like-this) | shipped · 0.10.0 |
+| **Search recents, "What I added" scope, typo tolerance** | shipped · 0.10.0 |
+| **In-app mini player** (pause / resume / stop) | shipped · 0.10.0 |
+| **Resume chip + progress bar on cards** | shipped · 0.10.0 |
+| **Episode stills, air date, runtime** | shipped · 0.10.0 |
+| **Follow series + card badge + Following rail** | shipped · 0.10.0 |
+| **"Because you watched"** rail | shipped · 0.10.0 |
+| **Genre browse** from a title's genre chips | shipped · 0.10.0 |
+| **Card right-click menu** | shipped · 0.10.0 |
+| **Settings hub** (Playback / Library / Sources / Data) | shipped · 0.10.0 |
+| **First-run wizard** | shipped · 0.10.0 |
+| **`g9://` title links** (copy + open in-app) | shipped · 0.10.0 |
+| **Keyboard + ARIA labels** on the new controls | shipped (partial) · 0.10.0 |
+
+### Not implemented
+
+The 57-feature brief was taken in one go; **33 of those 57 are still open**. Nothing below is
+half-built: each needs a subsystem G9 does not have yet, so it stays listed rather than faked.
+
+| Feature | Why it is not in yet | Target |
+|---|---|---|
+| **Magnet playback** (torrent streaming) | needs the embedded librqbit engine + buffer gate | 0.11.0 |
+| **Offline cache + offline playback** | needs a disk cache, a store table and a download manager for streams | 0.11.0 |
+| **Season / volume download** | needs per-episode job fan-out on top of that cache | 0.11.0 |
+| **Swap source mid-play** | depends on the torrent engine for the magnet half | 0.11.0 |
+| **Next / previous episode in the transport bar** | player transport is queue-shaped, not episode-shaped | 0.11.0 |
+| **Skip intro / recap** | needs chapter markers or an intro database per title | 0.11.0 |
+| **Per-title subtitle offset memory** | delay is global today; needs a per-title row | 0.11.0 |
+| **Source health / priority ordering** | needs per-source probe results stored per addon | 0.11.0 |
+| **Source diagnostics (timings, failures)** | needs the same probe data surfaced in Settings | 0.11.0 |
+| **Rate-limit budget per addon** | needs a token bucket shared by every request | 0.11.0 |
+| **Addon collection import** | Stremio collection JSON → sources, with duplicate rules | 0.11.0 |
+| **Local folder as a source** | needs a scanner + metadata/artwork matching | 0.11.0 |
+| **Profiles + Kids** | needs a profile column on every store table | 0.12.0 |
+| **PIN lock** | depends on profiles | 0.12.0 |
+| **Content-rating filter** | depends on profiles + rating metadata | 0.12.0 |
+| **Collections** | needs a new store table and rail management | 0.12.0 |
+| **Reorder / pin rails** | needs a per-user rail order (`fun_lib`-style row) | 0.12.0 |
+| **Poster / artwork override** | needs a per-title image column + picker | 0.12.0 |
+| **Muted trailer / hover previews** | needs a muted second player + asset policy | 0.12.0 |
+| **Filter inside My List + Watching** | sort shipped; filter needs facet data on saved rows | 0.12.0 |
+| **Prefetch, skeletons, virtualised rails** | wall is fully painted today; needs a windowing rewrite | 0.12.0 |
+| **"Recently added" rail** | My List sorted by *Added* covers the use case | 0.12.0 |
+| **Per-catalog genre rails** | needs a genre query per catalog in every provider | 0.12.0 |
+| **Airing calendar** | needs episode air dates from a metadata source | 0.12.0 |
+| **Full genre landing pages** | genre chips open a filter today; a page needs rails per genre | 0.12.0 |
+| **Send to new window / TV Mode** | needs a handoff channel between windows | 0.12.0 |
+| **OS deep links + jump list** | needs `g9://` registered in the installer and a Windows jump list | 0.13.0 |
+| **Accessibility pass (full)** | labels and keyboard shipped; no audit, high-contrast or reduced-motion yet | 0.13.0 |
+| **Community site scrapers (AnimePahe, AnimeHeaven, TokyoInsider)** | opt-in tier-C providers, deliberately last | 0.13.0 |
+
+Count: **24 shipped outright + 1 partial** of the 57 in v0.10.0, **17 of the 57** waiting on the
+torrent/cache work (0.11.0), **12** on profiles and library metadata (0.12.0), **3** on Windows
+shell integration and the a11y audit (0.13.0). The other 32 shipped features in the table above
+predate the brief.

@@ -7,6 +7,24 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 - Nothing yet.
 
+## [0.10.1] — 2026-10-25
+
+Two switches in the Playback sheet were shipped in 0.8.0 and never did anything. They do now.
+
+### Fixed
+
+- **Fallback to next source** — when a stream 403s or stalls, the player now asks Fun Mode before
+  it gives up, and Fun Mode moves to the next stream that fits your quality cap (saying which
+  source it is trying). With the preference off, you get the same short error as before.
+- **Subtitles preference** — *Auto / Hindi / English / Off* now reaches the real subtitle search
+  (it was hard-wired to `en`) and turns auto-attach off when set to *Off*.
+
+### Changed
+
+- `FEATURE-LIST.md` now carries the full status of the 57-feature brief: **24 shipped** in 0.10.0,
+  **33 open**, each with the reason it needs a subsystem G9 does not have yet and the release it
+  is planned for.
+
 ## [0.10.0] — 2026-10-25
 
 Fun Mode becomes something you can run a series in: it remembers what you watch, what you

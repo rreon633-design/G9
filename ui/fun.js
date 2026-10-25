@@ -658,8 +658,10 @@
     var eps = (payload && payload.details && payload.details.episodes) || [];
     var at = -1;
     for (var i = 0; i < eps.length; i++) if (episode && eps[i].id === episode.id) at = i;
+    var ranked = rankStreams(streams);
     state.playCtx = {
       payload: payload, item: item, list: eps, index: at,
+      streams: ranked, si: 0,
       resume: payload && payload.progress && at >= 0 &&
         payload.progress.episode_id === episode.id ? payload.progress.position : 0
     };
@@ -682,6 +684,10 @@
     invoke("fun_streams", { id: id, kind: item.kind || null, episode: episode ? episode.id : null })
       .then(function (streams) {
         if (!streams || !streams.length) { toast("No sources for this one"); return; }
+        var ranked = rankStreams(streams);
+        state.playCtx = Object.assign(state.playCtx || {}, {
+          item: item, streams: ranked, si: 0
+        });
         startStream(pickStream(streams), item, episode);
       })
       .catch(function (err) { toast(String(err || "No sources for this one").slice(0, 90)); });
@@ -952,6 +958,7 @@
         b.addEventListener("click", function () {
           prefs[k] = b.getAttribute("data-v");
           try { localStorage.setItem("g9.fun.prefs", JSON.stringify(prefs)); } catch (e) {}
+          if (k === "subs") applySubPrefs();
           row.querySelectorAll(".fun-seg").forEach(function (x) {
             x.setAttribute("aria-pressed", String(x === b));
           });
@@ -1093,6 +1100,7 @@
     if (tvBtn) tvBtn.classList.remove("on");
     if (b && b.showChrome) b.showChrome();
     loadRecents();
+    applySubPrefs();
     sync().then(function () { paintRows(); });
     maybeWizard();
     startMiniWatch();
@@ -2023,6 +2031,47 @@
     paint();
   }
 
+
+  /// The player could not play the current stream. With "Fallback to next source"
+  /// on, move to the next HTTP stream from the same title instead of failing.
+  function onPlaybackError(reason) {
+    var ctx = state.playCtx;
+    if (!ctx || !ctx.streams || !ctx.streams.length) return false;
+    if (prefs.fallback === "off") return false;
+    var at = Number(ctx.si) || 0;
+    var cap = capRank();
+    var pickAt = -1;
+    // First pass: stay under the data cap. Second pass: anything that plays.
+    for (var pass = 0; pass < 2 && pickAt < 0; pass++) {
+      for (var i = at + 1; i < ctx.streams.length; i++) {
+        var cand = ctx.streams[i];
+        if (cand.magnet) continue; // magnets need the torrent engine
+        if (pass === 0 && rankQ(cand.quality) > cap) continue;
+        pickAt = i;
+        break;
+      }
+    }
+    if (pickAt < 0) {
+      if (at > 0) toast("No other source answered");
+      return false;
+    }
+    var next = ctx.streams[pickAt];
+    ctx.si = pickAt;
+    toast("That source did not play — trying " + (next.provider || "another") +
+      (next.label ? " · " + next.label : ""));
+    startStream(next, ctx.item, (ctx.list && ctx.index >= 0) ? ctx.list[ctx.index] : state.now && state.now.episode);
+    return true;
+  }
+
+  /// Apply the Playback sheet's subtitle preference to the real player.
+  function applySubPrefs() {
+    var b = bridge();
+    if (!b || !b.setAutoSubs) return;
+    if (prefs.subs === "off") { b.setAutoSubs(false); return; }
+    b.setSubLanguage(prefs.subs === "hi" ? "hi" : "en");
+    b.setAutoSubs(true);
+  }
+
   // ---------------------------------------------------------------- context menu
 
   function openCardMenu(item, x, y) {
@@ -2311,7 +2360,7 @@
     show: show, hide: hide, toggle: toggle, visible: visible,
     openItem: openItem, openLink: openLink, search: function (q) { state.query = q; runSearch(); },
     setSleepTimer: setSleepTimer, sync: sync, onEnded: onEnded,
-    saveProgress: saveProgressNow, state: state
+    saveProgress: saveProgressNow, onPlaybackError: onPlaybackError, state: state
   };
   wire();
 })();

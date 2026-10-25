@@ -148,6 +148,11 @@
   }
   function fail(e) {
     var msg = shortError(e);
+    // Fun Mode may swap to another source instead of showing an error.
+    if (window.G9Fun && typeof window.G9Fun.onPlaybackError === "function" &&
+        window.G9Fun.onPlaybackError(msg)) {
+      return;
+    }
     toast(msg);
     var meta = document.getElementById("info-meta");
     var modal = document.getElementById("info-modal");
@@ -1931,6 +1936,9 @@
       .then(applyVtt)
       .catch(fail);
   }
+
+  // Fun Mode's subtitle preference (auto / a language / off) feeds this.
+  var subLang = "en";
 
   function maybeAutoSubs() {
     if (!state.autoSubs) return;
@@ -5281,7 +5289,7 @@
     if (list) list.innerHTML = '<p class="empty">Searching…</p>';
     modal.hidden = false;
     showChrome();
-    invoke("find_subtitles", { query: q, language: "en" })
+    invoke("find_subtitles", { query: q, language: subLang })
       .then(paintSubsHits)
       .catch(function () {
         paintSubsHits([]);
@@ -5870,6 +5878,15 @@
         time: video.currentTime || 0,
         duration: isFinite(video.duration) ? video.duration : 0
       };
+    },
+    // Subtitle preferences from Fun Mode's Playback sheet.
+    setSubLanguage: function (lang) {
+      var next = String(lang || "en").toLowerCase().slice(0, 5);
+      subLang = /^[a-z]{2}/.test(next) ? next.slice(0, 2) : "en";
+    },
+    setAutoSubs: function (on) {
+      state.autoSubs = !!on;
+      try { localStorage.setItem("g9-subs", on ? "1" : "0"); } catch (e) {}
     },
     // Jump to a position (Fun Mode resume, "skip to next").
     seek: function (seconds) {
