@@ -3,6 +3,11 @@
 All notable changes to G9. Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `v*` tag.
 
+## [Unreleased]
+
+- Dismissing a Save dialog no longer falls back to a browser download (save results are now
+  `path` / `cancelled` / `unsupported`).
+
 ## [0.3.1] — 2026-10-25
 
 Fixes for playback sound, captures, and the seek bar.

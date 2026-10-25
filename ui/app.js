@@ -579,9 +579,11 @@
       })
       .catch(function () {});
   }
+  /// { path } when chosen, { cancelled } when the dialog was dismissed,
+  /// { unsupported } when there is no native dialog (browser fallback).
   function pickSave(name, label, ext) {
     var api = tauri();
-    if (!api || !api.dialog || !api.dialog.save) return Promise.resolve(null);
+    if (!api || !api.dialog || !api.dialog.save) return Promise.resolve({ unsupported: true });
     var path = name;
     if (picsDir) {
       var sep = picsDir.indexOf("\\") >= 0 ? "\\" : "/";
@@ -589,8 +591,11 @@
     }
     return api.dialog
       .save({ defaultPath: path, filters: [{ name: label, extensions: [ext] }] })
+      .then(function (chosen) {
+        return chosen ? { path: chosen } : { cancelled: true };
+      })
       .catch(function () {
-        return null;
+        return { cancelled: true };
       });
   }
   function downloadBlob(blob, name) {
@@ -630,7 +635,9 @@
       data = null; // protected/foreign stream: canvas is tainted
     }
     destP
-      .then(function (dest) {
+      .then(function (pick) {
+        if (pick.cancelled) return null;
+        var dest = pick.path;
         if (data) {
           if (!dest) {
             var bin = atob(data.split(",")[1] || "");
@@ -961,7 +968,9 @@
   function saveRecording(blob) {
     var name = safeName(".webm");
     pickSave(name, "WebM video", "webm")
-      .then(function (dest) {
+      .then(function (pick) {
+        if (pick.cancelled) return null;
+        var dest = pick.path;
         if (!dest) {
           downloadBlob(blob, name);
           toast("Recording saved");
