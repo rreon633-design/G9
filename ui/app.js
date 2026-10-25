@@ -40,6 +40,14 @@
     autoSubs: false,
     subMeta: null,
     subBlob: null,
+    subRaw: "",
+    subDelay: 0,
+    subSize: 20,
+    boost: 100,
+    eq: [0, 0, 0, 0, 0, 0],
+    abA: null,
+    abB: null,
+    resumeTimer: 0,
   };
 
   var video = document.getElementById("video");
@@ -55,7 +63,20 @@
   var infoModal = document.getElementById("info-modal");
   var toastEl = document.getElementById("toast");
   var seekEl = document.getElementById("seek");
+  var preview = document.getElementById("preview");
+  var scrubEl = document.getElementById("scrub");
+  var scrubCanvas = document.getElementById("scrub-canvas");
+  var eqPanel = document.getElementById("eq-panel");
+  var subPanel = document.getElementById("sub-panel");
   var hlsSession = null;
+  var audioGraph = null;
+  var EQ_FREQ = [60, 170, 350, 1000, 3500, 10000];
+  var EQ_PRESETS = {
+    flat: [0, 0, 0, 0, 0, 0],
+    bass: [8, 5, 1, 0, -1, -2],
+    voice: [-2, -1, 3, 6, 4, 0],
+    movie: [3, 1, 0, 1, 3, 2],
+  };
 
   function tauri() {
     return window.__TAURI__ || null;
@@ -121,6 +142,7 @@
     }
     state.subsOn = false;
     state.subMeta = null;
+    state.subRaw = "";
     var cc = document.getElementById("btn-cc");
     if (cc) cc.classList.remove("on");
   }
@@ -131,31 +153,313 @@
   }
 
   function applyVtt(result) {
-    clearSubs();
-    var blob = new Blob([result.vtt], { type: "text/vtt" });
+    state.autoSubs = true;
+    try {
+      localStorage.setItem("g9-subs", "1");
+    } catch (e) {}
+    state.subMeta = result;
+    state.subRaw = result.vtt || "";
+    applyVttText(shiftVtt(state.subRaw, state.subDelay || 0), result);
+    var label = result.movie || result.release || result.query || "captions";
+    var src = result.provider ? " · " + result.provider : "";
+    toast("Subtitles · " + label + src);
+  }
+
+  function parseVttTime(s) {
+    var p = String(s).trim().split(":");
+    if (p.length === 3) return Number(p[0]) * 3600 + Number(p[1]) * 60 + Number(p[2]);
+    if (p.length === 2) return Number(p[0]) * 60 + Number(p[1]);
+    return Number(s) || 0;
+  }
+  function fmtVttTime(t) {
+    if (t < 0) t = 0;
+    var h = Math.floor(t / 3600);
+    var m = Math.floor((t % 3600) / 60);
+    var s = t - h * 3600 - m * 60;
+    var whole = Math.floor(s);
+    var ms = Math.round((s - whole) * 1000);
+    function z(n, w) {
+      return String(n).padStart(w, "0");
+    }
+    return z(h, 2) + ":" + z(m, 2) + ":" + z(whole, 2) + "." + z(ms, 3);
+  }
+  function shiftVtt(vtt, delay) {
+    return String(vtt).replace(/(\d+:\d{2}:\d{2}[.,]\d+|\d+:\d{2}[.,]\d+)\s*-->\s*(\d+:\d{2}:\d{2}[.,]\d+|\d+:\d{2}[.,]\d+)/g, function (_, a, b) {
+      return fmtVttTime(parseVttTime(a.replace(",", ".")) + delay) + " --> " + fmtVttTime(parseVttTime(b.replace(",", ".")) + delay);
+    });
+  }
+  function applyVttText(vtt, result) {
+    clearSubsKeepMeta();
+    var blob = new Blob([vtt], { type: "text/vtt" });
     var url = URL.createObjectURL(blob);
     state.subBlob = url;
     var track = document.createElement("track");
     track.kind = "subtitles";
-    track.label = result.language || "English";
-    track.srclang = (result.language || "en").slice(0, 2);
+    track.label = (result && result.language) || "English";
+    track.srclang = ((result && result.language) || "en").slice(0, 2);
     track.src = url;
     track.default = true;
     video.appendChild(track);
     track.addEventListener("load", showCueTrack);
     window.setTimeout(showCueTrack, 80);
     state.subsOn = true;
-    state.autoSubs = true;
-    try {
-      localStorage.setItem("g9-subs", "1");
-    } catch (e) {}
-    state.subMeta = result;
     var cc = document.getElementById("btn-cc");
     if (cc) cc.classList.add("on");
-    var label = result.movie || result.release || result.query || "captions";
-    var src = result.provider ? " · " + result.provider : "";
-    toast("Subtitles · " + label + src);
   }
+  function clearSubsKeepMeta() {
+    if (state.subBlob) {
+      try {
+        URL.revokeObjectURL(state.subBlob);
+      } catch (e) {}
+      state.subBlob = null;
+    }
+    Array.prototype.slice.call(video.querySelectorAll("track")).forEach(function (t) {
+      t.remove();
+    });
+  }
+  function setSubDelay(delta, abs) {
+    state.subDelay = abs ? delta : Math.round((state.subDelay + delta) * 100) / 100;
+    var el = document.getElementById("sub-delay-val");
+    if (el) el.textContent = (state.subDelay >= 0 ? "+" : "") + state.subDelay.toFixed(2) + "s";
+    if (state.subRaw) applyVttText(shiftVtt(state.subRaw, state.subDelay), state.subMeta || {});
+    toast("Subtitle delay " + (state.subDelay >= 0 ? "+" : "") + state.subDelay.toFixed(2) + "s");
+    saveResume();
+  }
+  function setSubSize(n) {
+    state.subSize = n;
+    document.documentElement.style.setProperty("--cue-size", n + "px");
+    var el = document.getElementById("sub-size-val");
+    if (el) el.textContent = n + "px";
+    try {
+      localStorage.setItem("g9-cue", String(n));
+    } catch (e) {}
+  }
+  function mediaKey() {
+    return state.mediaPath || state.mediaUrl || "";
+  }
+  function loadResumeMap() {
+    try {
+      return JSON.parse(localStorage.getItem("g9-resume") || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveResume() {
+    var key = mediaKey();
+    if (!key || state.mediaKind === "live") return;
+    if (!isFinite(video.currentTime)) return;
+    var map = loadResumeMap();
+    map[key] = {
+      t: video.currentTime,
+      dur: video.duration || 0,
+      title: state.title,
+      subDelay: state.subDelay,
+      boost: state.boost,
+      eq: state.eq,
+    };
+    var keys = Object.keys(map);
+    if (keys.length > 80) delete map[keys[0]];
+    try {
+      localStorage.setItem("g9-resume", JSON.stringify(map));
+    } catch (e) {}
+    if (key && isFinite(video.currentTime)) {
+      invoke("add_history", {
+        title: state.title || key,
+        url: key,
+        kind: state.mediaKind || "file",
+        position: video.currentTime,
+        duration: video.duration || 0,
+      }).catch(function () {});
+    }
+  }
+  function restoreResume() {
+    if (state.mediaKind === "live") return;
+    var rec = loadResumeMap()[mediaKey()];
+    if (!rec) return;
+    if (typeof rec.subDelay === "number") state.subDelay = rec.subDelay;
+    if (rec.eq) {
+      state.eq = rec.eq;
+      applyEq();
+    }
+    if (rec.boost) setBoost(rec.boost, true);
+    if (rec.t > 5 && isFinite(video.duration) && rec.t < video.duration - 5) {
+      video.currentTime = rec.t;
+      toast("Resumed " + fmt(rec.t));
+    }
+  }
+  function ensureAudio() {
+    if (audioGraph) return audioGraph;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try {
+      var ctx = new AC();
+      var src = ctx.createMediaElementSource(video);
+      var last = src;
+      var filters = EQ_FREQ.map(function (freq, i) {
+        var f = ctx.createBiquadFilter();
+        f.type = "peaking";
+        f.frequency.value = freq;
+        f.Q.value = 0.9;
+        f.gain.value = state.eq[i] || 0;
+        last.connect(f);
+        last = f;
+        return f;
+      });
+      var gain = ctx.createGain();
+      gain.gain.value = state.boost / 100;
+      last.connect(gain);
+      gain.connect(ctx.destination);
+      audioGraph = { ctx: ctx, filters: filters, gain: gain };
+      return audioGraph;
+    } catch (e) {
+      return null;
+    }
+  }
+  function applyEq() {
+    var g = ensureAudio();
+    if (!g) return;
+    g.filters.forEach(function (f, i) {
+      f.gain.value = state.eq[i] || 0;
+    });
+    var bands = document.getElementById("eq-bands");
+    if (bands) {
+      Array.prototype.forEach.call(bands.querySelectorAll("input"), function (inp, i) {
+        inp.value = String(state.eq[i] || 0);
+      });
+    }
+  }
+  function setBoost(n, silent) {
+    state.boost = Number(n) || 100;
+    var g = ensureAudio();
+    if (g) g.gain.gain.value = state.boost / 100;
+    var el = document.getElementById("eq-boost-val");
+    if (el) el.textContent = state.boost + "%";
+    var inp = document.getElementById("eq-boost");
+    if (inp) inp.value = String(state.boost);
+    if (!silent) toast("Boost " + state.boost + "%");
+  }
+  function buildEqUi() {
+    var host = document.getElementById("eq-bands");
+    if (!host || host.childNodes.length) return;
+    EQ_FREQ.forEach(function (freq, i) {
+      var col = document.createElement("div");
+      col.className = "eq-band";
+      var inp = document.createElement("input");
+      inp.type = "range";
+      inp.min = "-12";
+      inp.max = "12";
+      inp.value = String(state.eq[i] || 0);
+      inp.addEventListener("input", function () {
+        state.eq[i] = Number(inp.value);
+        applyEq();
+      });
+      var lab = document.createElement("span");
+      lab.textContent = freq >= 1000 ? freq / 1000 + "k" : String(freq);
+      col.appendChild(inp);
+      col.appendChild(lab);
+      host.appendChild(col);
+    });
+  }
+  function snapshot() {
+    if (!video.videoWidth) {
+      toast("Nothing to capture");
+      return;
+    }
+    var c = document.createElement("canvas");
+    c.width = video.videoWidth;
+    c.height = video.videoHeight;
+    c.getContext("2d").drawImage(video, 0, 0);
+    c.toBlob(function (blob) {
+      if (!blob) return;
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = (state.title || "g9").replace(/[\\/:*?"<>|]/g, "_") + ".jpg";
+      a.click();
+      toast("Saved frame");
+    }, "image/jpeg", 0.92);
+  }
+  function paintAb() {
+    var btn = document.getElementById("btn-ab");
+    if (!btn) return;
+    btn.classList.toggle("on", state.abA != null);
+    if (state.abA != null && state.abB != null) btn.title = "A–B " + fmt(state.abA) + "–" + fmt(state.abB);
+    else if (state.abA != null) btn.title = "A set · click for B";
+    else btn.title = "A–B loop";
+  }
+  function cycleAb() {
+    if (state.abA == null) {
+      state.abA = video.currentTime;
+      toast("A · " + fmt(state.abA));
+    } else if (state.abB == null) {
+      state.abB = Math.max(video.currentTime, state.abA + 0.4);
+      toast("A–B loop " + fmt(state.abA) + "–" + fmt(state.abB));
+    } else {
+      state.abA = null;
+      state.abB = null;
+      toast("A–B off");
+    }
+    paintAb();
+  }
+  function bindMediaSession() {
+    if (!navigator.mediaSession) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: state.title || "G9",
+        artist: "G9",
+      });
+      navigator.mediaSession.setActionHandler("play", function () {
+        video.play();
+      });
+      navigator.mediaSession.setActionHandler("pause", function () {
+        video.pause();
+      });
+      navigator.mediaSession.setActionHandler("previoustrack", function () {
+        zap(-1);
+      });
+      navigator.mediaSession.setActionHandler("nexttrack", function () {
+        zap(1);
+      });
+      navigator.mediaSession.setActionHandler("seekbackward", function () {
+        skip(-10);
+      });
+      navigator.mediaSession.setActionHandler("seekforward", function () {
+        skip(10);
+      });
+    } catch (e) {}
+  }
+  function seekTimeFromEvent(ev) {
+    var rect = seekEl.getBoundingClientRect();
+    var x = (ev.clientX - rect.left) / rect.width;
+    if (x < 0) x = 0;
+    if (x > 1) x = 1;
+    return x * (video.duration || 0);
+  }
+  var scrubTimer = 0;
+  function showScrub(ev) {
+    if (!video.duration || !isFinite(video.duration)) return;
+    var t = seekTimeFromEvent(ev);
+    var rect = seekEl.getBoundingClientRect();
+    var x = ev.clientX;
+    if (x < rect.left + 90) x = rect.left + 90;
+    if (x > rect.right - 90) x = rect.right - 90;
+    scrubEl.style.left = x + "px";
+    document.getElementById("scrub-time").textContent = fmt(t);
+    scrubEl.classList.add("show");
+    window.clearTimeout(scrubTimer);
+    scrubTimer = window.setTimeout(function () {
+      if (!preview.src && video.src) preview.src = video.currentSrc || video.src;
+      if (!preview.src) return;
+      try {
+        preview.currentTime = t;
+      } catch (e) {}
+    }, 40);
+  }
+  preview.addEventListener("seeked", function () {
+    try {
+      var ctx = scrubCanvas.getContext("2d");
+      ctx.drawImage(preview, 0, 0, scrubCanvas.width, scrubCanvas.height);
+    } catch (e) {}
+  });
 
   function mediaQuery() {
     return state.lastQuery || state.title || "";
@@ -251,7 +555,15 @@
   function showChrome() {
     app.classList.add("chrome-on");
     window.clearTimeout(state.hideTimer);
-    if (!video.paused && sheet.hidden && importModal.hidden && aboutModal.hidden && infoModal.hidden) {
+    if (
+      !video.paused &&
+      sheet.hidden &&
+      importModal.hidden &&
+      aboutModal.hidden &&
+      infoModal.hidden &&
+      eqPanel.hidden &&
+      subPanel.hidden
+    ) {
       state.hideTimer = window.setTimeout(function () {
         app.classList.remove("chrome-on");
         closeMenus();
@@ -290,6 +602,7 @@
     sheet.hidden = state.view === "watch";
     document.getElementById("btn-repeat").classList.toggle("on", state.repeat);
     document.getElementById("btn-shuffle").classList.toggle("on", state.shuffle);
+    paintAb();
     app.classList.toggle("tv", state.tv);
     document.getElementById("btn-tv").classList.toggle("on", state.tv);
     document.getElementById("btn-tv").textContent = state.tv ? "Exit TV" : "TV Mode";
@@ -541,8 +854,15 @@
     poster.style.display = "none";
     stopHls();
     clearSubs();
+    state.abA = null;
+    state.abB = null;
+    paintAb();
     video.removeAttribute("src");
     video.load();
+    if (preview) {
+      preview.removeAttribute("src");
+      preview.load();
+    }
     var isHls = /\.m3u8(\?|$)/i.test(url);
     var nativeHls = video.canPlayType && video.canPlayType("application/vnd.apple.mpegurl");
     if (isHls && !nativeHls) {
@@ -550,9 +870,13 @@
       return;
     }
     video.src = url;
+    if (preview) preview.src = url;
+    bindMediaSession();
     video.play().then(function () {
       setPlaying(true);
       updateMeta();
+      ensureAudio();
+      if (audioGraph && audioGraph.ctx.state === "suspended") audioGraph.ctx.resume();
     }).catch(function () {
       fail("Could not play this source");
     });
@@ -765,6 +1089,24 @@
       }
       if (act === "about") openAbout();
       if (act === "info") openInfo();
+      if (act === "eq") {
+        buildEqUi();
+        applyEq();
+        setBoost(state.boost, true);
+        eqPanel.hidden = false;
+        subPanel.hidden = true;
+        showChrome();
+      }
+      if (act === "substyle") {
+        subPanel.hidden = false;
+        eqPanel.hidden = true;
+        document.getElementById("sub-delay-val").textContent =
+          (state.subDelay >= 0 ? "+" : "") + state.subDelay.toFixed(2) + "s";
+        document.getElementById("sub-size").value = String(state.subSize);
+        document.getElementById("sub-size-val").textContent = state.subSize + "px";
+        showChrome();
+      }
+      if (act === "snap") snapshot();
       if (act === "subs") fetchBestSubs();
       if (act === "subs-off") {
         state.autoSubs = false;
@@ -828,6 +1170,37 @@
   document.getElementById("btn-shuffle").addEventListener("click", function () {
     state.shuffle = !state.shuffle;
     paint();
+  });
+  document.getElementById("btn-ab").addEventListener("click", cycleAb);
+  document.getElementById("btn-snap").addEventListener("click", snapshot);
+  document.getElementById("eq-close").addEventListener("click", function () {
+    eqPanel.hidden = true;
+  });
+  document.getElementById("sub-close").addEventListener("click", function () {
+    subPanel.hidden = true;
+  });
+  document.getElementById("eq-boost").addEventListener("input", function (ev) {
+    setBoost(Number(ev.target.value), true);
+  });
+  document.querySelectorAll("[data-eq]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var name = btn.getAttribute("data-eq");
+      state.eq = (EQ_PRESETS[name] || EQ_PRESETS.flat).slice();
+      applyEq();
+      toast("EQ · " + name);
+    });
+  });
+  document.getElementById("sub-delay-down").addEventListener("click", function () {
+    setSubDelay(-0.1);
+  });
+  document.getElementById("sub-delay-up").addEventListener("click", function () {
+    setSubDelay(0.1);
+  });
+  document.getElementById("sub-delay-zero").addEventListener("click", function () {
+    setSubDelay(0, true);
+  });
+  document.getElementById("sub-size").addEventListener("input", function (ev) {
+    setSubSize(Number(ev.target.value));
   });
   function setTv(on) {
     state.tv = !!on;
@@ -901,6 +1274,10 @@
   seekEl.addEventListener("input", function () {
     if (video.duration) video.currentTime = (Number(seekEl.value) / 1000) * video.duration;
   });
+  seekEl.addEventListener("mousemove", showScrub);
+  seekEl.addEventListener("mouseleave", function () {
+    scrubEl.classList.remove("show");
+  });
   function paintMute() {
     var btn = document.getElementById("btn-mute");
     if (!btn) return;
@@ -927,18 +1304,40 @@
     var p = video.duration ? (video.currentTime / video.duration) * 100 : 0;
     seekEl.value = String(Math.floor(p * 10));
     seekEl.style.setProperty("--p", p + "%");
+    if (state.abA != null && state.abB != null && video.currentTime >= state.abB) {
+      video.currentTime = state.abA;
+    }
+    if (!state.resumeTimer) {
+      state.resumeTimer = window.setTimeout(function () {
+        state.resumeTimer = 0;
+        saveResume();
+      }, 4000);
+    }
+    if (navigator.mediaSession && navigator.mediaSession.setPositionState && video.duration) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: video.duration,
+          playbackRate: video.playbackRate,
+          position: video.currentTime,
+        });
+      } catch (e) {}
+    }
   });
   video.addEventListener("loadedmetadata", function () {
     updateMeta();
     if (state.subsOn) showCueTrack();
+    restoreResume();
   });
   video.addEventListener("play", function () {
     setPlaying(true);
     showChrome();
+    bindMediaSession();
+    if (audioGraph && audioGraph.ctx.state === "suspended") audioGraph.ctx.resume();
   });
   video.addEventListener("pause", function () {
     setPlaying(false);
     showChrome();
+    saveResume();
   });
   video.addEventListener("ended", function () {
     if (state.repeat) {
@@ -975,6 +1374,8 @@
       importModal.hidden = true;
       aboutModal.hidden = true;
       infoModal.hidden = true;
+      eqPanel.hidden = true;
+      subPanel.hidden = true;
       if (state.tv) {
         setTv(false);
         return;
@@ -1005,11 +1406,24 @@
       diag.classList.toggle("on", state.showDiag);
       diag.textContent = "G9 " + (state.info ? state.info.version : "") + "\n" + (state.title || "");
     }
+    if (ev.key === "[" || ev.key === "z" || ev.key === "Z") setSubDelay(-0.1);
+    if (ev.key === "]" || ev.key === "x" || ev.key === "X") setSubDelay(0.1);
+    if (ev.key === "a" || ev.key === "A") cycleAb();
+    if (ev.key === "s" || ev.key === "S") snapshot();
+    if (ev.key === "e" || ev.key === "E") {
+      buildEqUi();
+      eqPanel.hidden = !eqPanel.hidden;
+      if (!eqPanel.hidden) subPanel.hidden = true;
+    }
   });
 
   try {
     if (localStorage.getItem("g9-tv") === "1") setTv(true);
     if (localStorage.getItem("g9-subs") === "1") state.autoSubs = true;
+    var cue = Number(localStorage.getItem("g9-cue"));
+    if (cue) setSubSize(cue);
   } catch (e) {}
+  window.addEventListener("beforeunload", saveResume);
+  buildEqUi();
   refresh();
 })();

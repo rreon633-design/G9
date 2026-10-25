@@ -167,6 +167,10 @@ fn sidecar(path: &str, language: &str) -> Result<SubResult, String> {
         format!("{stem}.srt"),
         format!("{stem}.{l2}.vtt"),
         format!("{stem}.vtt"),
+        format!("{stem}.{l2}.ass"),
+        format!("{stem}.ass"),
+        format!("{stem}.{l2}.ssa"),
+        format!("{stem}.ssa"),
     ];
     for name in names {
         let cand = dir.join(&name);
@@ -459,7 +463,12 @@ fn extract_subtitle(zip_bytes: &[u8]) -> Result<String, String> {
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
         let name = file.name().to_ascii_lowercase();
-        if name.ends_with(".srt") || name.ends_with(".vtt") || name.ends_with(".txt") {
+        if name.ends_with(".srt")
+            || name.ends_with(".vtt")
+            || name.ends_with(".txt")
+            || name.ends_with(".ass")
+            || name.ends_with(".ssa")
+        {
             let mut buf = Vec::new();
             file.read_to_end(&mut buf).map_err(|e| e.to_string())?;
             return Ok(String::from_utf8_lossy(&buf).into_owned());
@@ -478,10 +487,70 @@ fn looks_like_vtt(b: &[u8]) -> bool {
         .contains("WEBVTT")
 }
 
+fn ass_time_to_vtt(t: &str) -> String {
+    let t = t.trim();
+    let parts: Vec<&str> = t.split(':').collect();
+    if parts.len() != 3 {
+        return t.replace(',', ".");
+    }
+    let h: u32 = parts[0].parse().unwrap_or(0);
+    let m: u32 = parts[1].parse().unwrap_or(0);
+    let sec_parts: Vec<&str> = parts[2].split(['.', ',']).collect();
+    let s: u32 = sec_parts.first().and_then(|x| x.parse().ok()).unwrap_or(0);
+    let cs: u32 = sec_parts.get(1).and_then(|x| x.parse().ok()).unwrap_or(0);
+    let ms = if sec_parts.get(1).map(|x| x.len()).unwrap_or(0) <= 2 {
+        cs * 10
+    } else {
+        cs
+    };
+    format!("{h:02}:{m:02}:{s:02}.{ms:03}")
+}
+
+fn ass_to_vtt(ass: &str) -> String {
+    let mut out = String::from("WEBVTT\n\n");
+    for line in ass.lines() {
+        let rest = line
+            .strip_prefix("Dialogue:")
+            .or_else(|| line.strip_prefix("dialogue:"));
+        let Some(rest) = rest else { continue };
+        let mut fields = rest.splitn(10, ',');
+        let _layer = fields.next();
+        let start = fields.next().unwrap_or("");
+        let end = fields.next().unwrap_or("");
+        for _ in 0..6 {
+            let _ = fields.next();
+        }
+        let text = fields.next().unwrap_or("").replace("\\N", "\n").replace("\\n", "\n");
+        let mut clean = String::new();
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '{' {
+                while let Some(n) = chars.next() {
+                    if n == '}' {
+                        break;
+                    }
+                }
+            } else {
+                clean.push(c);
+            }
+        }
+        out.push_str(&ass_time_to_vtt(start));
+        out.push_str(" --> ");
+        out.push_str(&ass_time_to_vtt(end));
+        out.push('\n');
+        out.push_str(clean.trim());
+        out.push_str("\n\n");
+    }
+    out
+}
+
 pub fn srt_to_vtt(srt: &str) -> String {
     let text = srt.strip_prefix('\u{feff}').unwrap_or(srt);
     if text.trim_start().starts_with("WEBVTT") {
         return text.to_string();
+    }
+    if text.contains("[Script Info]") || text.contains("Dialogue:") {
+        return ass_to_vtt(text);
     }
     let mut out = String::from("WEBVTT\n\n");
     for line in text.lines() {
@@ -525,6 +594,15 @@ mod tests {
         let v = srt_to_vtt("1\n00:00:01,000 --> 00:00:02,000\nHi\n");
         assert!(v.starts_with("WEBVTT"));
         assert!(v.contains("00:00:01.000 --> 00:00:02.000"));
+    }
+
+    #[test]
+    fn ass_dialogue_becomes_vtt() {
+        let v = srt_to_vtt(
+            "[Script Info]\nDialogue: 0,0:00:01.00,0:00:02.50,Default,,0,0,0,,Hello {\\i1}world\n",
+        );
+        assert!(v.contains("00:00:01.000 --> 00:00:02.500"));
+        assert!(v.contains("Hello world"));
     }
 
     #[test]

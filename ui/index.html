@@ -45,7 +45,11 @@
             <div class="menu-pop">
               <div class="menu-label">Subtitles</div>
               <button type="button" data-act="subs">Search & apply best</button>
+              <button type="button" data-act="substyle">Timing & size</button>
               <button type="button" data-act="subs-off">Hide subtitles</button>
+              <hr />
+              <div class="menu-label">Audio</div>
+              <button type="button" data-act="eq">Equalizer & boost</button>
               <hr />
               <div class="menu-label">View</div>
               <button type="button" data-view="watch">Player</button>
@@ -53,6 +57,7 @@
               <button type="button" data-view="library">Library</button>
               <hr />
               <div class="menu-label">Tools</div>
+              <button type="button" data-act="snap">Save frame</button>
               <button type="button" data-act="diag">Diagnostics</button>
               <button type="button" data-view="settings">Preferences</button>
               <hr />
@@ -98,11 +103,51 @@
         <div class="list" id="list"></div>
       </section>
 
+      <video id="preview" muted playsinline preload="auto"></video>
+      <div class="scrub" id="scrub">
+        <canvas id="scrub-canvas" width="320" height="180"></canvas>
+        <span id="scrub-time">00:00</span>
+      </div>
       <div class="toast" id="toast"></div>
+      <div class="panel" id="eq-panel" hidden>
+        <div class="panel-head">
+          <h3>Equalizer</h3>
+          <button type="button" class="icon-btn" id="eq-close" title="Close">
+            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
+        <label class="boost-row">Volume boost <b id="eq-boost-val">100%</b></label>
+        <input id="eq-boost" type="range" min="100" max="200" value="100" />
+        <div class="eq-bands" id="eq-bands"></div>
+        <div class="eq-presets">
+          <button type="button" data-eq="flat">Flat</button>
+          <button type="button" data-eq="bass">Bass</button>
+          <button type="button" data-eq="voice">Voice</button>
+          <button type="button" data-eq="movie">Movie</button>
+        </div>
+      </div>
+      <div class="panel" id="sub-panel" hidden>
+        <div class="panel-head">
+          <h3>Subtitles</h3>
+          <button type="button" class="icon-btn" id="sub-close" title="Close">
+            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
+        <label>Delay <b id="sub-delay-val">0.00s</b></label>
+        <div class="row-btns">
+          <button type="button" id="sub-delay-down">−100 ms</button>
+          <button type="button" id="sub-delay-zero">Reset</button>
+          <button type="button" id="sub-delay-up">+100 ms</button>
+        </div>
+        <label>Size <b id="sub-size-val">20px</b></label>
+        <input id="sub-size" type="range" min="14" max="48" value="20" />
+      </div>
       <footer class="osd">
         <div class="seek-row">
           <span class="time" id="time-cur">00:00</span>
-          <input id="seek" type="range" min="0" max="1000" value="0" />
+          <div class="seek-wrap">
+            <input id="seek" type="range" min="0" max="1000" value="0" />
+          </div>
           <span class="time" id="time-end">00:00</span>
         </div>
         <div class="transport">
@@ -118,6 +163,12 @@
             </button>
             <button type="button" class="icon-btn" id="btn-shuffle" title="Shuffle">
               <svg viewBox="0 0 24 24"><path d="M16 3h5v5M21 3l-7 7M3 7h6M16 21h5v-5M21 21l-9-9M3 17h6" /></svg>
+            </button>
+            <button type="button" class="icon-btn" id="btn-ab" title="A–B loop">
+              <svg viewBox="0 0 24 24"><path d="M7 7h6v4H7zM11 13h6v4h-6z" /><path d="M5 12h14" /></svg>
+            </button>
+            <button type="button" class="icon-btn" id="btn-snap" title="Save frame">
+              <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2" /><circle cx="12" cy="13.5" r="3" /><path d="M8 7l1.5-3h5L16 7" /></svg>
             </button>
           </div>
 
@@ -207,7 +258,7 @@
         <p class="legal" id="about-policy"></p>
         <ul class="about-meta">
           <li><span>License</span><b>Apache-2.0 OR MIT</b></li>
-          <li><span>Engine</span><b>Tauri 2 · OS WebView</b></li>
+          <li><span>Engine</span><b>Tauri 2 · WebView2 (DXVA)</b></li>
           <li><span>UI</span><b>HTML · CSS · JavaScript</b></li>
           <li><span>Source</span><b>github.com/rreon633-design/G9</b></li>
         </ul>
