@@ -58,9 +58,9 @@ fn http_get_raw(url: &str) -> Result<String, String> {
     )
     .map_err(|e| e.to_string())?;
     stream.set_read_timeout(Some(Duration::from_secs(6))).ok();
+    let ua = g9_core::USER_AGENT;
     let req = format!(
-        "GET {path}{q} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\nUser-Agent: {}\r\n\r\n",
-        g9_core::USER_AGENT
+        "GET {path}{q} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\nUser-Agent: {ua}\r\n\r\n"
     );
     stream
         .write_all(req.as_bytes())
