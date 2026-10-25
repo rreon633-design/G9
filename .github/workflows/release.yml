@@ -82,8 +82,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.1' }}
-          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.1' }} — Windows
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.2' }}
+          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.2' }} — Windows
           draft: false
           prerelease: false
           generate_release_notes: false
@@ -96,6 +96,11 @@ jobs:
             | `*-setup.exe` | NSIS installer (per-user, LZMA, no admin) |
             | `*.msi` | MSI |
             | `G9-windows-x64-portable.zip` | Portable `G9.exe` |
+
+            **v0.1.2**
+            - Online subtitle search (OpenSubtitles) — CC auto-applies the best match
+            - Media info dialog
+            - Cinema chrome: Media · Playback · Settings · About G9 · TV Mode
 
             G9 is a player. It ships **no channels**. Add your own legal sources.
 

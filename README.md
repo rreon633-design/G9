@@ -6,7 +6,7 @@ Desktop player with a **Rust / Tauri** core and a **vanilla HTML/CSS/JS** UI. Yo
 
 > G9 does not provide channels, playlists, or provider credentials.
 
-## Windows release (v0.1.0)
+## Windows release (v0.1.2)
 
 Optimized **Windows 10/11 64-bit** builds are published from GitHub Actions when a `v*` tag is pushed:
 

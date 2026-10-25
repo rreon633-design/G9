@@ -32,8 +32,8 @@ Tauri APIs are used through `window.__TAURI__` (`withGlobalTauri: true`).
 ## Release
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 GitHub Actions workflow `Release` drafts installers.

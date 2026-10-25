@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "g9"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "g9-core",
  "g9-iptv",
@@ -1023,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "g9-core"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -1031,7 +1031,7 @@ dependencies = [
 
 [[package]]
 name = "g9-iptv"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "g9-core",
  "serde",
@@ -1041,7 +1041,7 @@ dependencies = [
 
 [[package]]
 name = "g9-store"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "g9-core",
  "g9-iptv",
