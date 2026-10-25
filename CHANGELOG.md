@@ -47,9 +47,6 @@ Fun Mode: movies, series, anime and manga on one wall, built only from sources y
   sheet → episode → player, the sources dialog, search, browse sorting, tabs and the reader.
 
 
-- Dismissing a Save dialog no longer falls back to a browser download (save results are now
-  `path` / `cancelled` / `unsupported`).
-
 ## [0.7.0] — 2026-10-25
 
 GIF out, TV mode in.
@@ -85,6 +82,8 @@ GIF out, TV mode in.
   `</programme>` started a line. Multi-entry guides (now/next and what's on) now list correctly;
   covered by a test.
 - `scrollIntoView` is guarded, so keyboard focus works in engines without it.
+- Dismissing a Save dialog no longer falls back to a browser download (save results are now
+  `path` / `cancelled` / `unsupported`).
 
 ## [0.6.0] — 2026-10-25
 
