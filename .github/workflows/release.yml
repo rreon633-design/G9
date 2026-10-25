@@ -99,8 +99,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.3.1' }}
-          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.3.1' }} — Windows
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.4.0' }}
+          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.4.0' }} — Windows
           draft: false
           prerelease: false
           generate_release_notes: false
@@ -114,13 +114,14 @@ jobs:
             | `*.msi` | MSI |
             | `G9-windows-x64-portable.zip` | Portable `G9.exe` |
 
-            **v0.3.1**
-            - Sound fix: the equaliser no longer mutes files, autoplay is unlocked, and a refused source shows one Play button
-            - Save frame and Record what is playing now write real files (Pictures by default); webcam recording too
-            - Music mode for audio-only files, volume pill with percentage and wheel
-            - Seek-bar preview removed — plain scrub bar
-            - Short errors that name no service ("No subtitles found")
-            - Everything from 0.2.0/0.3.0: cinema chrome, subtitles, playlist queue, PiP, chapters, DLNA, podcasts, IPTV, JSON IPC, EQ/boost, GIF, 360 look-around, transcript, shaders, managed FFmpeg
+            **v0.4.0**
+            - Windows "Open with": G9 registers as a viewer for video, audio and playlist files and plays what you double-click (reinstall this version to register)
+            - Split screen: snap left/right from the caption buttons or Ctrl+Alt+arrows
+            - Responsive layout down to small windows; Settings is a centred dialog
+            - GIF export fixed (proper LZW), saved through the file dialog
+            - In-app dialogs with icons and keyboard handling; no native browser chrome inside the player
+            - Removed the Picture-in-picture button
+            - Everything from 0.2/0.3: subtitles, queue, chapters, DLNA, podcasts, IPTV, JSON IPC, EQ, 360, transcript, shaders, managed FFmpeg
 
             Full list: [FEATURE-LIST.md](https://github.com/rreon633-design/G9/blob/main/FEATURE-LIST.md)
 

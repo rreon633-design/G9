@@ -11,14 +11,14 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.3.1)
+## Windows release (v0.4.0)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.3.1_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
-| `G9_0.3.1_x64_en-US.msi` | MSI for managed deployment |
+| `G9_0.4.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.4.0_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
 Download: **[Releases](https://github.com/rreon633-design/G9/releases)**
@@ -29,13 +29,15 @@ download small.
 
 ## What it does
 
+- **Windows "Open with"** for video, audio and playlist files — double-click plays in G9
+- **Split screen**: snap left/right or `Ctrl+Alt+←/→`, responsive down to small windows
 - Local files, HTTP(S) streams, HLS, UNC / SMB paths
 - IPTV from an M3U **you are allowed to use**; live sheet with favourites, groups, search
 - Online subtitles (OpenSubtitles hash + title, TheSubDB, Podnapisi) with auto-apply; sidecar
   SRT/VTT/ASS; subtitle browser; live cue translation
 - Chapters, playlist queue, PiP, always-on-top, 360° look-around, transcript pane
 - EQ / boost, speed 0.25–2× with pitch lock, A–B loop, bookmarks, sleep timer
-- GIF export, frame save, record-what-is-playing, webcam recording, scene poster
+- Working GIF export, frame save, record-what-is-playing, webcam recording, scene poster
 - DLNA browse, podcast RSS
 - Optional **ffmpeg on PATH**: convert / extract / remux / RTMP / embedded subs
 - JSON IPC on `127.0.0.1:18765`

@@ -2,7 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default G9 window capabilities",
-  "windows": ["main", "player-*"],
+  "windows": [
+    "main",
+    "player-*"
+  ],
   "permissions": [
     "core:default",
     "core:event:default",
@@ -16,6 +19,16 @@
     "core:window:allow-set-always-on-top",
     "core:webview:default",
     "dialog:default",
-    "fs:default"
+    "fs:default",
+    "core:window:allow-current-monitor",
+    "core:window:allow-available-monitors",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size",
+    "core:window:allow-inner-size",
+    "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-scale-factor",
+    "core:window:allow-is-maximized",
+    "core:window:allow-set-focus"
   ]
 }

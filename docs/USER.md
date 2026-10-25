@@ -13,6 +13,23 @@ G9 is a player, not a TV service. You bring files or a playlist you are allowed 
 
 There is no bundled channel pack and no “demo clips” menu.
 
+## From Windows Explorer
+
+After installing with the G9 installer, **right-click a video, audio or playlist file → Open with
+→ G9** (or pick G9 once and use *Always*). Double-clicking a file associated with G9 opens it
+straight away. The portable zip registers nothing — use *Media → Open file* there.
+
+**Media info → Show in folder** reveals the playing file in Explorer.
+
+## Window and layout
+
+- **Snap**: the two small buttons next to maximise put G9 on the left/right half. `Ctrl+Alt+←/→`
+  does the same, `Ctrl+Alt+↑` maximises. Windows' own `Win+←/→` also works.
+- The interface folds down for small windows: the volume slider collapses to the mute button,
+  secondary transport buttons move into Settings, and dialogs go full width.
+- **Settings** is the gear button (or Settings → Preferences): a centred dialog with Display,
+  Engine (FFmpeg, About) and your playlists, plus Export / Import.
+
 ## The chrome
 
 Top bar: **Media · Settings · TV Mode**. About G9 lives inside Settings, not on the bar.
@@ -71,6 +88,7 @@ RTMP out and embedded subtitle extraction then use that copy; if you prefer, put
 - **Save frame** (camera icon or `S`) asks where to write a JPEG — default folder is your Pictures.
   If the source is copy-protected and the frame cannot be read, G9 falls back to FFmpeg when the
   file is local.
+- **Export GIF** writes a real multi-frame GIF of the A–B range (or ~2.4 s around the playhead).
 - **Record what is playing** records the picture and the sound to WebM; press again to stop and
   choose where to save. **Record webcam** does the same from the camera.
 - Desktop/window capture is not part of G9: the webview has no screen-capture API.

@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.3.1** · source: `main`  
+Last updated: 2026-10-25 · release **v0.4.0** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -28,8 +28,9 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - File **playlist queue** (Settings → View → Playlist; plays next on end)
 - **Music mode** — audio-only files get a record stage with title, duration and a level meter instead of a black rectangle
 - **Chapters** (ffprobe, if on PATH)
-- **Picture-in-picture**
 - **Always on top**
+- **Windows "Open with"** — G9 is registered as a Viewer for video, audio and playlist files and plays the file it was launched with
+- **Split screen / snap** — caption buttons or `Ctrl+Alt+←/→/↑`
 - Background audio while minimized (WebView keeps decoding)
 - Touch **gestures**: horizontal seek, vertical volume
 - **Sleep timer** (pause G9, or schedule a Windows shutdown)
@@ -91,6 +92,8 @@ FFmpeg is **not bundled**. **Settings → FFmpeg engine** downloads a static bui
 - Diagnostics
 - ARIA application/toolbar roles, labelled controls
 - **Export / import settings** (JSON)
+- **Responsive layout** — folds down to small windows and short screens
+- **Settings as a centred dialog** (Display · Engine · Playlists)
 - **PC shutdown timer** (Windows `shutdown /s`) next to the sleep timer, plus Cancel
 
 ---

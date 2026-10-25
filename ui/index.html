@@ -9,7 +9,7 @@
   <body>
     <a class="skip" href="#play">Skip to playback</a>
     <div id="app" class="chrome-on" role="application" aria-label="G9 media player">
-      <video id="video" playsinline aria-label="Video"></video>
+      <video id="video" playsinline disablepictureinpicture disableremoteplayback controlslist="nodownload noplaybackrate" aria-label="Video"></video>
       <canvas id="view360" hidden></canvas>
       <canvas id="viz" hidden></canvas>
       <canvas id="glsl" hidden></canvas>
@@ -94,7 +94,6 @@
               <button type="button" data-act="record">Record what is playing</button>
               <button type="button" data-act="webcamrtc">Record webcam</button>
               <button type="button" data-act="convert">Convert / Save…</button>
-              <button type="button" data-act="pip">Picture-in-picture</button>
               <button type="button" data-act="ontop">Always on top</button>
               <button type="button" data-act="viz">Audio visualizer</button>
               <button type="button" data-act="chapters">Chapters</button>
@@ -126,6 +125,12 @@
         <div class="win-btns">
           <button type="button" id="win-min" title="Minimize">
             <svg viewBox="0 0 12 12"><path d="M2 6h8" /></svg>
+          </button>
+          <button type="button" id="win-snap-left" class="snap" title="Snap left half (Ctrl+Alt+←)">
+            <svg viewBox="0 0 12 12"><rect x="2" y="2.5" width="3.4" height="7" /></svg>
+          </button>
+          <button type="button" id="win-snap-right" class="snap" title="Snap right half (Ctrl+Alt+→)">
+            <svg viewBox="0 0 12 12"><rect x="6.6" y="2.5" width="3.4" height="7" /></svg>
           </button>
           <button type="button" id="win-max" title="Maximize">
             <svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" /></svg>
@@ -159,9 +164,26 @@
         <div class="list" id="list"></div>
       </section>
 
+      <div class="modal-back" id="settings-modal" hidden>
+        <div class="modal info-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+          <h3 id="settings-title">Settings</h3>
+          <div class="settings-body" id="settings-body"></div>
+          <div class="modal-actions">
+            <button type="button" id="settings-export">Export</button>
+            <button type="button" id="settings-import">Import</button>
+            <span class="spacer"></span>
+            <button type="button" class="primary" id="settings-close">Close</button>
+          </div>
+        </div>
+      </div>
       <div class="modal-back" id="ask-back" hidden>
         <div class="modal ask-card" role="dialog" aria-modal="true" aria-labelledby="ask-title">
-          <h3 id="ask-title">Ask</h3>
+          <div class="ask-head">
+            <span class="ask-icon" id="ask-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 8v5M12 16h.01" /><circle cx="12" cy="12" r="9" /></svg>
+            </span>
+            <h3 id="ask-title">Ask</h3>
+          </div>
           <p class="ask-hint" id="ask-hint" hidden></p>
           <input id="ask-input" type="text" />
           <div class="row-btns ask-choices" id="ask-choices" hidden></div>
@@ -383,6 +405,7 @@
         <ul class="info-grid" id="info-list"></ul>
         <div class="modal-actions">
           <button type="button" id="info-subs">Find subtitles</button>
+          <button type="button" id="info-reveal" hidden>Show in folder</button>
           <span class="spacer"></span>
           <button type="button" class="primary" id="info-close">Close</button>
         </div>

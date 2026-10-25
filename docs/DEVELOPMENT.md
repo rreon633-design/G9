@@ -65,8 +65,8 @@ the failing job prints it as a GitHub Actions **annotation**.
 3. Tag and push:
 
 ```bash
-git -c user.name='G9' -c user.email='g9@local' tag -a v0.3.1 -m "G9 v0.3.1 Windows"
-git push origin v0.3.1
+git -c user.name='G9' -c user.email='g9@local' tag -a v0.4.0 -m "G9 v0.4.0 Windows"
+git push origin v0.4.0
 ```
 
 4. **Release Windows** builds on `windows-latest`:
@@ -80,13 +80,20 @@ The workflow tees the build to `build.log` and, on failure, emits `::error` **an
 Fix on `main`, then move the tag — a tag whose release never published can be re-pointed:
 
 ```bash
-git push --delete origin v0.3.1
-git tag -d v0.3.1
-git -c user.name='G9' -c user.email='g9@local' tag -a v0.3.1 -m "G9 v0.3.1 Windows"
-git push origin v0.3.1
+git push --delete origin v0.4.0
+git tag -d v0.4.0
+git -c user.name='G9' -c user.email='g9@local' tag -a v0.4.0 -m "G9 v0.4.0 Windows"
+git push origin v0.4.0
 ```
 
 Never re-point a tag whose release **did** publish; bump the patch version instead.
+
+### File associations
+
+`src-tauri/tauri.conf.json` → `bundle.fileAssociations` is what puts G9 in Explorer's *Open with*
+list. Those registry entries are written by the **installer** (NSIS/MSI); the portable zip cannot
+register anything. The file a launch was started with is read from `argv` by
+`src-tauri/src/args.rs` and handed to the UI through the `startup_file` command.
 
 ### Repository setting
 

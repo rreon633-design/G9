@@ -5,8 +5,49 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 ## [Unreleased]
 
+- Nothing yet.
+
 - Dismissing a Save dialog no longer falls back to a browser download (save results are now
   `path` / `cancelled` / `unsupported`).
+
+## [0.4.0] — 2026-10-25
+
+Desktop-integration and layout pass.
+
+### Added
+
+- **Windows "Open with"** — the installer registers G9 as a Viewer for video (mp4, mkv, webm,
+  m4v, mov, avi, ts, m2ts, mpg, mpeg, wmv, flv), audio (mp3, m4a, aac, flac, wav, ogg, opus,
+  wma) and playlist (m3u, m3u8) files. G9 also reads the file it was launched with, so a
+  double-click opens and plays it. `Show in folder` in Media info reveals the current file.
+  *(Reinstall with this version's installer — associations come from the NSIS/MSI bundle, not
+  the portable zip.)*
+- **Split screen / snap** — snap left/right from the two new caption buttons (appear on hover),
+  or `Ctrl+Alt+←/→` for halves and `Ctrl+Alt+↑` for full screen. Windows' own `Win+←/→` keeps
+  working because the window is resizable.
+- **Responsive layout** — breakpoints at 1180 / 1000 / 860 / 700 px and a short-window rule:
+  the volume slider collapses to the mute button, secondary transport buttons fold away, panels
+  and dialogs become full-width, the title overlay shrinks instead of clipping.
+- Settings is now a **centred dialog** in the same family as Media info (Display / Engine /
+  Playlists + Export / Import), not a sliding panel.
+
+### Fixed
+
+- **GIF export was corrupt.** The LZW stage bumped its code width one code too early, so every
+  frame with more than a handful of colours produced a stream decoders reject. Rewritten to the
+  compress/GIFCOMPR ordering; verified against Pillow (multi-frame, noisy content). Palette now
+  uses 4×4 ordered dithering, and GIFs save through the same file dialog as frames/recordings
+  instead of a browser download.
+- **The alert dialog** now has an icon, separated actions, a default-choice highlight,
+  Tab/Enter/Escape handling and a warning variant — it no longer looks like a browser popup.
+  (Native `tauri.localhost says` boxes were gone as of 0.3.1; every prompt is in-app.)
+- **No native browser chrome inside the app**: WebView2's media controls, context menu, scroll
+  bars, text selection and drag ghosts are suppressed; the visualizer no longer draws under the
+  transport bar.
+
+### Removed
+
+- Picture-in-picture button (and the code behind it) from Settings, as requested.
 
 ## [0.3.1] — 2026-10-25
 
@@ -180,6 +221,7 @@ multi-window, independent pitch shift. See the gap list in `FEATURE-LIST.md`.
 - Local files, URL / HLS, M3U / IPTV import, Live TV sheet
 - Diagnostics overlay, keyboard map
 
+[0.4.0]: https://github.com/rreon633-design/G9/releases/tag/v0.4.0
 [0.3.1]: https://github.com/rreon633-design/G9/releases/tag/v0.3.1
 [0.3.0]: https://github.com/rreon633-design/G9/releases/tag/v0.3.0
 [0.2.0]: https://github.com/rreon633-design/G9/releases/tag/v0.2.0

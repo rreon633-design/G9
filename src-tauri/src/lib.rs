@@ -1,3 +1,4 @@
+mod args;
 mod commands;
 mod dlna;
 mod fetch;
@@ -59,6 +60,7 @@ pub fn run() {
             commands::ffmpeg_install,
             commands::ffmpeg_remove,
             windows::open_player_window,
+            windows::snap_window,
             windows::schedule_pc_shutdown,
             windows::cancel_pc_shutdown,
             windows::list_user_shaders,
@@ -67,6 +69,8 @@ pub fn run() {
             files::write_chunk,
             files::save_frame,
             files::pictures_dir,
+            args::startup_file,
+            args::reveal_in_folder,
         ])
         .run(tauri::generate_context!())
         .expect("G9 failed to start");

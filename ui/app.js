@@ -173,6 +173,13 @@
       var okBtn = document.getElementById("ask-ok");
       var cancelBtn = document.getElementById("ask-cancel");
       title.textContent = opts.title || "";
+      var icon = document.getElementById("ask-icon");
+      if (icon) {
+        icon.classList.toggle("warn", !!opts.warn);
+        icon.innerHTML = opts.warn
+          ? '<svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z" /><path d="M12 10v4M12 17h.01" /></svg>'
+          : '<svg viewBox="0 0 24 24"><path d="M12 8v5M12 16h.01" /><circle cx="12" cy="12" r="9" /></svg>';
+      }
       hint.textContent = opts.hint || "";
       hint.hidden = !opts.hint;
       input.hidden = !opts.input;
@@ -186,7 +193,14 @@
         opts.choices.forEach(function (c) {
           var b = document.createElement("button");
           b.type = "button";
+          if (c === picked) b.classList.add("is-default");
           b.textContent = c;
+          b.addEventListener("mouseenter", function () {
+            picked = c;
+            choices.querySelectorAll("button").forEach(function (x) {
+              x.classList.toggle("is-default", x === b);
+            });
+          });
           b.addEventListener("click", function () {
             done(c);
           });
@@ -202,6 +216,20 @@
         resolve(v);
       }
       function onKey(ev) {
+        if (ev.key === "Tab" && opts.choices) {
+          var list = Array.prototype.slice.call(choices.querySelectorAll("button"));
+          if (list.length) {
+            ev.preventDefault();
+            var at = list.indexOf(document.activeElement);
+            var nextIdx = (at + (ev.shiftKey ? -1 : 1) + list.length) % list.length;
+            picked = list[nextIdx].textContent;
+            list.forEach(function (x, i) {
+              x.classList.toggle("is-default", i === nextIdx);
+            });
+            list[nextIdx].focus();
+            return;
+          }
+        }
         if (ev.key === "Escape") {
           ev.preventDefault();
           ev.stopPropagation();
@@ -687,13 +715,14 @@
       if (t > end || frames.length >= 24) {
         video.currentTime = origin;
         if (!wasPaused) video.play();
-        var bytes = encodeGif(frames, w, h, Math.round(100 / fps));
+        if (!frames.length) {
+          toast("Nothing to export");
+          return;
+        }
+        var bytes = encodeGif(frames, w, h, Math.max(2, Math.round(100 / fps)));
         var blob = new Blob([bytes], { type: "image/gif" });
-        var a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = (state.title || "g9") + ".gif";
-        a.click();
-        toast("Saved GIF · " + frames.length + " frames");
+        saveBlob(blob, safeName(".gif"), "GIF image", "gif");
+        toast("GIF · " + frames.length + " frames");
         return;
       }
       video.pause();
@@ -966,14 +995,16 @@
     return btoa(out);
   }
   function saveRecording(blob) {
-    var name = safeName(".webm");
-    pickSave(name, "WebM video", "webm")
+    saveBlob(blob, safeName(".webm"), "WebM video", "webm");
+  }
+  function saveBlob(blob, name, label, ext) {
+    pickSave(name, label, ext)
       .then(function (pick) {
         if (pick.cancelled) return null;
         var dest = pick.path;
         if (!dest) {
           downloadBlob(blob, name);
-          toast("Recording saved");
+          toast("Saved");
           return null;
         }
         return blob.arrayBuffer().then(function (ab) {
@@ -994,12 +1025,12 @@
             first = false;
           }
           return chain.then(function () {
-            toast("Recording saved");
+            toast(ext === "gif" ? "GIF saved" : "Recording saved");
           });
         });
       })
       .catch(function (e) {
-        toast(shortError(e, "Could not save the recording"));
+        toast(shortError(e, "Could not save the file"));
       });
   }
   function startRecorder(stream, extraStop) {
@@ -1269,16 +1300,6 @@
       }
     }
     requestAnimationFrame(drawViz);
-  }
-  function togglePip() {
-    if (!document.pictureInPictureEnabled) {
-      toast("PiP not available");
-      return;
-    }
-    if (document.pictureInPictureElement) document.exitPictureInPicture();
-    else video.requestPictureInPicture().catch(function (e) {
-      toast(String(e.message || e));
-    });
   }
   function toggleOnTop() {
     state.onTop = !state.onTop;
@@ -1961,6 +1982,8 @@
   }
 
   function openInfo() {
+    var reveal = document.getElementById("info-reveal");
+    if (reveal) reveal.hidden = !(state.mediaKind === "file" && state.mediaPath);
     var rows = [];
     function add(k, v, wide) {
       if (v == null || v === "") return;
@@ -2131,6 +2154,93 @@
     }
   }
 
+  function openSettings() {
+    var modal = document.getElementById("settings-modal");
+    var body = document.getElementById("settings-body");
+    if (!modal || !body) return;
+    var html = "";
+    html +=
+      '<div class="settings-group"><p class="settings-label">Display</p>' +
+      '<div class="settings-row"><div class="txt"><b>TV Mode</b><span>Large type and spacing for a living-room screen</span></div>' +
+      '<button type="button" data-set="tv" class="' + (state.tv ? "on" : "") + '">' + (state.tv ? "On" : "Off") + "</button></div></div>";
+
+    html +=
+      '<div class="settings-group"><p class="settings-label">Engine</p>' +
+      '<div class="settings-row"><div class="txt"><b>FFmpeg</b><span id="set-ff">Checking…</span></div>' +
+      '<button type="button" data-set="ffmpeg">Manage</button></div>' +
+      '<div class="settings-row"><div class="txt"><b>About G9</b><span id="set-ver">Version, license, content policy</span></div>' +
+      '<button type="button" data-set="about">Open</button></div></div>';
+
+    html += '<div class="settings-group"><p class="settings-label">Playlists</p>';
+    if (!(state.sources || []).length) {
+      html += '<p class="settings-empty">No playlists yet — Media → Add playlist / IPTV.</p>';
+    } else {
+      state.sources.forEach(function (src) {
+        html +=
+          '<div class="settings-row"><div class="txt"><b>' +
+          escapeHtml(src.name) +
+          "</b><span>" +
+          src.channel_count +
+          " channels · " +
+          escapeHtml(src.kind) +
+          '</span></div><button type="button" class="ghost" data-del="' +
+          src.id +
+          '">Remove</button></div>';
+      });
+    }
+    html += "</div>";
+    body.innerHTML = html;
+
+    var ver = document.getElementById("set-ver");
+    if (ver && state.info) ver.textContent = "G9 v" + state.info.version + " · Apache-2.0 OR MIT";
+
+    body.querySelectorAll("[data-set]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var what = btn.getAttribute("data-set");
+        if (what === "tv") {
+          setTv(!state.tv);
+          openSettings();
+        }
+        if (what === "about") {
+          modal.hidden = true;
+          aboutModal.hidden = false;
+        }
+        if (what === "ffmpeg") {
+          modal.hidden = true;
+          openFfmpeg();
+        }
+      });
+    });
+    body.querySelectorAll("[data-del]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        invoke("delete_source", { id: Number(btn.getAttribute("data-del")) })
+          .then(function () {
+            return refresh();
+          })
+          .then(openSettings)
+          .catch(function (e) {
+            toast(shortError(e, "Could not remove that playlist"));
+          });
+      });
+    });
+
+    invoke("ffmpeg_status")
+      .then(function (st) {
+        var el = document.getElementById("set-ff");
+        if (!el) return;
+        el.textContent = st && st.available
+          ? (st.managed ? "Installed in G9" : "Using the copy on PATH") + (st.version ? " · " + String(st.version).replace(/^ffmpeg version /, "") : "")
+          : "Not installed — convert, chapters and repair are off";
+      })
+      .catch(function () {
+        var el = document.getElementById("set-ff");
+        if (el) el.textContent = "Not installed";
+      });
+
+    modal.hidden = false;
+    showChrome();
+  }
+
   function renderSheet() {
     var title = document.getElementById("sheet-title");
     var count = document.getElementById("sheet-count");
@@ -2287,48 +2397,6 @@
             state.mediaPath = url;
             playUrl(row.querySelector("b").textContent, url);
           }
-        });
-      });
-      return;
-    }
-    if (state.view === "settings") {
-      title.textContent = "Settings";
-      chipsEl.innerHTML = "";
-      count.textContent = String((state.sources || []).length);
-      var html = '<p class="legal">' + escapeHtml(state.info ? state.info.content_policy : "") + "</p>";
-      html +=
-        '<div class="row" id="row-tv"><div class="n">TV</div><div class="meta"><b>TV Mode</b><span>Large type, living-room controls. Esc to exit.</span></div><button type="button" id="sheet-tv">' +
-        (state.tv ? "On" : "Off") +
-        "</button></div>";
-      html +=
-        '<div class="row" id="row-about"><div class="n">i</div><div class="meta"><b>About G9</b><span>Version, license, content policy</span></div><button type="button" id="sheet-about">Open</button></div>';
-      if (!state.sources.length) html += '<div class="empty">No playlists yet. Media → Add playlist.</div>';
-      state.sources.forEach(function (s) {
-        html +=
-          '<div class="row"><div class="n">' +
-          s.id +
-          '</div><div class="meta"><b>' +
-          escapeHtml(s.name) +
-          "</b><span>" +
-          s.channel_count +
-          " · " +
-          escapeHtml(s.kind) +
-          '</span></div><button type="button" data-del="' +
-          s.id +
-          '">Remove</button></div>';
-      });
-      listEl.innerHTML = html;
-      var sheetTv = document.getElementById("sheet-tv");
-      if (sheetTv)
-        sheetTv.addEventListener("click", function () {
-          setTv(!state.tv);
-          renderSheet();
-        });
-      var sheetAbout = document.getElementById("sheet-about");
-      if (sheetAbout) sheetAbout.addEventListener("click", openAbout);
-      listEl.querySelectorAll("[data-del]").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          invoke("delete_source", { id: Number(btn.getAttribute("data-del")) }).then(refresh).catch(fail);
         });
       });
       return;
@@ -2749,7 +2817,12 @@
 
   document.querySelectorAll("[data-view]").forEach(function (el) {
     el.addEventListener("click", function () {
-      state.view = el.getAttribute("data-view");
+      var target = el.getAttribute("data-view");
+      if (target === "settings") {
+        openSettings();
+        return;
+      }
+      state.view = target;
       paint();
       renderSheet();
       showChrome();
@@ -2814,7 +2887,6 @@
       if (act === "convert") convertMedia();
       if (act === "360") toggle360();
       if (act === "livetx") setLiveTx();
-      if (act === "pip") togglePip();
       if (act === "ontop") toggleOnTop();
       if (act === "viz") toggleViz();
       if (act === "chapters") loadChapters();
@@ -2895,12 +2967,22 @@
   document.getElementById("info-subs").addEventListener("click", function () {
     fetchBestSubs();
   });
-  document.getElementById("btn-gear").addEventListener("click", function () {
-    state.view = "settings";
-    paint();
-    renderSheet();
-    showChrome();
+  document.getElementById("info-reveal").addEventListener("click", function () {
+    if (state.mediaKind !== "file" || !state.mediaPath) return;
+    invoke("reveal_in_folder", { path: state.mediaPath })
+      .then(function (msg) {
+        toast(msg);
+      })
+      .catch(function (e) {
+        toast(shortError(e, "Could not open the folder"));
+      });
   });
+  document.getElementById("btn-gear").addEventListener("click", openSettings);
+  document.getElementById("settings-close").addEventListener("click", function () {
+    document.getElementById("settings-modal").hidden = true;
+  });
+  document.getElementById("settings-export").addEventListener("click", exportCfg);
+  document.getElementById("settings-import").addEventListener("click", importCfg);
   document.getElementById("btn-repeat").addEventListener("click", function () {
     state.repeat = !state.repeat;
     paint();
@@ -3229,6 +3311,23 @@
       if (w) w.toggleMaximize();
     });
   });
+  function snapWindow(side) {
+    invoke("snap_window", { side: side })
+      .then(function (msg) {
+        toast(msg);
+      })
+      .catch(function (e) {
+        toast(shortError(e, "Could not snap the window"));
+      });
+  }
+  ["left", "right"].forEach(function (side) {
+    var btn = document.getElementById("win-snap-" + side);
+    if (btn) {
+      btn.addEventListener("click", function () {
+        snapWindow(side);
+      });
+    }
+  });
   document.getElementById("win-close").addEventListener("click", function () {
     win().then(function (w) {
       if (w) w.close();
@@ -3236,6 +3335,19 @@
   });
 
   app.addEventListener("mousemove", showChrome);
+  window.addEventListener("contextmenu", function (ev) {
+    var t = ev.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+    ev.preventDefault();
+  });
+  window.addEventListener("dragstart", function (ev) {
+    if (ev.target && ev.target.tagName !== "INPUT") ev.preventDefault();
+  });
+  document.addEventListener("selectstart", function (ev) {
+    var t = ev.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+    ev.preventDefault();
+  });
   ["pointerdown", "keydown"].forEach(function (evt) {
     window.addEventListener(evt, unlockAudio, { passive: true });
   });
@@ -3243,10 +3355,22 @@
 
   window.addEventListener("keydown", function (ev) {
     var typing = ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA");
+    if (ev.ctrlKey && ev.altKey) {
+      var map = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "full", ArrowDown: "bottom" };
+      var side = map[ev.key];
+      if (side) {
+        ev.preventDefault();
+        snapWindow(side);
+        return;
+      }
+    }
     if (ev.key === "Escape") {
       importModal.hidden = true;
       aboutModal.hidden = true;
       infoModal.hidden = true;
+      var settingsModal = document.getElementById("settings-modal");
+      if (settingsModal) settingsModal.hidden = true;
+      hideGate();
       eqPanel.hidden = true;
       subPanel.hidden = true;
       if (fxPanel) fxPanel.hidden = true;
@@ -3336,5 +3460,16 @@
     video.play().catch(function () {});
   })();
   initPicsDir();
+  (function openStartupFile() {
+    invoke("startup_file")
+      .then(function (f) {
+        if (!f || !f.path) return;
+        state.mediaKind = f.is_url ? "url" : "file";
+        state.mediaPath = f.path;
+        playUrl(f.name || "G9", f.is_url ? f.path : convertFileSrc(f.path));
+        if (!f.is_url) maybeAutoSubs();
+      })
+      .catch(function () {});
+  })();
   refresh();
 })();

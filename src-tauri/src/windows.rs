@@ -1,6 +1,8 @@
 //! Extra player windows + the system power timer.
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder, Window,
+};
 
 /// Open another player window. `src` is the media URL the popup should start with.
 pub fn open(app: &AppHandle, src: Option<String>, title: Option<String>) -> Result<String, String> {
@@ -36,6 +38,40 @@ fn encode(s: &str) -> String {
         }
     }
     out
+}
+
+/// Tile the window like Windows Snap: left / right / top (top half) / quarter / full.
+#[tauri::command]
+pub fn snap_window(window: Window, side: String) -> Result<String, String> {
+    let monitor = window
+        .current_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or("no monitor")?;
+    let pos = monitor.position();
+    let size = monitor.size();
+    let mw = size.width as i32;
+    let mh = size.height as i32;
+    let (x, y, w, h) = match side.as_str() {
+        "left" => (pos.x, pos.y, mw / 2, mh),
+        "right" => (pos.x + mw / 2, pos.y, mw - mw / 2, mh),
+        "top" => (pos.x, pos.y, mw, mh / 2),
+        "bottom" => (pos.x, pos.y + mh / 2, mw, mh - mh / 2),
+        "top-left" => (pos.x, pos.y, mw / 2, mh / 2),
+        "top-right" => (pos.x + mw / 2, pos.y, mw - mw / 2, mh / 2),
+        "bottom-left" => (pos.x, pos.y + mh / 2, mw / 2, mh - mh / 2),
+        "bottom-right" => (pos.x + mw / 2, pos.y + mh / 2, mw - mw / 2, mh - mh / 2),
+        _ => (pos.x, pos.y, mw, mh),
+    };
+    if window.is_maximized().unwrap_or(false) && side != "full" {
+        window.unmaximize().map_err(|e| e.to_string())?;
+    }
+    window
+        .set_size(PhysicalSize::new(w.max(320) as u32, h.max(240) as u32))
+        .map_err(|e| e.to_string())?;
+    window
+        .set_position(PhysicalPosition::new(x, y))
+        .map_err(|e| e.to_string())?;
+    Ok(format!("Snapped {side}"))
 }
 
 #[tauri::command]

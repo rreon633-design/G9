@@ -3,7 +3,7 @@ resolver = "2"
 members = ["src-tauri", "crates/g9-core", "crates/g9-iptv", "crates/g9-store"]
 
 [workspace.package]
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 authors = ["G9 contributors"]
