@@ -726,6 +726,9 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--ink);
 }
 .eq-presets button:hover, .row-btns button:hover { background: rgba(255, 255, 255, 0.06); }
+.panel input[type="checkbox"] { width: auto; margin-right: 8px; }
+.mark-row { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; cursor: pointer; }
+.mark-row:hover { color: var(--accent); }
 
 .story {
   display: none;

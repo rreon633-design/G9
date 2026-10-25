@@ -299,3 +299,42 @@ pub async fn dlna_browse(
         .await
         .map_err(|e| e.to_string())?
 }
+
+#[tauri::command]
+pub fn ffmpeg_available() -> bool {
+    crate::tools::ffmpeg_available()
+}
+
+#[tauri::command]
+pub async fn extract_audio(path: String, dest: String) -> Result<crate::tools::ToolResult, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::tools::extract_audio(&path, &dest))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn remux_repair(path: String, dest: String) -> Result<crate::tools::ToolResult, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::tools::remux_repair(&path, &dest))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn translate_text(
+    text: String,
+    from: Option<String>,
+    to: Option<String>,
+) -> Result<String, String> {
+    let from = from.unwrap_or_else(|| "en".into());
+    let to = to.unwrap_or_else(|| "es".into());
+    tauri::async_runtime::spawn_blocking(move || crate::tools::translate(&text, &from, &to))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn fetch_url(url: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::fetch::fetch_playlist(&url))
+        .await
+        .map_err(|e| e.to_string())?
+}

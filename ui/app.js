@@ -75,6 +75,10 @@
   var scrubCanvas = document.getElementById("scrub-canvas");
   var eqPanel = document.getElementById("eq-panel");
   var subPanel = document.getElementById("sub-panel");
+  var fxPanel = document.getElementById("fx-panel");
+  var speedPanel = document.getElementById("speed-panel");
+  var markPanel = document.getElementById("mark-panel");
+  var recorder = null;
   var hlsSession = null;
   var audioGraph = null;
   var EQ_FREQ = [60, 170, 350, 1000, 3500, 10000];
@@ -519,6 +523,255 @@
     }
     grab();
   }
+  function applyVideoFilter() {
+    var br = document.getElementById("fx-br");
+    var ct = document.getElementById("fx-ct");
+    var sat = document.getElementById("fx-sat");
+    var sh = document.getElementById("fx-sh");
+    if (!br) return;
+    var b = Number(br.value) / 100;
+    var c = Number(ct.value) / 100;
+    var s = Number(sat.value) / 100;
+    var sharp = Number(sh.value);
+    document.getElementById("fx-br-val").textContent = br.value + "%";
+    document.getElementById("fx-ct-val").textContent = ct.value + "%";
+    document.getElementById("fx-sat-val").textContent = sat.value + "%";
+    document.getElementById("fx-sh-val").textContent = String(sharp);
+    video.style.filter =
+      "brightness(" + b + ") contrast(" + (c + sharp * 0.04) + ") saturate(" + s + ")";
+  }
+  function setSpeed(pct) {
+    var rate = Math.max(0.25, Math.min(2, Number(pct) / 100));
+    video.playbackRate = rate;
+    if ("preservesPitch" in video) video.preservesPitch = document.getElementById("speed-pitch").checked;
+    var el = document.getElementById("speed-val");
+    if (el) el.textContent = rate.toFixed(2) + "×";
+  }
+  function frameStep(dir) {
+    video.pause();
+    var fps = 24;
+    if (video.getVideoPlaybackQuality && video.getVideoPlaybackQuality().totalVideoFrames && video.currentTime > 0) {
+      fps = 24;
+    }
+    video.currentTime = Math.max(0, video.currentTime + dir / fps);
+  }
+  function marksMap() {
+    try {
+      return JSON.parse(localStorage.getItem("g9-marks") || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveMarks(map) {
+    try {
+      localStorage.setItem("g9-marks", JSON.stringify(map));
+    } catch (e) {}
+  }
+  function addMark() {
+    var key = mediaKey();
+    if (!key) {
+      toast("Open a video first");
+      return;
+    }
+    var map = marksMap();
+    if (!map[key]) map[key] = [];
+    var name = window.prompt("Bookmark name", fmt(video.currentTime));
+    if (name == null) return;
+    map[key].push({ t: video.currentTime, name: name || fmt(video.currentTime) });
+    saveMarks(map);
+    renderMarks();
+    toast("Bookmark saved");
+  }
+  function renderMarks() {
+    var host = document.getElementById("mark-list");
+    if (!host) return;
+    var list = (marksMap()[mediaKey()] || []).slice();
+    if (!list.length) {
+      host.innerHTML = '<div class="empty">No bookmarks for this video.</div>';
+      return;
+    }
+    host.innerHTML = list
+      .map(function (m, i) {
+        return (
+          '<div class="mark-row" data-mi="' +
+          i +
+          '"><span>' +
+          escapeHtml(m.name) +
+          "</span><b>" +
+          fmt(m.t) +
+          "</b></div>"
+        );
+      })
+      .join("");
+    host.querySelectorAll("[data-mi]").forEach(function (row) {
+      row.addEventListener("click", function () {
+        var m = list[Number(row.getAttribute("data-mi"))];
+        if (m) video.currentTime = m.t;
+      });
+    });
+  }
+  function enableAudioDescription() {
+    var tracks = video.audioTracks;
+    if (!tracks || !tracks.length) {
+      toast("No extra audio tracks");
+      return;
+    }
+    var found = false;
+    for (var i = 0; i < tracks.length; i++) {
+      var lab = (tracks[i].label || tracks[i].language || "") + "";
+      var ad = /desc|narrat|commentary|audio description|\bad\b/i.test(lab);
+      tracks[i].enabled = ad;
+      if (ad) found = true;
+    }
+    if (!found) {
+      for (var j = 0; j < tracks.length; j++) tracks[j].enabled = j === 0;
+      toast(tracks.length + " audio track(s) — none tagged as description");
+    } else toast("Audio description on");
+  }
+  function translateCaptions() {
+    if (!state.cues.length) {
+      toast("No captions to translate");
+      return;
+    }
+    var to = window.prompt("Translate captions to language code (es, hi, fr, de…)", "es");
+    if (!to) return;
+    toast("Translating…");
+    var i = 0;
+    function next() {
+      if (i >= state.cues.length) {
+        state.subRaw = "WEBVTT\n\n" + state.cues.map(function (c) {
+          return fmtVttTime(c.start) + " --> " + fmtVttTime(c.end) + "\n" + c.text;
+        }).join("\n\n");
+        paintCue();
+        toast("Captions translated");
+        return;
+      }
+      var cue = state.cues[i];
+      invoke("translate_text", { text: cue.text, from: "en", to: to })
+        .then(function (t) {
+          if (t) cue.text = t;
+        })
+        .catch(function () {})
+        .then(function () {
+          i++;
+          next();
+        });
+    }
+    next();
+  }
+  function sidecarDest(ext) {
+    var src = state.mediaPath || "";
+    if (!src || src.indexOf("http") === 0) {
+      return window.prompt("Save as", "g9-out." + ext);
+    }
+    return src.replace(/\.[^.]+$/, "") + "." + ext;
+  }
+  function extractAudio() {
+    if (state.mediaKind !== "file" || !state.mediaPath) {
+      toast("Open a local file first");
+      return;
+    }
+    var dest = sidecarDest("mp3");
+    if (!dest) return;
+    toast("Extracting audio…");
+    invoke("extract_audio", { path: state.mediaPath, dest: dest })
+      .then(function (r) {
+        toast("Saved " + (r.output || dest));
+      })
+      .catch(function (e) {
+        toast(String(e && e.message ? e.message : e));
+      });
+  }
+  function repairFile() {
+    if (state.mediaKind !== "file" || !state.mediaPath) {
+      toast("Open a local file first");
+      return;
+    }
+    var dest = sidecarDest("fixed.mp4");
+    if (!dest) return;
+    toast("Remuxing…");
+    invoke("remux_repair", { path: state.mediaPath, dest: dest })
+      .then(function (r) {
+        toast("Repaired " + (r.output || dest));
+      })
+      .catch(function (e) {
+        toast(String(e && e.message ? e.message : e));
+      });
+  }
+  function toggleRecord() {
+    if (recorder && recorder.state === "recording") {
+      recorder.stop();
+      return;
+    }
+    var kind = window.prompt("Record: screen  |  webcam", "screen");
+    if (!kind) return;
+    var job =
+      kind.toLowerCase().indexOf("cam") >= 0
+        ? navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        : navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    job
+      .then(function (stream) {
+        var chunks = [];
+        recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = function (ev) {
+          if (ev.data && ev.data.size) chunks.push(ev.data);
+        };
+        recorder.onstop = function () {
+          stream.getTracks().forEach(function (t) {
+            t.stop();
+          });
+          var blob = new Blob(chunks, { type: "video/webm" });
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "g9-record.webm";
+          a.click();
+          recorder = null;
+          toast("Recording saved");
+        };
+        recorder.start();
+        toast("Recording… use Record again to stop");
+      })
+      .catch(function (e) {
+        toast(String(e && e.message ? e.message : e));
+      });
+  }
+  function openPodcast() {
+    var url = window.prompt("Podcast RSS URL");
+    if (!url) return;
+    toast("Loading feed…");
+    invoke("fetch_url", { url: url })
+      .then(function (xml) {
+        var doc = new DOMParser().parseFromString(xml, "text/xml");
+        var items = doc.querySelectorAll("item");
+        state.podcasts = [];
+        items.forEach(function (it) {
+          var enc = it.querySelector("enclosure");
+          var href = enc && enc.getAttribute("url");
+          var t = (it.querySelector("title") && it.querySelector("title").textContent) || "Episode";
+          if (href) state.podcasts.push({ title: t, url: href });
+        });
+        state.view = "podcast";
+        paint();
+        renderSheet();
+        showChrome();
+        toast(state.podcasts.length + " episode(s)");
+      })
+      .catch(function (e) {
+        toast(String(e && e.message ? e.message : e));
+      });
+  }
+  function handleIpc(msg) {
+    if (!msg || typeof msg !== "object") return;
+    var cmd = msg.cmd || msg.command;
+    if (cmd === "play") video.play();
+    if (cmd === "pause") video.pause();
+    if (cmd === "toggle") togglePlay();
+    if (cmd === "stop") stop();
+    if (cmd === "seek" && msg.to != null) video.currentTime = Number(msg.to);
+    if (cmd === "skip") skip(Number(msg.dt || 10));
+    if (cmd === "mute") video.muted = true;
+    if (cmd === "unmute") video.muted = false;
+  }
   function openPath() {
     var p = window.prompt("File path or SMB share (\\\\server\\share\\video.mp4)");
     if (!p) return;
@@ -738,7 +991,10 @@
       aboutModal.hidden &&
       infoModal.hidden &&
       eqPanel.hidden &&
-      subPanel.hidden
+      subPanel.hidden &&
+      (!fxPanel || fxPanel.hidden) &&
+      (!speedPanel || speedPanel.hidden) &&
+      (!markPanel || markPanel.hidden)
     ) {
       state.hideTimer = window.setTimeout(function () {
         app.classList.remove("chrome-on");
@@ -795,6 +1051,36 @@
   function renderSheet() {
     var title = document.getElementById("sheet-title");
     var count = document.getElementById("sheet-count");
+    if (state.view === "podcast") {
+      title.textContent = "Podcast";
+      chipsEl.innerHTML = "";
+      count.textContent = String((state.podcasts || []).length);
+      if (!state.podcasts || !state.podcasts.length) {
+        listEl.innerHTML = '<div class="empty">Media → Subscribe to podcast.</div>';
+        return;
+      }
+      listEl.innerHTML = state.podcasts
+        .map(function (p, i) {
+          return (
+            '<div class="row" data-pod="' +
+            i +
+            '"><div class="n">▶</div><div class="meta"><b>' +
+            escapeHtml(p.title) +
+            "</b><span>episode</span></div></div>"
+          );
+        })
+        .join("");
+      listEl.querySelectorAll("[data-pod]").forEach(function (row) {
+        row.addEventListener("click", function () {
+          var p = state.podcasts[Number(row.getAttribute("data-pod"))];
+          if (!p) return;
+          state.mediaKind = "url";
+          state.mediaPath = p.url;
+          playUrl(p.title, p.url);
+        });
+      });
+      return;
+    }
     if (state.view === "dlna") {
       title.textContent = "DLNA";
       chipsEl.innerHTML = "";
@@ -1309,6 +1595,7 @@
     }).catch(fail);
   });
   document.getElementById("btn-path").addEventListener("click", openPath);
+  document.getElementById("btn-podcast").addEventListener("click", openPodcast);
   document.getElementById("btn-dlna").addEventListener("click", openDlna);
   document.getElementById("btn-url").addEventListener("click", function () {
     var url = window.prompt("Stream or file URL");
@@ -1373,6 +1660,24 @@
         fetchBestSubs();
       }
       if (act === "subs") fetchBestSubs();
+      if (act === "filters") {
+        fxPanel.hidden = false;
+        showChrome();
+      }
+      if (act === "speed") {
+        speedPanel.hidden = false;
+        showChrome();
+      }
+      if (act === "marks") {
+        renderMarks();
+        markPanel.hidden = false;
+        showChrome();
+      }
+      if (act === "record") toggleRecord();
+      if (act === "ad") enableAudioDescription();
+      if (act === "translate") translateCaptions();
+      if (act === "extract") extractAudio();
+      if (act === "repair") repairFile();
       if (act === "subs-off") {
         state.autoSubs = false;
         try {
@@ -1442,6 +1747,34 @@
   document.getElementById("sub-pos").addEventListener("input", function (ev) {
     setCuePos(Number(ev.target.value));
   });
+  ["fx-br", "fx-ct", "fx-sat", "fx-sh"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener("input", applyVideoFilter);
+  });
+  document.getElementById("fx-reset").addEventListener("click", function () {
+    document.getElementById("fx-br").value = "100";
+    document.getElementById("fx-ct").value = "100";
+    document.getElementById("fx-sat").value = "100";
+    document.getElementById("fx-sh").value = "0";
+    applyVideoFilter();
+  });
+  document.getElementById("fx-close").addEventListener("click", function () {
+    fxPanel.hidden = true;
+  });
+  document.getElementById("speed").addEventListener("input", function (ev) {
+    setSpeed(ev.target.value);
+  });
+  document.getElementById("speed-pitch").addEventListener("change", function () {
+    setSpeed(document.getElementById("speed").value);
+  });
+  document.getElementById("speed-close").addEventListener("click", function () {
+    speedPanel.hidden = true;
+  });
+  document.getElementById("mark-add").addEventListener("click", addMark);
+  document.getElementById("mark-close").addEventListener("click", function () {
+    markPanel.hidden = true;
+  });
+  if ("preservesPitch" in video) video.preservesPitch = true;
   document.querySelectorAll("[data-cue-color]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       setCueColor(btn.getAttribute("data-cue-color"));
@@ -1657,6 +1990,9 @@
       infoModal.hidden = true;
       eqPanel.hidden = true;
       subPanel.hidden = true;
+      if (fxPanel) fxPanel.hidden = true;
+      if (speedPanel) speedPanel.hidden = true;
+      if (markPanel) markPanel.hidden = true;
       if (state.tv) {
         setTv(false);
         return;
@@ -1696,6 +2032,11 @@
       eqPanel.hidden = !eqPanel.hidden;
       if (!eqPanel.hidden) subPanel.hidden = true;
     }
+    if (ev.key === "." || ev.key === ">") frameStep(1);
+    if (ev.key === "," || ev.key === "<") frameStep(-1);
+    if (ev.key === "m" || ev.key === "M") addMark();
+    if (ev.key === "[" && ev.shiftKey) setSpeed((video.playbackRate - 0.25) * 100);
+    if (ev.key === "]" && ev.shiftKey) setSpeed((video.playbackRate + 0.25) * 100);
   });
 
   try {
@@ -1706,5 +2047,13 @@
   } catch (e) {}
   window.addEventListener("beforeunload", saveResume);
   buildEqUi();
+  try {
+    var api = tauri();
+    if (api && api.event && api.event.listen) {
+      api.event.listen("g9-ipc", function (ev) {
+        handleIpc(ev && ev.payload);
+      });
+    }
+  } catch (e3) {}
   refresh();
 })();

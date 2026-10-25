@@ -1,8 +1,10 @@
 mod commands;
 mod dlna;
 mod fetch;
+mod ipc;
 mod state;
 mod subs;
+mod tools;
 
 use state::AppState;
 use tauri::Manager;
@@ -16,6 +18,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let state = AppState::init(&handle)?;
             app.manage(state);
+            crate::ipc::spawn(handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -40,6 +43,11 @@ pub fn run() {
             commands::apply_best_subtitles,
             commands::dlna_discover,
             commands::dlna_browse,
+            commands::ffmpeg_available,
+            commands::extract_audio,
+            commands::remux_repair,
+            commands::translate_text,
+            commands::fetch_url,
         ])
         .run(tauri::generate_context!())
         .expect("G9 failed to start");
