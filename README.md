@@ -11,14 +11,14 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.2.0)
+## Windows release (v0.3.0)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.2.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
-| `G9_0.2.0_x64_en-US.msi` | MSI for managed deployment |
+| `G9_0.3.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.3.0_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
 Download: **[Releases](https://github.com/rreon633-design/G9/releases)**
@@ -39,6 +39,8 @@ download small.
 - DLNA browse, podcast RSS
 - Optional **ffmpeg on PATH**: convert / extract / remux / RTMP / embedded subs
 - JSON IPC on `127.0.0.1:18765`
+- **Managed FFmpeg**: one click in Settings downloads a static FFmpeg/ffprobe into app data (nothing bundled)
+- **Extra player windows**, **transcript pane**, **WebGL shader effects**, **PC shutdown timer**
 
 Full shipped list, keyboard map and IPC examples: **[FEATURE-LIST.md](FEATURE-LIST.md)** — which
 also lists every requested feature that is **not** in G9 and why.

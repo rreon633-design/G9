@@ -1,10 +1,12 @@
 mod commands;
 mod dlna;
 mod fetch;
+mod ffmpeg;
 mod ipc;
 mod state;
 mod subs;
 mod tools;
+mod windows;
 
 use state::AppState;
 use tauri::Manager;
@@ -18,6 +20,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let state = AppState::init(&handle)?;
             app.manage(state);
+            crate::ffmpeg::init(&handle);
             crate::ipc::spawn(handle);
             Ok(())
         })
@@ -51,6 +54,14 @@ pub fn run() {
             commands::convert_media,
             commands::translate_text,
             commands::fetch_url,
+            commands::ffmpeg_status,
+            commands::ffmpeg_install,
+            commands::ffmpeg_remove,
+            windows::open_player_window,
+            windows::schedule_pc_shutdown,
+            windows::cancel_pc_shutdown,
+            windows::list_user_shaders,
+            windows::shaders_dir,
         ])
         .run(tauri::generate_context!())
         .expect("G9 failed to start");

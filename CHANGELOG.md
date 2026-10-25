@@ -3,6 +3,43 @@
 All notable changes to G9. Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `v*` tag.
 
+## [0.3.0] — 2026-10-25
+
+Closing part of the gap list without turning G9 into a second media core.
+
+### Added
+
+- **Managed FFmpeg** (`Settings → FFmpeg engine`): one click downloads a static Windows build of
+  `ffmpeg` + `ffprobe` (~100 MB) into app data, with progress. Every tool — convert, extract,
+  remux/repair, chapters, inspect, RTMP, embedded subtitles — prefers that copy and falls back to
+  PATH. Nothing is bundled in the installer; **Remove** deletes it.
+- **Extra player windows** (`Open in new window`): a second independent window with its own file,
+  queue and state; close it like any window.
+- **Transcript pane**: the loaded captions as scrollable text, highlight follows playback, click a
+  line to seek. Works with searched, sidecar and generated captions.
+- **WebGL shader effects**: Sharpen / Vivid / Mono / Night over the video frame, plus any `*.frag`
+  dropped into `<app data>/shaders`.
+- **PC shutdown timer**: the sleep timer can also schedule a Windows shutdown (`shutdown /s`), with
+  `Cancel PC shutdown` in Settings.
+
+### Changed
+
+- `tools.rs` / `subs.rs` no longer hard-code `ffmpeg` / `ffprobe`: both go through `ffmpeg.rs`
+- New capability window pattern `player-*` so extra windows may call the same commands
+- Popup windows hide the menu bar and poster
+
+### Docs
+
+- `FEATURE-LIST.md`: four items moved out of the gap list; GLSL is now "partial" (WebGL effects,
+  not Anime4K/FSRCNNX); managed FFmpeg and the shutdown timer are documented
+- `docs/USER.md`, `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT.md`, `README.md` updated for 0.3.0
+
+### Still not in this release
+
+On-device whisper models, libass karaoke, Chromecast/AirPlay **out**, Plex/Jellyfin/Emby clients,
+cloud drives, watch sync, skins marketplace, disc menus, DVB tuners, NVDEC/QSV picker. See the gap
+list in `FEATURE-LIST.md` — each has a reason, not a stub.
+
 ## [0.2.0] — 2026-10-25
 
 The "webview can do more than you think" release. Playback is still WebView2 `<video>`;
@@ -105,6 +142,7 @@ multi-window, independent pitch shift. See the gap list in `FEATURE-LIST.md`.
 - Local files, URL / HLS, M3U / IPTV import, Live TV sheet
 - Diagnostics overlay, keyboard map
 
+[0.3.0]: https://github.com/rreon633-design/G9/releases/tag/v0.3.0
 [0.2.0]: https://github.com/rreon633-design/G9/releases/tag/v0.2.0
 [0.1.2]: https://github.com/rreon633-design/G9/releases/tag/v0.1.2
 [0.1.1]: https://github.com/rreon633-design/G9/releases/tag/v0.1.1

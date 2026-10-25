@@ -31,7 +31,11 @@ everything opens as an overlay card over the picture.
 - **Settings → View → Playlist** is the file queue — it plays the next file when one ends.
 - **PiP** pops the picture out; **always-on-top** pins the window.
 - **360°** turns on look-around for equirectangular footage (drag to look).
-- **Sleep timer** stops playback after N minutes (G9 pauses; it does not shut down Windows).
+- **Sleep timer** stops playback after N minutes; answer *OK* to the follow-up to also schedule a
+  Windows shutdown, or use **Cancel PC shutdown** in Settings.
+- **Transcript** shows the same captions as scrolling text, follows playback and seeks when you click a line.
+- **Shader effect** applies a WebGL look (Sharpen / Vivid / Mono / Night, or your own `.frag` files).
+- **Open in new window** runs a second, independent player window — handy for a second screen.
 
 ## Keys
 
@@ -52,11 +56,18 @@ everything opens as an overlay card over the picture.
 
 Swipe on a touch screen: horizontal seek, vertical volume.
 
-## Optional tools (ffmpeg on PATH)
+## FFmpeg
 
-Convert / Save, extract audio, remux / repair, chapters, inspect, and RTMP out call **ffmpeg** /
-**ffprobe** if they exist. G9 does not bundle FFmpeg and the buttons will tell you when the
-binary is missing.
+G9 does not bundle FFmpeg. Open **Settings → FFmpeg engine** and press **Download FFmpeg** once
+(~100 MB, static Windows build). Convert / Save, extract audio, remux / repair, chapters, inspect,
+RTMP out and embedded subtitle extraction then use that copy; if you prefer, put `ffmpeg` and
+`ffprobe` on PATH and G9 will use them instead. **Remove** deletes the managed copy.
+
+## Shaders
+
+Built-in: Sharpen, Vivid, Mono, Night. For your own, drop `*.frag` files into the shaders folder
+(the panel prints its path). Shaders need a local file or a CORS-allowed stream to sample the
+video frame.
 
 ## Remote control (IPC)
 

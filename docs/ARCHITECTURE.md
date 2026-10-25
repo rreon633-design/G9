@@ -42,6 +42,8 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
 | `ipc.rs` | JSON lines on `127.0.0.1:18765` |
 | `tools.rs` | ffmpeg convert/extract/remux/RTMP, ffprobe, MyMemory translate |
 | `fetch.rs` | HTTP(S) playlist / RSS fetch |
+| `ffmpeg.rs` | Managed FFmpeg: download + unpack into app data, resolve `ffmpeg` / `ffprobe` before PATH |
+| `windows.rs` | Extra player windows (`player-*`), Windows shutdown timer, user shader files |
 
 ## Playback path
 
@@ -58,13 +60,14 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
 
 ## Optional external binaries
 
-G9 never bundles FFmpeg or Whisper. When present on PATH it spawns them **hidden**
+G9 never bundles FFmpeg or Whisper. `ffmpeg.rs` can **download** a static FFmpeg build into
+`<app data>/ffmpeg` on request; otherwise G9 uses PATH. Binaries are spawned **hidden**
 (`CREATE_NO_WINDOW`) for:
 
 | Binary | Used by |
 |---|---|
-| `ffmpeg` | convert / extract / remux / RTMP / embedded subtitle extraction |
-| `ffprobe` | chapters, inspect (Diagnostics) |
+| `ffmpeg` (managed or PATH) | convert / extract / remux / RTMP / embedded subtitle extraction |
+| `ffprobe` (managed or PATH) | chapters, inspect (Diagnostics) |
 | `whisper` / `whisper-cli` | Generate captions (opt-in, never during normal subtitle search) |
 
 ## CI / CD

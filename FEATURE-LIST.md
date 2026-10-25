@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.2.0** · source: `main`  
+Last updated: 2026-10-25 · release **v0.3.0** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -31,7 +31,8 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - **Always on top**
 - Background audio while minimized (WebView keeps decoding)
 - Touch **gestures**: horizontal seek, vertical volume
-- **Sleep timer**
+- **Sleep timer** (pause G9, or schedule a Windows shutdown)
+- **Extra player windows** (a second independent window, its own file and state)
 
 ### Picture
 - Hover **scrub preview**
@@ -44,6 +45,7 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - **Region** screen capture (draw a rectangle, then record)
 - Audio **visualizer** (spectrum)
 - **Scene poster** (3×2 stills)
+- **Shader effects** — built-in Sharpen / Vivid / Mono / Night plus your own `.frag` files in the shaders folder (WebGL, over the video frame)
 
 ### Subtitles
 - Sidecar `.srt` / `.vtt` / `.ass` / `.ssa`
@@ -59,6 +61,7 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - Live translate of the current cue while playing
 - **Subtitle browser** (click a line to seek)
 - **Pause after each line** (language-learning)
+- **Transcript pane** — the same cues as scrollable text, highlights and follows playback, click a line to seek
 
 ### Audio
 - Mute + volume on the transport
@@ -72,7 +75,10 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - DLNA / UPnP MediaServer browse + play
 - Podcast RSS subscribe + episode play
 
-### Tools (need **ffmpeg on PATH**)
+### Tools (need FFmpeg)
+FFmpeg is **not bundled**. **Settings → FFmpeg engine** downloads a static build once into app data
+(~100 MB) and every tool prefers it; otherwise `ffmpeg` / `ffprobe` on PATH is used.
+
 - Extract audio (MP3)
 - Repair / remux (copy codecs, ignore errors)
 - Convert / Save (MP4 / WebM / MP3)
@@ -85,6 +91,7 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - Diagnostics
 - ARIA application/toolbar roles, labelled controls
 - **Export / import settings** (JSON)
+- **PC shutdown timer** (Windows `shutdown /s`) next to the sleep timer, plus Cancel
 
 ---
 
@@ -147,6 +154,10 @@ G9 will not grow a second media core unless you explicitly switch the product to
 
 Every item below was requested in this project and is **not** in G9 (or only a thin substitute). This is the gap list.
 
+Four items left this list in **v0.3.0**: multi-window, bundled FFmpeg (now a managed download), the PC
+shutdown timer, and the transcript pane. GLSL is now **partial** — shader effects run in WebGL, but a
+libplacebo-grade Anime4K/FSRCNNX chain does not. The rest are engine-level or account-level features.
+
 ### Not in the app at all
 
 | # | You asked for | Notes |
@@ -155,9 +166,9 @@ Every item below was requested in this project and is **not** in G9 (or only a t
 | 2 | **MurmurAI** / self-hosted Whisper sidecar | Not shipped. |
 | 3 | Unofficial OpenSubtitles “unlimited” scraper / quota-bypass API | Refused (ToS / quota dodge). |
 | 4 | **TVSubtitles.net** HTML scrape | Not shipped. |
-| 5 | Custom **GLSL shaders** (Anime4K, FSRCNNX, user `.glsl` folder) | Needs mpv/`libplacebo`. |
-| 6 | **NVIDIA RTX Video HDR** | Needs NVAPI. |
-| 7 | **NVIDIA RTX Super Resolution** | Needs NVAPI. |
+| 5 | Full **libass** karaoke, signs, \\pos, \\move, fonts | ASS/SSA is flattened to timed text. WebGL shader effects are not subtitle rendering. |
+| 6 | **NVIDIA RTX Video HDR** | Needs NVAPI + their decoder path. |
+| 7 | **NVIDIA RTX Super Resolution** | Needs NVAPI + their decoder path. |
 | 8 | Live captions via **Whisper + Argos** (or other on-device MT) | Only MyMemory on existing cues. |
 | 9 | **OpenCodec** / user-droppable codec DLLs | Not how WebView decodes. |
 | 10 | **DVB-T / DVB-S / DVB-C** tuner cards | Needs FFmpeg hardware demuxers. |
@@ -172,23 +183,20 @@ Every item below was requested in this project and is **not** in G9 (or only a t
 | 19 | **Plex** client (library, artwork, watched) | Play their HTTP URL only. |
 | 20 | **Jellyfin** client | Same. |
 | 21 | **Emby** client | Same. |
-| 22 | Downloadable **skins / themes** marketplace | Cinema chrome is fixed. |
+| 22 | Downloadable **skins / themes** marketplace | Cinema chrome is fixed (one dark theme, TV Mode type scale). |
 | 23 | VLC-style **skin editor** | Not shipped. |
-| 24 | **Multi-window** / several videos at once | One window + PiP only. |
-| 25 | Independent **pitch shifter** (tempo unchanged, ±octave) | Speed+`preservesPitch` is the opposite trick. Needs Rubber Band. |
-| 26 | **MilkDrop** / plugin visualizers | Only a simple spectrum. |
-| 27 | **Album cover downloads** (MusicBrainz / iTunes) | Not shipped. |
-| 28 | TMDB/OMDb **posters, cast, ratings** media library | Library is recents only. |
-| 29 | Folder **indexer** with artwork | Not shipped. |
-| 30 | Full **NAS / SMB file manager** | UNC path prompt only. |
-| 31 | **libass** karaoke, signs, \pos, \move, fonts | ASS/SSA is flattened to timed text. |
-| 32 | QuickSync / **NVDEC** / VideoToolbox **decoder picker** | WebView2 DXVA only, no vendor toggle. |
-| 33 | Bundled **FFmpeg sidecar** | Convert/repair/RTMP/chapters/probe only if **ffmpeg/ffprobe are already on PATH**. |
-| 34 | OS **shutdown** after timer | Sleep timer **pauses G9**, does not power off Windows. |
-| 35 | Dedicated buttons for **transcripts** and **sign-language** tracks | Only generic AD-track pick. |
-| 36 | Gyro / headset **VR** navigation | 360 is mouse-drag WebGL only. |
-| 37 | `tauri-plugin-cast` / DIAL Chromecast | Not wired. |
-| 38 | Settings export as PotPlayer **`.reg`** | JSON only. |
+| 24 | Independent **pitch shifter** (tempo unchanged, ±octave) | Speed+`preservesPitch` is the opposite trick. Needs Rubber Band. |
+| 25 | **MilkDrop** / plugin visualizers | Only a simple spectrum. |
+| 26 | **Album cover downloads** (MusicBrainz / iTunes) | Not shipped. |
+| 27 | TMDB/OMDb **posters, cast, ratings** media library | Library is recents only. |
+| 28 | Folder **indexer** with artwork | Not shipped. |
+| 29 | Full **NAS / SMB file manager** | UNC path prompt only. |
+| 30 | QuickSync / **NVDEC** / VideoToolbox **decoder picker** | WebView2 DXVA only, no vendor toggle. |
+| 31 | Bundled **FFmpeg inside the installer** | Managed **download** (Settings → FFmpeg engine) instead: tools use that copy, then PATH. Nothing is bundled. |
+| 32 | Dedicated buttons for **sign-language** tracks | Only a generic audio-description track pick. |
+| 33 | Gyro / headset **VR** navigation | 360 is mouse-drag WebGL only; WebView2 has no reliable WebXR. |
+| 34 | `tauri-plugin-cast` / DIAL Chromecast | Not wired. |
+| 35 | Settings export as PotPlayer **`.reg`** | JSON only. |
 
 ### Partial vs what you specified
 
@@ -198,16 +206,13 @@ Every item below was requested in this project and is **not** in G9 (or only a t
 | Full HW decode paths (DXVA **and** NVDEC **and** QSV **and** VT) | DXVA via WebView2 only. |
 | Advanced ASS/SSA styling | Size, colour, position, outline; no karaoke/libass. |
 | Screen recorder with **region + FPS + encoder profiles** | Region / screen / webcam → WebM via MediaRecorder. No bitrate/FPS UI. |
-| Universal transcoder (all codecs/containers) | ffmpeg PATH: mp4 / webm / mp3 + audio extract + remux. |
-| Real-time filters (sharpen, motion blur, spatial blur, noise) | CSS brightness / contrast / saturation. |
-| Codec inspection **and** live CPU/GPU/decode stats | Info dialog + dropped frames; ffprobe dump if on PATH. No live GPU meter. |
+| Universal transcoder (all codecs/containers) | FFmpeg (managed download or PATH): mp4 / webm / mp3 + extract + remux. |
+| Real-time filters (sharpen, motion blur, spatial blur, noise) | CSS brightness / contrast / saturation, plus **WebGL shader effects** (built-in Sharpen / Vivid / Mono / Night and your own `.frag`). No Anime4K / FSRCNNX / temporal filters. |
+| Codec inspection **and** live CPU/GPU/decode stats | Info dialog + dropped frames; ffprobe dump if FFmpeg is installed. No live GPU meter. |
 | Subtitle **search UI** (preview many providers, pick one) | One-click “best match” chain; cue list after apply. No provider picker. |
 | Live TV from a **tuner**, not just M3U | M3U/IPTV/DLNA only. |
 | 360° with dedicated VR controls | Equirectangular look-around, drag only. |
-| Timed **PC shutdown** | Pause-after-N-minutes. |
-| Full screen-reader a11y (every control announced, captions/AD/transcript/sign as separate actions) | ARIA application/toolbar + labels + skip link. Not a complete a11y audit. |
-
----
+| Full screen-reader a11y (every control announced, captions/AD/transcript/sign as separate actions) | ARIA application/toolbar + labels + skip link, and a **transcript pane**. Not a complete a11y audit, no sign-language track. |
 
 ## Status of requested lists
 
@@ -217,4 +222,4 @@ Every item below was requested in this project and is **not** in G9 (or only a t
 
 **“12 more vs VLC”** — recorder, IPTV, podcasts, filters (CSS), frame-step, bookmarks, URL, speed+pitch-lock, extract/repair/convert (ffmpeg PATH), 360 look-around: shipped. Independent pitch-shift, disc menus, codec plugins: **not implemented**.
 
-**“23 long-tail”** — playlist, chapters (ffprobe), visualizer, PiP, background audio, cue browser, line-repeat, inspect, poster, sleep (pause), settings JSON, gestures, RTMP (ffmpeg PATH): shipped. Disc menus, cast-out, cloud, Plex/Jellyfin/Emby, skins, multi-window, album art/TMDB library: **not implemented**.
+**“23 long-tail”** — playlist, chapters (ffprobe), visualizer, PiP, background audio, cue browser, line-repeat, inspect, poster, sleep, settings JSON, gestures, RTMP: shipped. **v0.3.0** adds multi-window, a downloaded FFmpeg, a transcript pane, WebGL shader effects and a PC shutdown timer. Disc menus, cast-out, cloud, Plex/Jellyfin/Emby, skins, album art/TMDB library: **not implemented**.

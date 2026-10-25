@@ -481,7 +481,7 @@ fn run_hidden(cmd: &mut std::process::Command) -> Result<std::process::Output, S
 }
 
 fn extract_embedded(path: &str) -> Result<SubResult, String> {
-    let mut cmd = std::process::Command::new("ffmpeg");
+    let mut cmd = crate::ffmpeg::ffmpeg();
     cmd.args([
         "-nostdin",
         "-hide_banner",

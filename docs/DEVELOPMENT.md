@@ -8,6 +8,7 @@
 - Linux packages, debug only: `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf`
 - Optional: `ffmpeg` / `ffprobe` on PATH (convert, repair, chapters, inspect, RTMP, embedded subs)
 - Optional: `whisper` / `whisper-cli` on PATH (Generate captions)
+- Optional: no FFmpeg needed for development — **Settings → FFmpeg engine** downloads one at runtime
 
 ## Commands
 
@@ -64,8 +65,8 @@ the failing job prints it as a GitHub Actions **annotation**.
 3. Tag and push:
 
 ```bash
-git -c user.name='G9' -c user.email='g9@local' tag -a v0.2.0 -m "G9 v0.2.0 Windows"
-git push origin v0.2.0
+git -c user.name='G9' -c user.email='g9@local' tag -a v0.3.0 -m "G9 v0.3.0 Windows"
+git push origin v0.3.0
 ```
 
 4. **Release Windows** builds on `windows-latest`:
@@ -79,10 +80,10 @@ The workflow tees the build to `build.log` and, on failure, emits `::error` **an
 Fix on `main`, then move the tag — a tag whose release never published can be re-pointed:
 
 ```bash
-git push --delete origin v0.2.0
-git tag -d v0.2.0
-git -c user.name='G9' -c user.email='g9@local' tag -a v0.2.0 -m "G9 v0.2.0 Windows"
-git push origin v0.2.0
+git push --delete origin v0.3.0
+git tag -d v0.3.0
+git -c user.name='G9' -c user.email='g9@local' tag -a v0.3.0 -m "G9 v0.3.0 Windows"
+git push origin v0.3.0
 ```
 
 Never re-point a tag whose release **did** publish; bump the patch version instead.

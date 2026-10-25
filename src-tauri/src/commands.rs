@@ -2,7 +2,7 @@ use g9_core::{ParsedChannel, SourceKind, APP_NAME, APP_VERSION, CONTENT_POLICY};
 use g9_iptv::{parse_m3u, ParseOptions};
 use g9_store::{ChannelRow, GroupRow, HistoryRow, SourceRow, StoreStats};
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::fetch::fetch_playlist;
 use crate::state::AppState;
@@ -358,4 +358,21 @@ pub async fn fetch_url(url: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || crate::fetch::fetch_playlist(&url))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn ffmpeg_status() -> crate::ffmpeg::Status {
+    crate::ffmpeg::status()
+}
+
+#[tauri::command]
+pub async fn ffmpeg_install(app: AppHandle) -> Result<crate::ffmpeg::Status, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::ffmpeg::install(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn ffmpeg_remove() -> Result<crate::ffmpeg::Status, String> {
+    crate::ffmpeg::remove()
 }

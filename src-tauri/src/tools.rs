@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::process::Command;
 use std::time::Duration;
 
-fn run_hidden(cmd: &mut Command) -> Result<std::process::Output, String> {
+pub fn run_hidden(cmd: &mut Command) -> Result<std::process::Output, String> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -20,13 +20,11 @@ pub struct ToolResult {
 }
 
 pub fn ffmpeg_available() -> bool {
-    run_hidden(Command::new("ffmpeg").args(["-version"]))
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    crate::ffmpeg::status().available
 }
 
 pub fn extract_audio(path: &str, dest: &str) -> Result<ToolResult, String> {
-    let out = run_hidden(Command::new("ffmpeg").args([
+    let out = run_hidden(crate::ffmpeg::ffmpeg().args([
         "-y",
         "-nostdin",
         "-hide_banner",
@@ -50,7 +48,7 @@ pub fn extract_audio(path: &str, dest: &str) -> Result<ToolResult, String> {
 }
 
 pub fn remux_repair(path: &str, dest: &str) -> Result<ToolResult, String> {
-    let out = run_hidden(Command::new("ffmpeg").args([
+    let out = run_hidden(crate::ffmpeg::ffmpeg().args([
         "-y",
         "-nostdin",
         "-hide_banner",
@@ -75,7 +73,7 @@ pub fn remux_repair(path: &str, dest: &str) -> Result<ToolResult, String> {
 }
 
 pub fn probe(path: &str) -> Result<String, String> {
-    let out = run_hidden(Command::new("ffprobe").args([
+    let out = run_hidden(crate::ffmpeg::ffprobe().args([
         "-v",
         "quiet",
         "-print_format",
@@ -95,7 +93,7 @@ pub fn rtmp_out(path: &str, rtmp: &str) -> Result<ToolResult, String> {
     if !rtmp.starts_with("rtmp://") && !rtmp.starts_with("rtmps://") {
         return Err("RTMP URL required".into());
     }
-    let out = run_hidden(Command::new("ffmpeg").args([
+    let out = run_hidden(crate::ffmpeg::ffmpeg().args([
         "-re",
         "-nostdin",
         "-hide_banner",
@@ -140,7 +138,7 @@ pub fn convert(path: &str, dest: &str) -> Result<ToolResult, String> {
         ]);
     }
     args.push(dest);
-    let out = run_hidden(Command::new("ffmpeg").args(&args))?;
+    let out = run_hidden(crate::ffmpeg::ffmpeg().args(&args))?;
     if out.status.success() {
         Ok(ToolResult {
             ok: true,

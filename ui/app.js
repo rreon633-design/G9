@@ -61,6 +61,8 @@
     lineRepeat: false,
     lastCueIdx: -1,
     onTop: false,
+    shaderOn: false,
+    shaderName: "Off",
   };
 
   var video = document.getElementById("video");
@@ -1117,6 +1119,305 @@
     panel.hidden = false;
     showChrome();
   }
+
+  /* ---------- managed FFmpeg ---------- */
+  function ffPaint(st) {
+    var el = document.getElementById("ff-state");
+    if (!el) return;
+    if (!st) {
+      el.textContent = "Unavailable";
+      return;
+    }
+    var lines = [st.available ? "Ready" : "Not installed"];
+    if (st.version) lines.push(st.version);
+    if (st.ffmpeg) lines.push(st.ffmpeg);
+    if (st.dir) lines.push("Folder: " + st.dir);
+    el.textContent = lines.join("\n");
+    var btn = document.getElementById("ff-install");
+    if (btn) btn.textContent = st.managed ? "Re-download" : "Download FFmpeg";
+  }
+  function openFfmpeg() {
+    var panel = document.getElementById("ff-panel");
+    if (!panel) return;
+    panel.hidden = false;
+    showChrome();
+    invoke("ffmpeg_status")
+      .then(ffPaint)
+      .catch(function (e) {
+        var el = document.getElementById("ff-state");
+        if (el) el.textContent = String(e.message || e);
+      });
+  }
+  function installFfmpeg() {
+    var el = document.getElementById("ff-state");
+    if (el) el.textContent = "Downloading FFmpeg… 0%";
+    invoke("ffmpeg_install")
+      .then(function (st) {
+        ffPaint(st);
+        toast("FFmpeg ready");
+      })
+      .catch(function (e) {
+        if (el) el.textContent = String(e.message || e);
+      });
+  }
+  function removeFfmpeg() {
+    invoke("ffmpeg_remove")
+      .then(function (st) {
+        ffPaint(st);
+        toast("Managed FFmpeg removed");
+      })
+      .catch(function (e) {
+        toast(String(e.message || e));
+      });
+  }
+
+  /* ---------- extra player window ---------- */
+  function openNewWindow() {
+    var src = "";
+    if (state.mediaKind === "file" && state.mediaPath) src = convertFileSrc(state.mediaPath);
+    else src = state.mediaUrl || video.currentSrc || "";
+    invoke("open_player_window", { src: src || null, title: "G9 — " + (state.title || "player") })
+      .then(function () {
+        toast("Opened in a new window");
+      })
+      .catch(function (e) {
+        toast(String(e.message || e));
+      });
+  }
+
+  /* ---------- transcript ---------- */
+  function openTranscript() {
+    var panel = document.getElementById("transcript-panel");
+    var host = document.getElementById("tr-list");
+    if (!panel || !host) return;
+    if (!state.cues.length) {
+      host.innerHTML =
+        '<div class="empty">No captions loaded. Use CC to search subtitles, or Settings → Generate captions.</div>';
+    } else {
+      host.innerHTML = state.cues
+        .map(function (c, i) {
+          return (
+            '<div class="tr-row" data-tri="' +
+            i +
+            '"><time>' +
+            fmt(c.start) +
+            "</time><span>" +
+            escapeHtml(c.text) +
+            "</span></div>"
+          );
+        })
+        .join("");
+      host.querySelectorAll("[data-tri]").forEach(function (row) {
+        row.addEventListener("click", function () {
+          var c = state.cues[Number(row.getAttribute("data-tri"))];
+          if (c) {
+            video.currentTime = c.start + 0.01;
+            if (video.paused) togglePlay();
+          }
+        });
+      });
+    }
+    panel.hidden = false;
+    showChrome();
+    syncTranscript._i = -9;
+    syncTranscript();
+  }
+  function syncTranscript() {
+    var panel = document.getElementById("transcript-panel");
+    if (!panel || panel.hidden || !state.cues.length) return;
+    var t = video.currentTime - (state.subDelay || 0);
+    var idx = -1;
+    for (var i = 0; i < state.cues.length; i++) {
+      if (t >= state.cues[i].start && t < state.cues[i].end) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx === syncTranscript._i) return;
+    syncTranscript._i = idx;
+    var rows = document.querySelectorAll("#tr-list .tr-row");
+    for (var j = 0; j < rows.length; j++) rows[j].classList.toggle("now", j === idx);
+    if (idx >= 0 && rows[idx] && rows[idx].scrollIntoView) rows[idx].scrollIntoView({ block: "nearest" });
+  }
+
+  /* ---------- WebGL shaders ---------- */
+  var glState = null;
+  var glRaf = 0;
+  var BUILTIN_SHADERS = [
+    { name: "Off", src: null },
+    {
+      name: "Sharpen",
+      src:
+        "void main(){ vec4 c = texture2D(tex, vUv); vec4 n = texture2D(tex, vUv + vec2(0.0, -px.y)) + texture2D(tex, vUv + vec2(0.0, px.y)) + texture2D(tex, vUv + vec2(-px.x, 0.0)) + texture2D(tex, vUv + vec2(px.x, 0.0)); gl_FragColor = clamp(c * 2.2 - n * 0.3, 0.0, 1.0); }",
+    },
+    {
+      name: "Vivid",
+      src:
+        "void main(){ vec4 c = texture2D(tex, vUv); float l = dot(c.rgb, vec3(0.299, 0.587, 0.114)); gl_FragColor = vec4(mix(vec3(l), c.rgb, 1.5), c.a); }",
+    },
+    {
+      name: "Mono",
+      src:
+        "void main(){ vec4 c = texture2D(tex, vUv); float l = dot(c.rgb, vec3(0.299, 0.587, 0.114)); gl_FragColor = vec4(vec3(l * 1.06), c.a); }",
+    },
+    {
+      name: "Night",
+      src:
+        "void main(){ vec4 c = texture2D(tex, vUv); gl_FragColor = vec4(pow(c.rgb, vec3(1.25)) * vec3(0.92, 0.98, 1.08), c.a); }",
+    },
+  ];
+  var VERT_SRC =
+    "attribute vec2 p; varying vec2 vUv; void main(){ vUv = vec2((p.x + 1.0) * 0.5, 1.0 - (p.y + 1.0) * 0.5); gl_Position = vec4(p, 0.0, 1.0); }";
+  function glCompile(gl, type, src) {
+    var sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+  function glBuild(frag) {
+    var canvas = document.getElementById("glsl");
+    var gl = canvas.getContext("webgl", { alpha: false });
+    if (!gl) throw new Error("WebGL unavailable");
+    var prog = gl.createProgram();
+    gl.attachShader(prog, glCompile(gl, gl.VERTEX_SHADER, VERT_SRC));
+    gl.attachShader(
+      gl,
+      glCompile(
+        gl,
+        gl.FRAGMENT_SHADER,
+        "precision mediump float; varying vec2 vUv; uniform sampler2D tex; uniform vec2 px; " + frag
+      )
+    );
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    var loc = gl.getAttribLocation(prog, "p");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    var tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+    return {
+      gl: gl,
+      canvas: canvas,
+      tex: tex,
+      uTex: gl.getUniformLocation(prog, "tex"),
+      uPx: gl.getUniformLocation(prog, "px"),
+    };
+  }
+  function shaderLoop() {
+    if (!glState) return;
+    var v = video;
+    var canvas = glState.canvas;
+    var w = v.videoWidth || 640;
+    var h = v.videoHeight || 360;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      glState.gl.viewport(0, 0, w, h);
+    }
+    try {
+      var gl = glState.gl;
+      gl.bindTexture(gl.TEXTURE_2D, glState.tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+      gl.uniform1i(glState.uTex, 0);
+      gl.uniform2f(glState.uPx, 1 / w, 1 / h);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    } catch (e) {
+      toast("Shader needs a local file or a CORS-allowed stream");
+      stopShader();
+      return;
+    }
+    glRaf = requestAnimationFrame(shaderLoop);
+  }
+  function stopShader() {
+    if (glRaf) cancelAnimationFrame(glRaf);
+    glRaf = 0;
+    glState = null;
+    state.shaderOn = false;
+    var canvas = document.getElementById("glsl");
+    if (canvas) canvas.hidden = true;
+  }
+  function startShader(name, frag) {
+    stopShader();
+    if (!frag) {
+      toast("Shader off");
+      paintShaderList(name);
+      return;
+    }
+    try {
+      glState = glBuild(frag);
+    } catch (e) {
+      toast(String(e.message || e));
+      return;
+    }
+    document.getElementById("glsl").hidden = false;
+    state.shaderOn = true;
+    state.shaderName = name;
+    shaderLoop();
+    toast("Shader: " + name);
+    paintShaderList(name);
+  }
+  function paintShaderList(active) {
+    document.querySelectorAll("#shader-list [data-sh]").forEach(function (row) {
+      row.classList.toggle("on", row.getAttribute("data-sh") === active);
+    });
+  }
+  function openShaderPanel() {
+    var panel = document.getElementById("shader-panel");
+    var host = document.getElementById("shader-list");
+    if (!panel || !host) return;
+    function render(extra) {
+      var all = BUILTIN_SHADERS.concat(extra || []);
+      host.innerHTML = all
+        .map(function (s) {
+          return '<div class="row" data-sh="' + escapeHtml(s.name) + '"><div class="meta"><b>' + escapeHtml(s.name) + "</b></div></div>";
+        })
+        .join("");
+      host.querySelectorAll("[data-sh]").forEach(function (row) {
+        row.addEventListener("click", function () {
+          var name = row.getAttribute("data-sh");
+          var hit = all.filter(function (s) {
+            return s.name === name;
+          })[0];
+          startShader(name, hit ? hit.src : null);
+        });
+      });
+      paintShaderList(state.shaderName || "Off");
+    }
+    render([]);
+    invoke("list_user_shaders")
+      .then(function (list) {
+        render(
+          (list || []).map(function (s) {
+            return { name: s.name, src: s.source };
+          })
+        );
+      })
+      .catch(function () {});
+    panel.hidden = false;
+    showChrome();
+  }
+
+  /* ---------- PC power (sleep timer) ---------- */
+  function cancelPcShutdown() {
+    invoke("cancel_pc_shutdown")
+      .then(function (m) {
+        toast(m);
+      })
+      .catch(function (e) {
+        toast(String(e.message || e));
+      });
+  }
+
   function loadChapters() {
     if (!state.mediaPath || state.mediaKind !== "file") {
       toast("Open a local file");
@@ -1249,10 +1550,20 @@
       toast("Sleep timer off");
       return;
     }
+    var power = window.confirm("Also shut down the PC when the timer fires?\nOK = shut down · Cancel = only pause G9");
     state.sleepId = window.setTimeout(function () {
       video.pause();
       toast("Sleep timer");
     }, m * 60 * 1000);
+    if (power) {
+      invoke("schedule_pc_shutdown", { seconds: Math.round(m * 60) })
+        .then(function (msg) {
+          toast(msg);
+        })
+        .catch(function (e) {
+          toast(String(e.message || e));
+        });
+    }
     toast("Sleep in " + m + " min");
   }
   function exportCfg() {
@@ -2275,6 +2586,11 @@
         toast(state.lineRepeat ? "Pause after each line" : "Line repeat off");
       }
       if (act === "sleep") sleepTimer();
+      if (act === "ffmpeg") openFfmpeg();
+      if (act === "newwin") openNewWindow();
+      if (act === "transcript") openTranscript();
+      if (act === "shader") openShaderPanel();
+      if (act === "pcoff") cancelPcShutdown();
       if (act === "poster") scenePoster();
       if (act === "inspect") inspectFile();
       if (act === "rtmp") broadcastRtmp();
@@ -2380,6 +2696,30 @@
   document.getElementById("mark-close").addEventListener("click", function () {
     markPanel.hidden = true;
   });
+  ["ff", "tr", "shader"].forEach(function (id) {
+    var btn = document.getElementById(id + "-close");
+    var panel = document.getElementById(id === "tr" ? "transcript-panel" : id + "-panel");
+    if (btn && panel)
+      btn.addEventListener("click", function () {
+        panel.hidden = true;
+        if (id === "shader") stopShader();
+      });
+  });
+  (function ffWiring() {
+    var inst = document.getElementById("ff-install");
+    if (inst) inst.addEventListener("click", installFfmpeg);
+    var rem = document.getElementById("ff-remove");
+    if (rem) rem.addEventListener("click", removeFfmpeg);
+    var api = tauri();
+    if (api && api.event && api.event.listen) {
+      api.event.listen("ffmpeg-progress", function (ev) {
+        var el = document.getElementById("ff-state");
+        if (el && el.textContent.indexOf("Downloading") === 0) {
+          el.textContent = "Downloading FFmpeg… " + (ev && ev.payload != null ? ev.payload : 0) + "%";
+        }
+      });
+    }
+  })();
   var cueClose = document.getElementById("cue-close");
   if (cueClose)
     cueClose.addEventListener("click", function () {
@@ -2561,6 +2901,7 @@
     seekEl.value = String(Math.floor(p * 10));
     seekEl.style.setProperty("--p", p + "%");
     paintCue();
+    syncTranscript();
     if (state.abA != null && state.abB != null && video.currentTime >= state.abB) {
       video.currentTime = state.abA;
     }
@@ -2703,5 +3044,25 @@
       });
     }
   } catch (e3) {}
+  (function popupInit() {
+    var q = null;
+    try {
+      q = new URLSearchParams(window.location.search);
+    } catch (e) {
+      q = null;
+    }
+    if (!q || q.get("popup") !== "1") return;
+    document.body.classList.add("popup");
+    if (poster) poster.style.display = "none";
+    var src = q.get("src");
+    if (!src) {
+      toast("Open a file in this window");
+      return;
+    }
+    state.mediaUrl = src;
+    state.mediaKind = /^https?:/i.test(src) ? "url" : "file";
+    playUrl(decodeURIComponent((src.split("/").pop() || "G9").split("?")[0]), src);
+    video.play().catch(function () {});
+  })();
   refresh();
 })();

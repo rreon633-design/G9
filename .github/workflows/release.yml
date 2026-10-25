@@ -99,8 +99,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.2.0' }}
-          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.2.0' }} — Windows
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.3.0' }}
+          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.3.0' }} — Windows
           draft: false
           prerelease: false
           generate_release_notes: false
@@ -114,13 +114,13 @@ jobs:
             | `*.msi` | MSI |
             | `G9-windows-x64-portable.zip` | Portable `G9.exe` |
 
-            **v0.2.0**
-            - Cinema chrome: Media · Settings · TV Mode · About G9
-            - Online subtitles (OpenSubtitles, TheSubDB, Podnapisi) + sidecar/ASS
-            - Scrub preview, storyboard, EQ/boost, A–B, resume, bookmarks
-            - Playlist queue, PiP, visualizer, 360 look-around, GIF, region record
-            - DLNA browse, podcasts, IPTV (your M3U), JSON IPC `127.0.0.1:18765`
-            - Optional ffmpeg on PATH: convert, extract, remux, chapters, RTMP
+            **v0.3.0**
+            - Managed FFmpeg: one click downloads a static FFmpeg + ffprobe into app data
+              (nothing is bundled; PATH still works)
+            - Extra player windows, transcript pane, WebGL shader effects (built-in + your .frag)
+            - Windows shutdown timer beside the sleep timer, with Cancel
+            - Everything from 0.2.0: cinema chrome, multi-provider subtitles, playlist queue, PiP,
+              storyboard, chapters, DLNA, podcasts, IPTV, JSON IPC, EQ/boost, GIF, 360 look-around
 
             Full list: [FEATURE-LIST.md](https://github.com/rreon633-design/G9/blob/main/FEATURE-LIST.md)
 

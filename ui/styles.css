@@ -760,6 +760,16 @@ input[type="range"]::-webkit-slider-thumb {
   border: 2px solid var(--accent);
   background: rgba(78, 163, 255, 0.12);
 }
+#glsl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  z-index: 2;
+  pointer-events: none;
+}
+#glsl[hidden] { display: none !important; }
 #viz {
   position: absolute;
   left: 0;
@@ -812,3 +822,41 @@ input[type="range"]::-webkit-slider-thumb {
     -1px 1px 0 #000;
   white-space: pre-wrap;
 }
+
+/* Transcript pane */
+.transcript { max-height: 46vh; }
+.tr-row {
+  display: flex;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1.45;
+}
+.tr-row time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  flex: 0 0 52px;
+  padding-top: 2px;
+}
+.tr-row span { flex: 1; }
+.tr-row:hover { background: rgba(255, 255, 255, 0.05); }
+.tr-row.now { background: rgba(78, 163, 255, 0.16); color: var(--ink); }
+.tr-row.now time { color: var(--accent); }
+
+/* FFmpeg panel */
+#ff-state {
+  margin: 0 0 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+#ff-hint { padding: 0; }
+
+/* Popup player window: no menu bar, no poster */
+.popup .titlebar .menubar,
+.popup .poster { display: none; }

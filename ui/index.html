@@ -12,6 +12,7 @@
       <video id="video" playsinline aria-label="Video"></video>
       <canvas id="view360" hidden></canvas>
       <canvas id="viz" hidden></canvas>
+      <canvas id="glsl" hidden></canvas>
       <div id="region" hidden>
         <div id="region-box"></div>
         <p id="region-hint">Drag a rectangle. Release to record. Esc cancels.</p>
@@ -92,6 +93,11 @@
               <button type="button" data-act="poster">Scene poster</button>
               <button type="button" data-act="inspect">Inspect file</button>
               <button type="button" data-act="rtmp">Broadcast RTMP…</button>
+              <button type="button" data-act="ffmpeg">FFmpeg engine…</button>
+              <button type="button" data-act="newwin">Open in new window</button>
+              <button type="button" data-act="transcript">Transcript</button>
+              <button type="button" data-act="shader">Shader effect…</button>
+              <button type="button" data-act="pcoff">Cancel PC shutdown</button>
               <button type="button" data-act="exportcfg">Export settings</button>
               <button type="button" data-act="importcfg">Import settings</button>
               <button type="button" data-act="marks">Bookmarks</button>
@@ -220,6 +226,33 @@
           <button type="button" class="icon-btn" id="cue-close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
         </div>
         <div class="list" id="cue-list"></div>
+      </div>
+      <div class="panel" id="ff-panel" hidden>
+        <div class="panel-head">
+          <h3>FFmpeg engine</h3>
+          <button type="button" class="icon-btn" id="ff-close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        </div>
+        <p class="meta" id="ff-state">Checking…</p>
+        <div class="row-btns">
+          <button type="button" id="ff-install">Download FFmpeg</button>
+          <button type="button" id="ff-remove">Remove</button>
+        </div>
+        <p class="empty" id="ff-hint">Convert, repair, chapters, inspect, RTMP and embedded subtitles use this copy first, then PATH. About 100 MB, downloaded once.</p>
+      </div>
+      <div class="panel" id="transcript-panel" hidden>
+        <div class="panel-head">
+          <h3>Transcript</h3>
+          <button type="button" class="icon-btn" id="tr-close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        </div>
+        <div class="list transcript" id="tr-list"></div>
+      </div>
+      <div class="panel" id="shader-panel" hidden>
+        <div class="panel-head">
+          <h3>Shader effect</h3>
+          <button type="button" class="icon-btn" id="shader-close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        </div>
+        <div class="list" id="shader-list"></div>
+        <p class="empty" id="shader-hint">Processed in WebGL over the video frame. Drop your own .frag files into the shaders folder.</p>
       </div>
       <div class="panel" id="mark-panel" hidden>
         <div class="panel-head">
