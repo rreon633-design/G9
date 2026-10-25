@@ -39,6 +39,7 @@
   var chipsEl = document.getElementById("chips");
   var sheet = document.getElementById("sheet");
   var importModal = document.getElementById("import-modal");
+  var aboutModal = document.getElementById("about-modal");
   var seekEl = document.getElementById("seek");
   var hlsSession = null;
 
@@ -129,6 +130,10 @@
     if (state.info) {
       var legal = document.getElementById("legal");
       if (legal) legal.textContent = state.info.content_policy;
+      var av = document.getElementById("about-ver");
+      var ap = document.getElementById("about-policy");
+      if (av) av.textContent = "v" + state.info.version;
+      if (ap) ap.textContent = state.info.content_policy;
     }
   }
 
@@ -144,6 +149,8 @@
         '<div class="row" id="row-tv"><div class="n">TV</div><div class="meta"><b>TV Mode</b><span>Large type, living-room controls. Esc to exit.</span></div><button type="button" id="sheet-tv">' +
         (state.tv ? "On" : "Off") +
         "</button></div>";
+      html +=
+        '<div class="row" id="row-about"><div class="n">i</div><div class="meta"><b>About G9</b><span>Version, license, content policy</span></div><button type="button" id="sheet-about">Open</button></div>';
       if (!state.sources.length) html += '<div class="empty">No playlists yet. Media → Add playlist.</div>';
       state.sources.forEach(function (s) {
         html +=
@@ -166,6 +173,8 @@
           setTv(!state.tv);
           renderSheet();
         });
+      var sheetAbout = document.getElementById("sheet-about");
+      if (sheetAbout) sheetAbout.addEventListener("click", openAbout);
       listEl.querySelectorAll("[data-del]").forEach(function (btn) {
         btn.addEventListener("click", function () {
           invoke("delete_source", { id: Number(btn.getAttribute("data-del")) }).then(refresh).catch(fail);
@@ -573,6 +582,7 @@
         state.showDiag = !state.showDiag;
         diag.classList.toggle("on", state.showDiag);
       }
+      if (act === "about") openAbout();
     });
   });
 
@@ -640,6 +650,18 @@
   document.getElementById("q").addEventListener("input", function (ev) {
     state.query = ev.target.value;
     loadChannels();
+  });
+  function openAbout() {
+    if (state.info) {
+      document.getElementById("about-ver").textContent = "v" + state.info.version;
+      document.getElementById("about-policy").textContent = state.info.content_policy;
+    }
+    aboutModal.hidden = false;
+    showChrome();
+  }
+  document.getElementById("btn-about").addEventListener("click", openAbout);
+  document.getElementById("about-close").addEventListener("click", function () {
+    aboutModal.hidden = true;
   });
   document.getElementById("imp-cancel").addEventListener("click", function () {
     importModal.hidden = true;
@@ -720,6 +742,7 @@
     var typing = ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA");
     if (ev.key === "Escape") {
       importModal.hidden = true;
+      aboutModal.hidden = true;
       if (state.tv) {
         setTv(false);
         return;

@@ -86,6 +86,40 @@ video {
   box-shadow: 0 10px 30px rgba(30, 90, 180, 0.35);
 }
 .logo-mark svg { width: 22px; height: 22px; fill: #fff; stroke: none; }
+.logo-mark.sm { width: 44px; height: 44px; margin: 0 auto 10px; border-radius: 12px; }
+.logo-mark.sm svg { width: 18px; height: 18px; }
+
+.about { text-align: center; }
+.about-hero { margin-bottom: 16px; }
+.about-tag { margin: 4px 0 0; color: var(--muted); }
+.about-ver {
+  margin: 10px 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+}
+.about-meta {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.about-meta li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.about-meta li:first-child { border-top: 0; }
+.about-meta span { color: var(--muted); }
+.about-meta b { font-weight: 500; }
+.about-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0 0 8px; }
+.about .legal { text-align: left; }
 .poster h1 {
   margin: 0 0 8px;
   font-size: 32px;

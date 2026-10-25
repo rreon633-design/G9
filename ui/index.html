@@ -68,9 +68,12 @@
               <hr />
               <div class="menu-label">Tools</div>
               <button type="button" data-act="diag">Diagnostics</button>
-              <button type="button" data-view="settings">About G9</button>
+              <button type="button" data-view="settings">Preferences</button>
+              <hr />
+              <button type="button" data-act="about">About G9</button>
             </div>
           </div>
+          <button type="button" class="menu-btn" id="btn-about">About G9</button>
           <button type="button" class="menu-btn tv-toggle" id="btn-tv" title="TV mode">TV Mode</button>
         </nav>
 
@@ -184,6 +187,31 @@
           <span class="spacer"></span>
           <button type="button" id="imp-cancel">Cancel</button>
           <button type="button" class="primary" id="imp-go">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-back" id="about-modal" hidden>
+      <div class="modal about" role="dialog" aria-labelledby="about-title">
+        <div class="about-hero">
+          <div class="logo-mark sm">
+            <svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7z"></path></svg>
+          </div>
+          <h3 id="about-title">G9</h3>
+          <p class="about-tag">Files, streams, live TV. One player.</p>
+          <p class="about-ver" id="about-ver">v0.1.0</p>
+        </div>
+        <p class="legal" id="about-policy"></p>
+        <ul class="about-meta">
+          <li><span>License</span><b>Apache-2.0 OR MIT</b></li>
+          <li><span>Engine</span><b>Tauri 2 · OS WebView</b></li>
+          <li><span>UI</span><b>HTML · CSS · JavaScript</b></li>
+          <li><span>Source</span><b>github.com/rreon633-design/G9</b></li>
+        </ul>
+        <p class="about-note">G9 does not provide channels, playlists, or credentials. You bring legal sources.</p>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="primary" id="about-close">Close</button>
         </div>
       </div>
     </div>
