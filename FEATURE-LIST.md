@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.7.0** · source: `main`  
+Last updated: 2026-10-25 · release **v0.9.0** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -19,6 +19,14 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - Managed `yt-dlp` install (app data), `PATH` copy honoured, managed FFmpeg used for merging
 
 ### Playback
+- **Picture fit / fill / stretch / zoom, rotate and mirror** (`Shift+F`, `Shift+R`, `Shift+H`)
+- **Drag & drop**: video, several videos, folder, subtitle file, or a link
+- **Open folder…** into the queue; **save / open playlists** as `.m3u8`
+- **Single-click play/pause, double-click fullscreen**
+- **Live-stream reconnect**: 3 tries (1s, 3s, 8s), resumes where it stopped, then says so
+- **Stream stats** (`I`) and a **keyboard sheet** (`?`)
+- **Window size / position / maximized remembered**
+- **Check for updates** in About
 - Local files (Open file, Open path / SMB UNC)
 - Direct HTTP(S) URL / stream
 - IPTV: user-supplied M3U / M3U8 playlists
@@ -37,7 +45,7 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - Hardware decode: **WebView2 DXVA / D3D11** (automatic; no NVDEC toggle)
 - Resume last position, EQ, and subtitle delay per file
 - Repeat, shuffle, A–B loop
-- Speed 0.25×–2× with **pitch lock** (`preservesPitch`)
+- Speed 0.25×–4× with **pitch lock** (`preservesPitch`), presets and `+` / `−`
 - Frame step (`,` / `.`)
 - Bookmarks (`M`)
 - TV Mode (large type, living-room chrome)
@@ -120,6 +128,12 @@ FFmpeg is **not bundled**. **Settings → FFmpeg engine** downloads a static bui
 | Key | Action |
 |---|---|
 | Space | Play / pause |
+| 0 – 9 | Jump to 0 – 90% |
+| Home / End | Start / end |
+| + / − | Speed up / down |
+| I | Stream stats |
+| ? | Keyboard sheet |
+| Shift + F / R / H | Cycle fit / rotate / mirror |
 | ← → | ±10s |
 | ↑ ↓ | Previous / next channel |
 | F | Fullscreen |

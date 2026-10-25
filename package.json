@@ -1,7 +1,7 @@
 {
   "name": "g9",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "G9 \u2014 files, streams, live TV. One player.",
   "scripts": {
     "tauri": "tauri",

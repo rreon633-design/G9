@@ -40,7 +40,9 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs   fun.rs
 
 | Module | Role |
 |---|---|
-| `commands.rs` | Tauri command surface (playlist import, subs, DLNA, ffmpeg, translate) |
+| `commands.rs` | Tauri command surface (playlist import, subs, DLNA, ffmpeg, translate, update check, open link) |
+| `files.rs` | Frame/recording writes, plus `list_folder`, `read_text` and the `.m3u8` queue reader/writer |
+| `update.rs` | GitHub release check and the version comparison behind *Check for updates* |
 | `state.rs` | `AppState`: store handle, DB path, HTTP client |
 | `subs.rs` | Sidecar / TheSubDB / OpenSubtitles / Podnapisi / ffmpeg-embedded / Whisper CLI |
 | `dlna.rs` | SSDP MediaServer discover + ContentDirectory browse |

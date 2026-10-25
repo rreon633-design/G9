@@ -5,7 +5,7 @@ use g9_core::{APP_NAME, APP_VERSION, USER_AGENT};
 /// One message for every provider failure: short, and it names no service.
 pub const NO_SUBTITLE_MSG: &str = "No subtitles found";
 use md5::{Digest, Md5};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::io::{Read, Seek, SeekFrom};
 use url::Url;
 
@@ -13,7 +13,7 @@ const MAX_BODY: usize = 4 * 1024 * 1024;
 const HASH_CHUNK: u64 = 64 * 1024;
 const REPO: &str = "https://github.com/rreon633-design/G9";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubHit {
     pub movie: String,
     pub release: String,
@@ -376,6 +376,11 @@ fn search_podnapisi(query: &str, language: &str) -> Result<Vec<SubHit>, String> 
     } else {
         Ok(hits)
     }
+}
+
+/// Download one specific search hit, the way the picker asks for it.
+pub fn fetch_hit(hit: &SubHit, query: &str) -> Result<SubResult, String> {
+    download_hit(hit, query)
 }
 
 fn download_hit(hit: &SubHit, query: &str) -> Result<SubResult, String> {

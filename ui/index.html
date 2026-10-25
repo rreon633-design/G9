@@ -71,6 +71,9 @@
               <button type="button" id="btn-file" role="menuitem">Open file…</button>
               <button type="button" id="btn-url" role="menuitem">Open URL…</button>
               <button type="button" id="btn-path" role="menuitem">Open path / SMB…</button>
+              <button type="button" id="btn-folder" role="menuitem">Open folder…</button>
+              <button type="button" id="btn-pl-open" role="menuitem">Open a playlist…</button>
+              <button type="button" id="btn-pl-save" role="menuitem">Save the queue as a playlist…</button>
               <button type="button" id="btn-import" role="menuitem">Add playlist / IPTV…</button>
               <button type="button" id="btn-podcast" role="menuitem">Subscribe to podcast…</button>
               <button type="button" id="btn-dlna" role="menuitem">Find DLNA servers…</button>
@@ -95,7 +98,9 @@
               <button type="button" data-act="speed">Speed</button>
               <hr />
               <div class="menu-label">Picture</div>
-              <button type="button" data-act="filters">Video filters</button>
+              <button type="button" data-act="filters">Picture, fit &amp; zoom</button>
+              <button type="button" data-act="stats">Stream stats</button>
+              <button type="button" data-act="keys">Keyboard shortcuts…</button>
               <button type="button" data-act="360">360° look-around</button>
               <hr />
               <div class="menu-label">View</div>
@@ -164,6 +169,13 @@
 
       <div class="zap" id="zap"></div>
       <pre class="diag" id="diag"></pre>
+      <pre class="stats" id="stats" hidden></pre>
+      <div class="drop-hint" id="drop-hint" hidden>
+        <div class="drop-card">
+          <b>Drop to play</b>
+          <span>A video, a folder, a subtitle file or a link</span>
+        </div>
+      </div>
 
 
       <section class="fun" id="fun" hidden aria-label="Fun Mode">
@@ -380,7 +392,20 @@
         <input id="fx-sat" type="range" min="0" max="200" value="100" />
         <label>Sharpness (contrast edge) <b id="fx-sh-val">0</b></label>
         <input id="fx-sh" type="range" min="0" max="8" value="0" />
-        <div class="row-btns"><button type="button" id="fx-reset">Reset</button></div>
+        <label>Fit <b id="fx-fit-val">Fit</b></label>
+        <div class="row-btns" id="fx-fit">
+          <button type="button" data-fit="contain">Fit</button>
+          <button type="button" data-fit="cover">Fill</button>
+          <button type="button" data-fit="fill">Stretch</button>
+          <button type="button" data-fit="z125">125%</button>
+          <button type="button" data-fit="z150">150%</button>
+        </div>
+        <div class="row-btns">
+          <button type="button" id="fx-rot">Rotate 90°</button>
+          <button type="button" id="fx-flip">Mirror</button>
+          <button type="button" id="fx-fit-reset">Reset picture</button>
+        </div>
+        <div class="row-btns"><button type="button" id="fx-reset">Reset colour</button></div>
       </div>
       <div class="panel" id="speed-panel" hidden>
         <div class="panel-head">
@@ -388,7 +413,17 @@
           <button type="button" class="icon-btn" id="speed-close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
         </div>
         <label>Playback <b id="speed-val">1.00×</b></label>
-        <input id="speed" type="range" min="25" max="200" value="100" />
+        <input id="speed" type="range" min="25" max="400" value="100" />
+        <div class="row-btns" id="speed-presets">
+          <button type="button" data-speed="50">0.5×</button>
+          <button type="button" data-speed="75">0.75×</button>
+          <button type="button" data-speed="100">1×</button>
+          <button type="button" data-speed="125">1.25×</button>
+          <button type="button" data-speed="150">1.5×</button>
+          <button type="button" data-speed="200">2×</button>
+          <button type="button" data-speed="300">3×</button>
+          <button type="button" data-speed="400">4×</button>
+        </div>
         <label class="boost-row"><input id="speed-pitch" type="checkbox" checked /> Keep pitch (no chipmunk)</label>
       </div>
       <div class="panel" id="cue-panel" hidden>
@@ -581,10 +616,39 @@
           <li><span>UI</span><b>HTML · CSS · JavaScript</b></li>
           <li><span>Source</span><b>github.com/rreon633-design/G9</b></li>
         </ul>
+        <div class="about-upd">
+          <button type="button" id="about-check">Check for updates</button>
+          <span class="about-upd-text" id="about-upd">G9 checks GitHub for a newer release.</span>
+        </div>
         <p class="about-note">G9 does not provide channels, playlists, or credentials. You bring legal sources. Local JSON IPC: 127.0.0.1:18765 (one JSON object per line).</p>
         <div class="modal-actions">
           <span class="spacer"></span>
           <button type="button" class="primary" id="about-close">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-back" id="keys-modal" hidden>
+      <div class="modal keys-card" role="dialog" aria-modal="true" aria-labelledby="keys-title">
+        <h3 id="keys-title">Keyboard</h3>
+        <div class="keys-grid" id="keys-grid"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="primary" id="keys-close">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-back" id="subs-modal" hidden>
+      <div class="modal subs-card" role="dialog" aria-modal="true" aria-labelledby="subs-title">
+        <h3 id="subs-title">Subtitles</h3>
+        <p class="meta" id="subs-query">Pick a release to use.</p>
+        <div class="subs-list" id="subs-list"></div>
+        <div class="modal-actions">
+          <button type="button" id="subs-best">Best match</button>
+          <button type="button" id="subs-open">From a file…</button>
+          <span class="spacer"></span>
+          <button type="button" class="primary" id="subs-close">Close</button>
         </div>
       </div>
     </div>

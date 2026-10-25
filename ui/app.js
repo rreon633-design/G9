@@ -62,6 +62,12 @@
     onTop: false,
     shaderOn: false,
     shaderName: "Off",
+    playTitle: "",
+    reconnectTry: 0,
+    reconnectTimer: 0,
+    lastProgressAt: 0,
+    statsOn: false,
+    pic: { fit: "contain", zoom: 1, rot: 0, flip: false },
   };
 
   var video = document.getElementById("video");
@@ -713,11 +719,17 @@
       "brightness(" + b + ") contrast(" + (c + sharp * 0.04) + ") saturate(" + s + ")";
   }
   function setSpeed(pct) {
-    var rate = Math.max(0.25, Math.min(2, Number(pct) / 100));
+    var rate = Math.max(0.25, Math.min(4, Number(pct) / 100));
     video.playbackRate = rate;
-    if ("preservesPitch" in video) video.preservesPitch = document.getElementById("speed-pitch").checked;
+    var pitch = document.getElementById("speed-pitch");
+    if ("preservesPitch" in video) video.preservesPitch = pitch ? pitch.checked : true;
     var el = document.getElementById("speed-val");
     if (el) el.textContent = rate.toFixed(2) + "×";
+    var slider = document.getElementById("speed");
+    if (slider) slider.value = String(Math.round(rate * 100));
+    try {
+      localStorage.setItem("g9-speed", String(rate));
+    } catch (e) {}
   }
   function frameStep(dir) {
     video.pause();
@@ -2559,6 +2571,9 @@
     setTitle(title);
     state.lastQuery = title || url || "";
     state.mediaUrl = url || "";
+    state.playTitle = title || "";
+    state.lastProgressAt = Date.now();
+    state.gaveUp = false;
     enqueue(title, url);
     poster.style.display = "none";
     stopHls();
@@ -2657,6 +2672,10 @@
   }
 
   function togglePlay() {
+    if (video.error && state.mediaUrl) {
+      playUrl(state.playTitle || state.title || "Stream", state.mediaUrl);
+      return;
+    }
     if (video.paused) video.play();
     else video.pause();
   }
@@ -2670,6 +2689,10 @@
     state.mediaUrl = "";
     state.mediaPath = "";
     state.mediaKind = "";
+    state.playTitle = "";
+    state.reconnectTry = 0;
+    state.gaveUp = false;
+    window.clearTimeout(state.reconnectTimer);
     clearSubs();
     setPlaying(false);
     poster.style.display = "grid";
@@ -2839,7 +2862,9 @@
         toast("Generating captions…");
         fetchBestSubs();
       }
-      if (act === "subs") fetchBestSubs();
+      if (act === "subs") openSubsPicker();
+      if (act === "stats") toggleStats();
+      if (act === "keys") toggleKeys();
       if (act === "filters") {
         fxPanel.hidden = false;
         showChrome();
@@ -2929,7 +2954,7 @@
       toast("Subtitles off");
       return;
     }
-    fetchBestSubs();
+    openSubsPicker();
   });
   document.getElementById("btn-info").addEventListener("click", openInfo);
   document.getElementById("info-close").addEventListener("click", function () {
@@ -3342,6 +3367,15 @@
         return;
       }
     }
+    if (ev.key === "?") {
+      ev.preventDefault();
+      toggleKeys();
+      return;
+    }
+    if (ev.key === "Escape" && document.fullscreenElement) {
+      if (document.exitFullscreen) document.exitFullscreen();
+      return;
+    }
     if (ev.key === "Escape") {
       if (tvVisible()) {
         ev.preventDefault();
@@ -3374,6 +3408,51 @@
       return;
     }
     if (typing) return;
+    if (/^[0-9]$/.test(ev.key) && !state.tv && state.mediaUrl && video.duration) {
+      ev.preventDefault();
+      seekPercent(Number(ev.key) * 10);
+      return;
+    }
+    if (ev.key === "Home" && video.duration) {
+      ev.preventDefault();
+      video.currentTime = 0;
+      return;
+    }
+    if (ev.key === "End" && video.duration) {
+      ev.preventDefault();
+      video.currentTime = Math.max(0, video.duration - 0.5);
+      return;
+    }
+    if (ev.key === "+" || ev.key === "=") {
+      ev.preventDefault();
+      setSpeed(video.playbackRate * 100 + 25);
+      return;
+    }
+    if (ev.key === "-" || ev.key === "_") {
+      ev.preventDefault();
+      setSpeed(video.playbackRate * 100 - 25);
+      return;
+    }
+    if (ev.key === "i" || ev.key === "I") {
+      ev.preventDefault();
+      toggleStats();
+      return;
+    }
+    if (ev.key === "F" && ev.shiftKey) {
+      ev.preventDefault();
+      cycleFit();
+      return;
+    }
+    if (ev.key === "R" && ev.shiftKey) {
+      ev.preventDefault();
+      rotatePic();
+      return;
+    }
+    if (ev.key === "H" && ev.shiftKey) {
+      ev.preventDefault();
+      flipPic();
+      return;
+    }
     if (ev.key === " ") {
       ev.preventDefault();
       togglePlay();
@@ -4941,6 +5020,821 @@
       if (!ev.target.closest("[data-tv-open]") && !ev.target.closest("[data-tv-sched]")) tvClosePop();
     });
   })();
+
+
+  /* ==========================================================================
+     Everyday basics: picture fit, speed, stats, shortcuts, drag & drop,
+     folders and playlists, window memory, update check, subtitle picker and
+     live-stream reconnect. Everything here is plain DOM work; the only Rust
+     it leans on is list_folder / playlist_* / read_text / find_subtitles /
+     apply_subtitle / update_check / open_url.
+     ========================================================================== */
+  var pic = state.pic;
+  var FIT_LABEL = { contain: "Fit", cover: "Fill", fill: "Stretch" };
+  var keysTimer = 0;
+  var statsTimer = 0;
+  var subsQuery = "";
+
+  function loadPic() {
+    try {
+      var raw = localStorage.getItem("g9-pic");
+      if (raw) {
+        var p = JSON.parse(raw);
+        if (p && typeof p === "object") {
+          pic.fit = ["contain", "cover", "fill"].indexOf(p.fit) >= 0 ? p.fit : "contain";
+          pic.zoom = Number(p.zoom) > 0 && Number(p.zoom) <= 2 ? Number(p.zoom) : 1;
+          pic.rot = Number(p.rot) % 360 === 0 ? (Number(p.rot) + 360) % 360 : 0;
+          pic.flip = !!p.flip;
+        }
+      }
+      var sp = Number(localStorage.getItem("g9-speed"));
+      if (sp >= 0.25 && sp <= 4) {
+        video.playbackRate = sp;
+        var sv = document.getElementById("speed-val");
+        if (sv) sv.textContent = sp.toFixed(2) + "×";
+        var sl = document.getElementById("speed");
+        if (sl) sl.value = String(Math.round(sp * 100));
+      }
+    } catch (e) {}
+  }
+
+  function savePic() {
+    try {
+      localStorage.setItem("g9-pic", JSON.stringify(pic));
+    } catch (e) {}
+  }
+
+  function picLabel() {
+    var bits = [FIT_LABEL[pic.fit] || "Fit"];
+    if (pic.zoom !== 1) bits.push(Math.round(pic.zoom * 100) + "%");
+    if (pic.rot % 360) bits.push(pic.rot % 360 + "°");
+    if (pic.flip) bits.push("Mirror");
+    return bits.join(" · ");
+  }
+
+  function paintPic() {
+    var rot = ((pic.rot % 360) + 360) % 360;
+    var scale = pic.zoom;
+    // A rotated picture is taller than the frame: shrink it so nothing is cut.
+    if (rot === 90 || rot === 270) {
+      var cw = video.clientWidth || 0;
+      var ch = video.clientHeight || 0;
+      if (cw > 0 && ch > 0) scale *= Math.min(1, ch / cw);
+    }
+    video.style.objectFit = pic.fit;
+    video.style.transformOrigin = "center center";
+    var parts = [];
+    if (scale !== 1) parts.push("scale(" + scale.toFixed(4) + ")");
+    if (rot) parts.push("rotate(" + rot + "deg)");
+    if (pic.flip) parts.push("scaleX(-1)");
+    video.style.transform = parts.join(" ");
+    var el = document.getElementById("fx-fit-val");
+    if (el) el.textContent = picLabel();
+  }
+
+  function setFit(kind) {
+    if (kind === "z125") {
+      pic.fit = "contain";
+      pic.zoom = 1.25;
+    } else if (kind === "z150") {
+      pic.fit = "contain";
+      pic.zoom = 1.5;
+    } else if (FIT_LABEL[kind]) {
+      pic.fit = kind;
+      pic.zoom = 1;
+    } else {
+      return;
+    }
+    savePic();
+    paintPic();
+    toast("Picture · " + picLabel());
+  }
+
+  function cycleFit() {
+    var order = ["contain", "cover", "fill", "z125", "z150"];
+    var key = pic.zoom === 1.25 ? "z125" : pic.zoom === 1.5 ? "z150" : pic.fit;
+    var at = order.indexOf(key);
+    setFit(order[(at + 1) % order.length]);
+  }
+
+  function rotatePic() {
+    pic.rot = ((pic.rot || 0) + 90) % 360;
+    savePic();
+    paintPic();
+    toast("Picture · " + picLabel());
+  }
+
+  function flipPic() {
+    pic.flip = !pic.flip;
+    savePic();
+    paintPic();
+    toast(pic.flip ? "Picture · mirrored" : "Picture · normal");
+  }
+
+  function resetPic() {
+    pic.fit = "contain";
+    pic.zoom = 1;
+    pic.rot = 0;
+    pic.flip = false;
+    savePic();
+    paintPic();
+    toast("Picture reset");
+  }
+
+  /* ---- stream stats ---- */
+  function paintStats() {
+    var el = document.getElementById("stats");
+    if (!el || el.hidden) return;
+    var w = video.videoWidth || 0;
+    var h = video.videoHeight || 0;
+    var q = video.getVideoPlaybackQuality ? video.getVideoPlaybackQuality() : null;
+    var dropped = q ? q.droppedVideoFrames || 0 : 0;
+    var total = q ? q.totalVideoFrames || 0 : 0;
+    var buffer = 0;
+    try {
+      if (video.buffered && video.buffered.length) {
+        buffer = video.buffered.end(video.buffered.length - 1) - (video.currentTime || 0);
+      }
+    } catch (e) {}
+    var lines = [
+      "source    " + (state.mediaKind === "live" ? "live" : state.mediaKind || "—"),
+      "picture   " + (w && h ? w + "×" + h : "—"),
+      "fit       " + picLabel(),
+      "speed     " + (video.playbackRate || 1).toFixed(2) + "×",
+      "buffer    " + (isFinite(buffer) && buffer > 0 ? buffer.toFixed(1) + "s" : "0s"),
+      "dropped   " + dropped + (total ? " / " + total : ""),
+      "volume    " + Math.round((video.muted ? 0 : video.volume || 0) * 100) + "%",
+      "retries   " + (state.reconnectTry || 0) + " / 3",
+    ];
+    el.textContent = lines.join("\n");
+  }
+
+  function toggleStats(force) {
+    state.statsOn = typeof force === "boolean" ? force : !state.statsOn;
+    var el = document.getElementById("stats");
+    if (!el) return;
+    el.hidden = !state.statsOn;
+    window.clearInterval(statsTimer);
+    if (state.statsOn) {
+      paintStats();
+      statsTimer = window.setInterval(paintStats, 500);
+    }
+  }
+
+  /* ---- shortcuts sheet ---- */
+  var KEY_ROWS = [
+    ["Space", "Play / pause"],
+    ["← / →", "Back / forward 10s"],
+    ["0 – 9", "Jump to 0 – 90%"],
+    ["Home / End", "Start / end"],
+    ["↑ / ↓", "Previous / next channel"],
+    ["+ / −", "Speed up / down"],
+    ["F", "Fullscreen"],
+    ["Double-click", "Fullscreen"],
+    ["Shift + F", "Cycle fit: Fit · Fill · Stretch · zoom"],
+    ["Shift + R", "Rotate the picture 90°"],
+    ["Shift + H", "Mirror the picture"],
+    ["I", "Stream stats"],
+    ["A", "A–B loop"],
+    ["S", "Save frame"],
+    ["E", "Equalizer"],
+    ["M", "Bookmark"],
+    [", / .", "Frame back / forward"],
+    ["[ / ]", "Subtitle delay"],
+    ["D", "Diagnostics"],
+    ["?", "This list"],
+    ["Esc", "Close overlay · leave fullscreen"],
+  ];
+
+  function toggleKeys() {
+    var modal = document.getElementById("keys-modal");
+    if (!modal) return;
+    if (modal.hidden) {
+      var grid = document.getElementById("keys-grid");
+      grid.innerHTML = KEY_ROWS.map(function (r) {
+        return (
+          '<div class="keys-row"><kbd>' +
+          escapeHtml(r[0]) +
+          "</kbd><span>" +
+          escapeHtml(r[1]) +
+          "</span></div>"
+        );
+      }).join("");
+      modal.hidden = false;
+      window.clearTimeout(keysTimer);
+      keysTimer = window.setTimeout(function () {
+        var close = document.getElementById("keys-close");
+        if (close) close.focus();
+      }, 30);
+    } else {
+      modal.hidden = true;
+    }
+  }
+
+  /* ---- subtitle picker ---- */
+  function stars(rating) {
+    var n = Math.max(1, Math.min(5, Math.round((Number(rating) || 0) / 2)));
+    return "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
+  }
+
+  function paintSubsHits(hits) {
+    var list = document.getElementById("subs-list");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!hits || !hits.length) {
+      list.innerHTML = '<p class="empty">No subtitles found</p>';
+      return;
+    }
+    hits.slice(0, 40).forEach(function (hit) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "subs-hit";
+      var title = hit.release || hit.movie || "Subtitle";
+      b.innerHTML =
+        "<b>" +
+        escapeHtml(title) +
+        "</b><span>" +
+        escapeHtml(String(hit.language || "en").toUpperCase()) +
+        " · " +
+        stars(hit.rating) +
+        "</span>";
+      b.addEventListener("click", function () {
+        applySubHit(hit);
+      });
+      list.appendChild(b);
+    });
+  }
+
+  function openSubsPicker() {
+    var q = mediaQuery();
+    if (!q || q === "Ready") {
+      toast("Open a video first");
+      return;
+    }
+    subsQuery = q;
+    var modal = document.getElementById("subs-modal");
+    var meta = document.getElementById("subs-query");
+    if (meta) meta.textContent = q;
+    var list = document.getElementById("subs-list");
+    if (list) list.innerHTML = '<p class="empty">Searching…</p>';
+    modal.hidden = false;
+    showChrome();
+    invoke("find_subtitles", { query: q, language: "en" })
+      .then(paintSubsHits)
+      .catch(function () {
+        paintSubsHits([]);
+      });
+  }
+
+  function applySubHit(hit) {
+    document.getElementById("subs-modal").hidden = true;
+    toast("Fetching subtitles…");
+    invoke("apply_subtitle", { hit: hit, query: subsQuery })
+      .then(applyVtt)
+      .catch(fail);
+  }
+
+  /* ---- subtitle files dropped or picked ---- */
+  function isSubFile(name) {
+    return /\.(srt|vtt|ass|ssa)$/i.test(String(name || ""));
+  }
+
+  function baseName(p) {
+    return String(p || "").split(/[\\/]/).pop() || String(p || "");
+  }
+
+  function assTime(t) {
+    var m = /^(\d+):(\d{2}):(\d{2})[.:](\d{1,3})$/.exec(String(t).trim());
+    if (!m) return "";
+    var ms = (m[4] + "00").slice(0, 3);
+    function z(n) {
+      return String(n).padStart(2, "0");
+    }
+    return z(m[1]) + ":" + z(m[2]) + ":" + z(m[3]) + "." + ms;
+  }
+
+  function toVtt(text) {
+    var raw = String(text || "").replace(/\r/g, "");
+    if (!raw.trim()) return "";
+    if (/^WEBVTT/i.test(raw.trim())) return raw;
+    if (/^\[Script Info\]|^\[V4\+? Styles\]/m.test(raw)) {
+      var out = ["WEBVTT", ""];
+      raw.split("\n").forEach(function (line) {
+        if (line.indexOf("Dialogue:") !== 0) return;
+        var parts = line.slice("Dialogue:".length).split(",");
+        if (parts.length < 10) return;
+        var a = assTime(parts[1]);
+        var b = assTime(parts[2]);
+        if (!a || !b) return;
+        var body = parts
+          .slice(9)
+          .join(",")
+          .replace(/\{[^}]*\}/g, "")
+          .replace(/\\N/g, " ")
+          .trim();
+        if (!body) return;
+        out.push(a + " --> " + b, body, "");
+      });
+      return out.length > 2 ? out.join("\n") : "";
+    }
+    var srt = raw.replace(/(\d{1,2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
+    return "WEBVTT\n\n" + srt.trim() + "\n";
+  }
+
+  function applySubText(text, name) {
+    var vtt = toVtt(text);
+    if (!vtt) {
+      toast("That subtitle file is empty");
+      return false;
+    }
+    state.autoSubs = false;
+    applyVttText(shiftVtt(vtt, state.subDelay || 0), { language: "en" });
+    state.subsOn = true;
+    var cc = document.getElementById("btn-cc");
+    if (cc) cc.classList.add("on");
+    toast("Subtitles · " + baseName(name));
+    return true;
+  }
+
+  function attachSubFile(path) {
+    invoke("read_text", { path: path })
+      .then(function (text) {
+        applySubText(text, path);
+      })
+      .catch(function () {
+        toast("Could not read that subtitle");
+      });
+  }
+
+  /* ---- drag & drop ---- */
+  function dropHint(on) {
+    var el = document.getElementById("drop-hint");
+    if (el) el.hidden = !on;
+  }
+
+  function srcFor(p) {
+    return /^[a-z]+:\/\//i.test(String(p)) ? String(p) : convertFileSrc(p);
+  }
+
+  function queuePaths(list) {
+    var files = (list || []).filter(Boolean);
+    if (!files.length) return;
+    var jobs = files.map(function (path) {
+      return invoke("list_folder", { path: path })
+        .then(function (items) {
+          return { path: path, items: items || [] };
+        })
+        .catch(function () {
+          return { path: path, items: null };
+        });
+    });
+    Promise.all(jobs)
+      .then(function (res) {
+        var out = [];
+        res.forEach(function (r) {
+          if (r.items && r.items.length) {
+            r.items.forEach(function (it) {
+              out.push(it);
+            });
+          } else if (!r.items) {
+            out.push({ name: baseName(r.path), path: r.path });
+          }
+        });
+        if (!out.length) {
+          toast("No videos in there");
+          return;
+        }
+        out.forEach(function (it) {
+          state.queue.push({
+            title: it.name,
+            url: srcFor(it.path),
+            path: it.path,
+            kind: "file",
+          });
+        });
+        var first = out[0];
+        playUrl(first.name, srcFor(first.path));
+        if (out.length > 1) toast(out.length + " videos queued");
+      })
+      .catch(fail);
+  }
+
+  function dropPaths(paths) {
+    var list = (paths || []).filter(Boolean);
+    if (!list.length) return;
+    var subs = list.filter(isSubFile);
+    var media = list.filter(function (p) {
+      return !isSubFile(p);
+    });
+    if (subs.length) attachSubFile(subs[0]);
+    if (media.length) queuePaths(media);
+  }
+
+  (function wireDrop() {
+    var api = tauri();
+    if (api && api.event && api.event.listen) {
+      api.event.listen("tauri://drag-enter", function () {
+        dropHint(true);
+      });
+      api.event.listen("tauri://drag-over", function () {
+        dropHint(true);
+      });
+      api.event.listen("tauri://drag-leave", function () {
+        dropHint(false);
+      });
+      api.event.listen("tauri://drag-drop", function (ev) {
+        dropHint(false);
+        var p = ev && ev.payload && ev.payload.paths;
+        if (p && p.length) dropPaths(p);
+      });
+    }
+    document.addEventListener("dragover", function (ev) {
+      ev.preventDefault();
+      dropHint(true);
+    });
+    document.addEventListener("dragleave", function (ev) {
+      if (ev.target === document.documentElement || !ev.relatedTarget) dropHint(false);
+    });
+    document.addEventListener("drop", function (ev) {
+      ev.preventDefault();
+      dropHint(false);
+      var dt = ev.dataTransfer;
+      if (!dt) return;
+      var files = dt.files ? Array.prototype.slice.call(dt.files) : [];
+      if (files.length) {
+        var paths = files
+          .map(function (f) {
+            return f.path || "";
+          })
+          .filter(Boolean);
+        if (paths.length) {
+          dropPaths(paths);
+          return;
+        }
+        var first = files[0];
+        if (first && isSubFile(first.name) && first.text) {
+          first.text().then(function (t) {
+            applySubText(t, first.name);
+          });
+          return;
+        }
+        toast("Drop a video, a folder or a subtitle file");
+        return;
+      }
+      var text = "";
+      try {
+        text = (dt.getData("text/uri-list") || dt.getData("text/plain") || "").trim();
+      } catch (e) {}
+      if (/^https?:\/\/\S+$/i.test(text)) playUrl(baseName(text.split("?")[0]) || text, text);
+      else toast("Drop a video, a folder or a subtitle file");
+    });
+  })();
+
+  /* ---- folders and playlists ---- */
+  function openFolder() {
+    openDialog({ directory: true, multiple: false })
+      .then(function (dir) {
+        if (typeof dir !== "string" || !dir) return null;
+        return invoke("list_folder", { path: dir }).then(function (items) {
+          if (!items || !items.length) {
+            toast("No videos in that folder");
+            return null;
+          }
+          items.forEach(function (it) {
+            state.queue.push({ title: it.name, url: srcFor(it.path), path: it.path, kind: "file" });
+          });
+          playUrl(items[0].name, srcFor(items[0].path));
+          toast(items.length + " videos queued");
+          return null;
+        });
+      })
+      .catch(fail);
+  }
+
+  function saveQueue() {
+    var rows = state.queue.map(function (q) {
+      return { title: q.title || q.url, url: q.url };
+    });
+    if (!rows.length && state.mediaUrl) rows.push({ title: state.playTitle || state.mediaUrl, url: state.mediaUrl });
+    if (!rows.length) {
+      toast("Nothing queued yet");
+      return;
+    }
+    var api = tauri();
+    var save = api && api.dialog && api.dialog.save ? api.dialog.save : null;
+    if (!save) {
+      toast("Saving a playlist needs the desktop app");
+      return;
+    }
+    var name = picsDir ? null : "G9 queue.m3u8";
+    Promise.resolve(
+      save({
+        defaultPath: name || picsDir.replace(/[\\/]+$/, "") + "\\G9 queue.m3u8",
+        filters: [{ name: "Playlist", extensions: ["m3u8", "m3u"] }],
+      })
+    )
+      .then(function (path) {
+        if (typeof path !== "string" || !path) return null;
+        return invoke("playlist_save", { path: path, entries: rows }).then(function (n) {
+          toast(n + " saved to the playlist");
+          return null;
+        });
+      })
+      .catch(fail);
+  }
+
+  function loadQueue() {
+    openDialog({ multiple: false, filters: [{ name: "Playlist", extensions: ["m3u8", "m3u"] }] })
+      .then(function (path) {
+        if (typeof path !== "string" || !path) return null;
+        return invoke("playlist_load", { path: path }).then(function (rows) {
+          if (!rows || !rows.length) {
+            toast("That playlist is empty");
+            return null;
+          }
+          state.queue = rows.map(function (r) {
+            return { title: r.title, url: r.url, path: "", kind: /^https?:/i.test(r.url) ? "url" : "file" };
+          });
+          state.queueIdx = -1;
+          var first = state.queue[0];
+          playUrl(first.title, first.url);
+          toast(state.queue.length + " in the queue");
+          return null;
+        });
+      })
+      .catch(fail);
+  }
+
+  /* ---- window memory ---- */
+  function restoreWindow() {
+    win()
+      .then(function (w) {
+        if (!w) return null;
+        return invoke("get_setting", { key: "window.geom" }).then(function (raw) {
+          if (!raw) return null;
+          var g = JSON.parse(raw);
+          var api = tauri();
+          if (g.max) return w.maximize();
+          var jobs = [];
+          if (g.w > 480 && g.h > 320 && api.window.PhysicalSize) {
+            jobs.push(w.setSize(new api.window.PhysicalSize(g.w, g.h)));
+          }
+          if (typeof g.x === "number" && typeof g.y === "number" && api.window.PhysicalPosition) {
+            if (Math.abs(g.x) < 20000 && Math.abs(g.y) < 20000) {
+              jobs.push(w.setPosition(new api.window.PhysicalPosition(g.x, g.y)));
+            }
+          }
+          return Promise.all(jobs);
+        });
+      })
+      .catch(function () {});
+  }
+
+  function saveWindow() {
+    win()
+      .then(function (w) {
+        if (!w) return null;
+        return Promise.all([w.isMaximized(), w.outerSize(), w.outerPosition()]).then(function (r) {
+          var g = { max: !!r[0], w: r[1].width, h: r[1].height, x: r[2].x, y: r[2].y };
+          return invoke("set_setting", { key: "window.geom", value: JSON.stringify(g) });
+        });
+      })
+      .catch(function () {});
+  }
+
+  /* ---- update check ---- */
+  function checkUpdates() {
+    var el = document.getElementById("about-upd");
+    if (!el) return;
+    el.textContent = "Checking…";
+    invoke("update_check")
+      .then(function (info) {
+        if (info.newer) {
+          el.textContent = "v" + info.latest + " is available · ";
+          var b = document.createElement("button");
+          b.type = "button";
+          b.textContent = "Download";
+          b.addEventListener("click", function () {
+            invoke("open_url", { url: info.url }).catch(function () {
+              toast("Could not open the release page");
+            });
+          });
+          el.appendChild(b);
+        } else {
+          el.textContent = "Up to date (v" + info.current + ")";
+        }
+      })
+      .catch(function (e) {
+        el.textContent = shortError(e, "Could not check for updates");
+      });
+  }
+
+  /* ---- live-stream reconnect ---- */
+  function isNetworkSource() {
+    return /^https?:/i.test(state.mediaUrl || "");
+  }
+
+  function scheduleReconnect() {
+    if (!isNetworkSource()) return;
+    if (state.reconnectTry >= 3) {
+      if (!state.gaveUp) {
+        state.gaveUp = true;
+        var st = document.getElementById("status-text");
+        if (st) st.textContent = "Stream unavailable";
+        var meta = document.getElementById("info-meta");
+        if (meta) meta.textContent = "Press play to try again";
+        toast("Stream unavailable · press play to try again");
+        setPlaying(false);
+      }
+      return;
+    }
+    state.reconnectTry += 1;
+    var n = state.reconnectTry;
+    var delay = [1000, 3000, 8000][n - 1] || 8000;
+    var status = document.getElementById("status-text");
+    if (status) status.textContent = "Reconnecting… (" + n + "/3)";
+    if (n === 1) toast("Stream dropped · reconnecting");
+    window.clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = window.setTimeout(function () {
+      if (!state.mediaUrl) return;
+      var at = video.currentTime || 0;
+      var url = state.mediaUrl;
+      var title = state.playTitle || state.title || "Stream";
+      playUrl(title, url);
+      if (at > 1) {
+        video.addEventListener("loadedmetadata", function once() {
+          video.removeEventListener("loadedmetadata", once);
+          try {
+            video.currentTime = at;
+          } catch (e) {}
+        });
+      }
+    }, delay);
+  }
+
+  video.addEventListener("error", function () {
+    if (isNetworkSource()) scheduleReconnect();
+  });
+  video.addEventListener("timeupdate", function () {
+    state.lastProgressAt = Date.now();
+    if ((state.reconnectTry || state.gaveUp) && !video.paused && video.readyState >= 2) {
+      state.reconnectTry = 0;
+      state.gaveUp = false;
+      var status = document.getElementById("status-text");
+      if (status) status.textContent = state.title || "Playing";
+    }
+  });
+  window.setInterval(function () {
+    if (!isNetworkSource() || video.paused || !state.mediaUrl) return;
+    if (Date.now() - (state.lastProgressAt || 0) > 15000) scheduleReconnect();
+  }, 5000);
+
+  /* ---- click controls ---- */
+  var clickTimer = 0;
+
+  function overlayOpen() {
+    return !!document.querySelector(".modal-back:not([hidden])");
+  }
+
+  function clickTargetIsChrome(ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return true;
+    return !!t.closest(
+      "button, input, select, textarea, a, .osd, .panel, .modal-back, .fun, .tv, .sheet, aside.info, header, .drop-hint, .stats"
+    );
+  }
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      if (document.exitFullscreen) document.exitFullscreen();
+      return;
+    }
+    if (app.requestFullscreen) {
+      var p = app.requestFullscreen();
+      if (p && p.catch) p.catch(function () {});
+    }
+  }
+
+  app.addEventListener("click", function (ev) {
+    if (clickTargetIsChrome(ev) || overlayOpen() || !state.mediaUrl) return;
+    window.clearTimeout(clickTimer);
+    clickTimer = window.setTimeout(togglePlay, 210);
+  });
+
+  app.addEventListener("dblclick", function (ev) {
+    if (clickTargetIsChrome(ev)) return;
+    window.clearTimeout(clickTimer);
+    toggleFullscreen();
+  });
+
+  /* ---- seek helpers ---- */
+  function seekPercent(pct) {
+    if (!video.duration || !isFinite(video.duration)) {
+      toast("This source cannot seek");
+      return;
+    }
+    var at = (video.duration * pct) / 100;
+    video.currentTime = Math.max(0, Math.min(video.duration - 0.2, at));
+    toast(Math.round(pct) + "%");
+  }
+
+  /* ---- wiring ---- */
+  (function wireBasics() {
+    var folder = document.getElementById("btn-folder");
+    if (folder) folder.addEventListener("click", openFolder);
+    var plOpen = document.getElementById("btn-pl-open");
+    if (plOpen) plOpen.addEventListener("click", loadQueue);
+    var plSave = document.getElementById("btn-pl-save");
+    if (plSave) plSave.addEventListener("click", saveQueue);
+
+    var fitRow = document.getElementById("fx-fit");
+    if (fitRow) {
+      fitRow.addEventListener("click", function (ev) {
+        var b = ev.target.closest("[data-fit]");
+        if (b) setFit(b.getAttribute("data-fit"));
+      });
+    }
+    var rot = document.getElementById("fx-rot");
+    if (rot) rot.addEventListener("click", rotatePic);
+    var flip = document.getElementById("fx-flip");
+    if (flip) flip.addEventListener("click", flipPic);
+    var fitReset = document.getElementById("fx-fit-reset");
+    if (fitReset) fitReset.addEventListener("click", resetPic);
+
+    var presets = document.getElementById("speed-presets");
+    if (presets) {
+      presets.addEventListener("click", function (ev) {
+        var b = ev.target.closest("[data-speed]");
+        if (b) setSpeed(Number(b.getAttribute("data-speed")));
+      });
+    }
+
+    var aboutCheck = document.getElementById("about-check");
+    if (aboutCheck) aboutCheck.addEventListener("click", checkUpdates);
+
+    var keysClose = document.getElementById("keys-close");
+    if (keysClose)
+      keysClose.addEventListener("click", function () {
+        document.getElementById("keys-modal").hidden = true;
+      });
+
+    var subsClose = document.getElementById("subs-close");
+    if (subsClose)
+      subsClose.addEventListener("click", function () {
+        document.getElementById("subs-modal").hidden = true;
+      });
+    var subsBest = document.getElementById("subs-best");
+    if (subsBest)
+      subsBest.addEventListener("click", function () {
+        document.getElementById("subs-modal").hidden = true;
+        fetchBestSubs();
+      });
+    var subsOpen = document.getElementById("subs-open");
+    if (subsOpen)
+      subsOpen.addEventListener("click", function () {
+        document.getElementById("subs-modal").hidden = true;
+        openDialog({ multiple: false, filters: [{ name: "Subtitles", extensions: ["srt", "vtt", "ass", "ssa", "txt"] }] })
+          .then(function (p) {
+            if (typeof p === "string" && p) attachSubFile(p);
+            return null;
+          })
+          .catch(function () {});
+      });
+
+    // Esc closes the two new dialogs first, like every other overlay.
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Escape") return;
+      var keys = document.getElementById("keys-modal");
+      var subs = document.getElementById("subs-modal");
+      if (keys && !keys.hidden) {
+        keys.hidden = true;
+        ev.stopPropagation();
+      } else if (subs && !subs.hidden) {
+        subs.hidden = true;
+        ev.stopPropagation();
+      }
+    }, true);
+  })();
+
+  loadPic();
+  paintPic();
+  restoreWindow();
+  window.setInterval(saveWindow, 8000);
+  window.addEventListener("beforeunload", saveWindow);
+
+  window.G9Basics = {
+    fit: function () {
+      return picLabel();
+    },
+    stats: toggleStats,
+    keys: toggleKeys,
+    drop: dropPaths,
+    subText: applySubText,
+    speed: setSpeed,
+    update: checkUpdates,
+    reconnect: scheduleReconnect,
+  };
+
 
   initPicsDir();
   (function openStartupFile() {

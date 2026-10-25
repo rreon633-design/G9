@@ -348,6 +348,58 @@ pub async fn apply_best_subtitles(
 }
 
 #[tauri::command]
+pub async fn apply_subtitle(
+    hit: crate::subs::SubHit,
+    query: String,
+) -> Result<crate::subs::SubResult, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::subs::fetch_hit(&hit, &query))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Hand a web link to the default browser. No shell, no other schemes.
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    let link = url.trim().to_string();
+    if !(link.starts_with("https://") || link.starts_with("http://")) {
+        return Err("Only web links can be opened".into());
+    }
+    spawn_browser(&link).map_err(|_| "Could not open that link".to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn spawn_browser(link: &str) -> std::io::Result<()> {
+    // The empty argument is the window title `start` otherwise eats the URL.
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", link])
+        .spawn()
+        .map(|_| ())
+}
+
+#[cfg(target_os = "macos")]
+fn spawn_browser(link: &str) -> std::io::Result<()> {
+    std::process::Command::new("open")
+        .arg(link)
+        .spawn()
+        .map(|_| ())
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn spawn_browser(link: &str) -> std::io::Result<()> {
+    std::process::Command::new("xdg-open")
+        .arg(link)
+        .spawn()
+        .map(|_| ())
+}
+
+#[tauri::command]
+pub async fn update_check() -> Result<crate::update::UpdateInfo, String> {
+    tauri::async_runtime::spawn_blocking(crate::update::check)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn dlna_discover() -> Result<Vec<crate::dlna::DlnaServer>, String> {
     tauri::async_runtime::spawn_blocking(crate::dlna::discover)
         .await

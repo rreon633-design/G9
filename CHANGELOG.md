@@ -5,11 +5,56 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 ## [Unreleased]
 
+- Nothing yet.
+
+## [0.9.0] — 2026-10-25
+
+The everyday basics: the controls a player is expected to have before it has anything clever.
+
+### Added
+
+- **Picture fit, zoom, rotate and mirror** — Fit / Fill / Stretch / 125% / 150% in the Picture
+  panel, plus **Rotate 90°** and **Mirror** for phone footage; `Shift+F` cycles the fit,
+  `Shift+R` rotates, `Shift+H` mirrors. Remembered between sessions.
+- **Drag & drop** — drop a video to play it, several to queue them, a **folder** to queue
+  everything in it, a `.srt` / `.vtt` / `.ass` / `.ssa` to attach subtitles, or a link to stream it.
+- **Open folder…** — queue every video in a folder, sorted the way Explorer sorts (`Ep 2` before `Ep 10`).
+- **Playlists the player can keep** — *Save the queue as a playlist…* writes a real `.m3u8`;
+  *Open a playlist…* fills the queue from one and starts playing.
+- **Subtitle picker** — the CC button and *Find subtitles…* list the results (release, language,
+  rating) and you choose; **Best match** and **From a file…** are one click away. Provider names
+  are never shown.
+- **Stream stats** (`I`) — resolution, fit, speed, buffer, dropped frames, volume, retries.
+- **Keyboard sheet** (`?`) — every binding in one place, including the new ones.
+- **Seek keys** — `0`–`9` jump to 0–90%, `Home` / `End` to the ends, `+` / `−` nudge the speed.
+- **Playback up to 4×** with 0.5× / 0.75× / 1× / 1.25× / 1.5× / 2× / 3× / 4× presets, remembered.
+- **Double-click fullscreen** and single-click play/pause on the picture (chrome clicks are ignored).
+- **Window memory** — size, position and maximized state come back on the next launch.
+- **Check for updates** in About — asks GitHub for the newest release and offers **Download**.
+- **Live stream reconnect** — a dropped HTTP(S)/HLS stream is retried three times (1s, 3s, 8s)
+  with the status line counting attempts and playback resuming where it stopped; when the
+  attempts are spent G9 says **Stream unavailable · press play to try again**, and Play reloads it.
+
 ### Changed
 
 - Release pages are generated: `scripts/release-notes.sh` builds the GitHub Release body from the
   matching `CHANGELOG.md` section, and a **Release notes** workflow re-syncs it from `main`, so the
   page can no longer advertise the previous version's bullets.
+- The CC button opens the picker instead of silently applying the first result.
+- `speed` no longer stops at 2×; the slider goes to 4×.
+- Picture panel: **Reset colour** and **Reset picture** are separate, so clearing the rotation no
+  longer wipes the brightness/contrast/saturation settings.
+
+### Fixed
+
+- The drag overlay could sit invisible over the whole window and swallow clicks (`.drop-hint`
+  set `display:grid`, which beat the `hidden` attribute).
+- A permanently broken stream used to leave "Reconnecting…" on screen forever.
+
+### Commands
+
+- New: `list_folder`, `playlist_save`, `playlist_load`, `read_text`, `apply_subtitle`,
+  `update_check`, `open_url`.
 
 ## [0.8.0] — 2026-10-25
 

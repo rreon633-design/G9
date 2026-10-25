@@ -11,6 +11,7 @@ mod ipc;
 mod state;
 mod subs;
 mod tools;
+mod update;
 mod windows;
 mod xtream;
 
@@ -57,6 +58,13 @@ pub fn run() {
             commands::stats,
             commands::load_demo_playlist,
             commands::find_subtitles,
+            commands::apply_subtitle,
+            commands::update_check,
+            commands::open_url,
+            files::list_folder,
+            files::read_text,
+            files::playlist_save,
+            files::playlist_load,
             commands::apply_best_subtitles,
             commands::dlna_discover,
             commands::dlna_browse,

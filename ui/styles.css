@@ -2250,3 +2250,122 @@ input[type="range"]::-webkit-slider-thumb {
   .fun-search:focus-within { width: 200px; }
   .fun-card.land { width: 232px; }
 }
+
+/* ---------- everyday basics (v0.9.0) ---------- */
+
+/* Stream stats — sits where the picture is, readable over anything. */
+.stats {
+  position: absolute;
+  top: 76px;
+  left: 20px;
+  z-index: 24;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(4, 6, 10, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cfe4ff;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre;
+  pointer-events: none;
+}
+
+/* Drag & drop target. */
+.drop-hint[hidden] { display: none; }
+.drop-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 6, 10, 0.72);
+  backdrop-filter: blur(2px);
+}
+.drop-card {
+  display: grid;
+  gap: 6px;
+  padding: 26px 38px;
+  border-radius: 16px;
+  border: 2px dashed rgba(76, 157, 255, 0.55);
+  background: rgba(14, 20, 32, 0.9);
+  text-align: center;
+}
+.drop-card b { font-size: 18px; letter-spacing: 0.01em; }
+.drop-card span { color: #8fa0b8; font-size: 13px; }
+
+/* Keyboard sheet. */
+.keys-card { width: min(680px, 92vw); }
+.keys-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 6px 22px;
+  max-height: 62vh;
+  overflow: auto;
+  margin: 6px 0 14px;
+}
+.keys-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+  color: #b9c6d8;
+}
+.keys-row kbd {
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #eaf2ff;
+  white-space: nowrap;
+}
+.keys-row span { text-align: right; }
+
+/* Subtitle picker. */
+.subs-card { width: min(560px, 92vw); }
+.subs-list {
+  display: grid;
+  gap: 6px;
+  max-height: 54vh;
+  overflow: auto;
+  margin: 4px 0 12px;
+}
+.subs-hit {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 12px;
+  text-align: left;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  cursor: pointer;
+}
+.subs-hit:hover, .subs-hit:focus-visible { background: rgba(76, 157, 255, 0.14); }
+.subs-hit b { font-size: 13px; font-weight: 600; color: #eaf2ff; }
+.subs-hit span { font-size: 11.5px; color: #8fa0b8; }
+
+/* About → updates. */
+.about-upd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0 12px;
+}
+.about-upd-text { font-size: 12.5px; color: #8fa0b8; }
+.about-upd-text button {
+  margin-left: 2px;
+  padding: 3px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(76, 157, 255, 0.4);
+  background: rgba(76, 157, 255, 0.16);
+  color: #cfe4ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}

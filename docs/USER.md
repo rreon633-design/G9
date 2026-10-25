@@ -28,6 +28,24 @@ Click any card for episodes or chapters, source chips and **Play** (or **Read**)
 a grid you can sort; the box at the top searches every enabled source. Magnet results are labelled
 `Magnet` and start playing when the torrent engine lands in v0.10.0.
 
+## Everyday controls
+
+- **Drag & drop** a video (plays it), several videos (queues them), a folder (queues everything in
+  it), a `.srt` / `.vtt` / `.ass` / `.ssa` (attaches it) or a link (streams it).
+- **Media → Open folder…** queues every video in a folder; **Save the queue as a playlist…** writes
+  an `.m3u8` and **Open a playlist…** brings one back.
+- **Settings → Picture, fit & zoom** has Fit / Fill / Stretch / 125% / 150%, **Rotate 90°** and
+  **Mirror**. Keys: `Shift+F`, `Shift+R`, `Shift+H`. Playback runs 0.25×–4× (`+` / `−`).
+- **Click** the picture to play or pause, **double-click** for fullscreen, `Esc` leaves it.
+- `0`–`9` jump to 0–90% of the file, `Home` / `End` to the ends, `I` shows stream stats and `?`
+  lists every shortcut.
+- The **CC button** opens a subtitle picker; **Best match** keeps the one-click behaviour and
+  **From a file…** takes a subtitle you already have.
+- G9 remembers the window's size, position and maximized state, and **About G9 → Check for
+  updates** tells you when a newer release exists.
+- If a live stream drops, G9 retries three times (1s, 3s, 8s) and resumes where it was. When the
+  attempts run out the status line says **Stream unavailable** and **Play** reloads the stream.
+
 ## From Windows Explorer
 
 After installing with the G9 installer, **right-click a video, audio or playlist file → Open with

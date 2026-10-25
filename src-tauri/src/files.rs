@@ -149,3 +149,245 @@ mod tests {
         assert_eq!(val(b'/'), Some(63));
     }
 }
+
+// ---------- folders and playlists ----------
+
+/// Extensions G9 will queue from a folder drop or *Open folder…*.
+pub const VIDEO_EXT: &[&str] = &[
+    "mp4", "m4v", "mkv", "webm", "mov", "avi", "wmv", "flv", "mpg", "mpeg", "m2ts", "mts", "ts",
+    "ogv", "3gp", "m3u8",
+];
+
+/// True when the file name looks like something `<video>` can open.
+pub fn is_video(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    let ext = lower.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+    VIDEO_EXT.contains(&ext)
+}
+
+/// One file from a folder.
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+pub struct FolderItem {
+    pub name: String,
+    pub path: String,
+}
+
+/// Video files directly inside `path`, sorted the way Explorer sorts them.
+pub fn videos_in(path: &str) -> Result<Vec<FolderItem>, String> {
+    let dir = std::path::Path::new(path);
+    if !dir.is_dir() {
+        return Err("That folder is not there any more".into());
+    }
+    let mut items: Vec<FolderItem> = std::fs::read_dir(dir)
+        .map_err(|_| "Could not read that folder".to_string())?
+        .flatten()
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            is_video(&name).then(|| FolderItem {
+                path: e.path().display().to_string(),
+                name,
+            })
+        })
+        .collect();
+    items.sort_by_key(|a| natural_key(&a.name));
+    items.truncate(2000);
+    Ok(items)
+}
+
+/// Case-insensitive, digit-aware sort key, so `Ep 2` comes before `Ep 10`.
+fn natural_key(name: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut num = String::new();
+    let mut word = String::new();
+    for ch in name.chars() {
+        if ch.is_ascii_digit() {
+            if !word.is_empty() {
+                out.push(word.to_ascii_lowercase());
+                word.clear();
+            }
+            num.push(ch);
+        } else {
+            if !num.is_empty() {
+                let n: u64 = num.parse().unwrap_or(0);
+                out.push(format!("\u{0}{n:020}"));
+                num.clear();
+            }
+            word.push(ch);
+        }
+    }
+    if !word.is_empty() {
+        out.push(word.to_ascii_lowercase());
+    }
+    if !num.is_empty() {
+        let n: u64 = num.parse().unwrap_or(0);
+        out.push(format!("\u{0}{n:020}"));
+    }
+    out
+}
+
+/// Read a small text file (a dropped `.srt`, for instance) over IPC.
+#[tauri::command]
+pub fn read_text(path: String) -> Result<String, String> {
+    const CAP: u64 = 4 * 1024 * 1024;
+    let meta =
+        std::fs::metadata(&path).map_err(|_| "That file is not there any more".to_string())?;
+    if !meta.is_file() {
+        return Err("That is a folder, not a file".into());
+    }
+    if meta.len() > CAP {
+        return Err("That file is too big to read".into());
+    }
+    std::fs::read_to_string(&path).map_err(|_| "Could not read that file".to_string())
+}
+
+/// Scan a folder for playable files.
+#[tauri::command]
+pub fn list_folder(path: String) -> Result<Vec<FolderItem>, String> {
+    videos_in(&path)
+}
+
+/// One row of the player queue, as written to an `.m3u8`.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct PlayEntry {
+    pub title: String,
+    pub url: String,
+}
+
+impl PlayEntry {
+    fn clean(&self) -> PlayEntry {
+        let title = self.title.replace(['\r', '\n'], " ").trim().to_string();
+        PlayEntry {
+            title: if title.is_empty() {
+                self.url.clone()
+            } else {
+                title
+            },
+            url: self.url.trim().to_string(),
+        }
+    }
+}
+
+/// Render a queue as M3U8 text.
+pub fn playlist_text(entries: &[PlayEntry]) -> String {
+    let mut out = String::from("#EXTM3U\n");
+    for e in entries {
+        let e = e.clean();
+        if e.url.is_empty() {
+            continue;
+        }
+        out.push_str("#EXTINF:-1,");
+        out.push_str(&e.title);
+        out.push('\n');
+        out.push_str(&e.url);
+        out.push('\n');
+    }
+    out
+}
+
+/// Read an M3U/M3U8 back into queue rows.
+pub fn parse_playlist(text: &str) -> Vec<PlayEntry> {
+    let mut out = Vec::new();
+    let mut title = String::new();
+    for raw in text.lines() {
+        let line = raw.trim().trim_start_matches('\u{feff}');
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("#EXTINF:") {
+            title = rest
+                .split_once(',')
+                .map(|(_, t)| t.trim().to_string())
+                .unwrap_or_default();
+            continue;
+        }
+        if line.starts_with('#') {
+            continue;
+        }
+        out.push(PlayEntry {
+            title: if title.is_empty() {
+                line.rsplit(['/', '\\']).next().unwrap_or(line).to_string()
+            } else {
+                title.clone()
+            },
+            url: line.to_string(),
+        });
+        title.clear();
+    }
+    out.truncate(5000);
+    out
+}
+
+/// Write the player queue as an `.m3u8`. Returns how many rows were written.
+#[tauri::command]
+pub fn playlist_save(path: String, entries: Vec<PlayEntry>) -> Result<usize, String> {
+    let text = playlist_text(&entries);
+    let count = text.matches("#EXTINF").count();
+    if count == 0 {
+        return Err("The playlist is empty".into());
+    }
+    ensure_parent(&path)?;
+    std::fs::write(&path, text).map_err(|_| "Could not write that playlist".to_string())?;
+    Ok(count)
+}
+
+/// Read an `.m3u8` into the player queue.
+#[tauri::command]
+pub fn playlist_load(path: String) -> Result<Vec<PlayEntry>, String> {
+    let text =
+        std::fs::read_to_string(&path).map_err(|_| "Could not read that playlist".to_string())?;
+    let items = parse_playlist(&text);
+    if items.is_empty() {
+        return Err("That playlist has nothing to play".into());
+    }
+    Ok(items)
+}
+
+#[cfg(test)]
+mod playlist_tests {
+    use super::*;
+
+    #[test]
+    fn video_extensions() {
+        assert!(is_video("Movie.MKV"));
+        assert!(is_video("clip.mp4"));
+        assert!(is_video("show.m3u8"));
+        assert!(!is_video("notes.txt"));
+        assert!(!is_video("no-extension"));
+    }
+
+    #[test]
+    fn natural_order() {
+        let mut names = vec!["Ep 10.mp4", "Ep 2.mp4", "Ep 1.mp4"];
+        names.sort_by_key(|a| natural_key(a));
+        assert_eq!(names, vec!["Ep 1.mp4", "Ep 2.mp4", "Ep 10.mp4"]);
+    }
+
+    #[test]
+    fn playlist_round_trip() {
+        let entries = vec![
+            PlayEntry {
+                title: "One".into(),
+                url: "https://example.test/1.m3u8".into(),
+            },
+            PlayEntry {
+                title: "Two, with a comma".into(),
+                url: "C:\\media\\2.mkv".into(),
+            },
+        ];
+        let text = playlist_text(&entries);
+        assert!(text.starts_with("#EXTM3U"));
+        let back = parse_playlist(&text);
+        assert_eq!(back.len(), 2);
+        assert_eq!(back[0].url, "https://example.test/1.m3u8");
+        assert_eq!(back[1].title, "Two, with a comma");
+        assert_eq!(back[1].url, "C:\\media\\2.mkv");
+    }
+
+    #[test]
+    fn plain_url_list_is_readable() {
+        let back = parse_playlist("https://a.test/x.mp4\nhttps://a.test/y.mp4\n");
+        assert_eq!(back.len(), 2);
+        assert_eq!(back[1].title, "y.mp4");
+    }
+}
