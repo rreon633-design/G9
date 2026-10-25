@@ -62,6 +62,8 @@
     onTop: false,
     shaderOn: false,
     shaderName: "Off",
+    shaderFrag: null,
+    filterPlan: null,
     playTitle: "",
     reconnectTry: 0,
     reconnectTimer: 0,
@@ -655,7 +657,15 @@
     c.width = video.videoWidth;
     c.height = video.videoHeight;
     var ctx = c.getContext("2d");
-    ctx.drawImage(video, 0, 0, c.width, c.height);
+    // With the pipeline on, the processed canvas is the picture on screen. Draw
+    // it in this same task, before the browser clears the drawing buffer.
+    var glc = document.getElementById("glsl");
+    if (glState && glPlan && glPlan.active && glc && !glc.hidden) {
+      glRender();
+      ctx.drawImage(glc, 0, 0, c.width, c.height);
+    } else {
+      ctx.drawImage(video, 0, 0, c.width, c.height);
+    }
     return c;
   }
   function snapshot() {
@@ -712,16 +722,101 @@
     var sat = document.getElementById("fx-sat");
     var sh = document.getElementById("fx-sh");
     if (!br) return;
-    var b = Number(br.value) / 100;
-    var c = Number(ct.value) / 100;
-    var s = Number(sat.value) / 100;
+    var deband = document.getElementById("fx-deband");
+    var b = Number(br.value);
+    var c = Number(ct.value);
+    var satV = Number(sat.value);
     var sharp = Number(sh.value);
-    document.getElementById("fx-br-val").textContent = br.value + "%";
-    document.getElementById("fx-ct-val").textContent = ct.value + "%";
-    document.getElementById("fx-sat-val").textContent = sat.value + "%";
-    document.getElementById("fx-sh-val").textContent = String(sharp);
-    video.style.filter =
-      "brightness(" + b + ") contrast(" + (c + sharp * 0.04) + ") saturate(" + s + ")";
+    var brVal = document.getElementById("fx-br-val");
+    var ctVal = document.getElementById("fx-ct-val");
+    var satVal = document.getElementById("fx-sat-val");
+    var shVal = document.getElementById("fx-sh-val");
+    if (brVal) brVal.textContent = b + "%";
+    if (ctVal) ctVal.textContent = c + "%";
+    if (satVal) satVal.textContent = satV + "%";
+    if (shVal) shVal.textContent = String(sharp);
+    var plan = pipelinePlan({
+      brightness: b,
+      contrast: c,
+      saturation: satV,
+      sharpen: sharp,
+      deband: !!(deband && deband.checked),
+      custom: state.shaderFrag || null,
+    });
+    state.filterPlan = plan;
+    saveFilter();
+    var mode = glApply(plan);
+    state.pipelineMode = mode;
+    if (mode === "none") {
+      // No WebGL on this machine: fall back to the compositor, and be honest
+      // about what it cannot do (no real sharpening, no deband).
+      video.style.filter =
+        "brightness(" + plan.brightness + ") contrast(" + (plan.contrast + sharp * 0.04) + ") saturate(" + plan.saturation + ")";
+      if (!glFallbackWarned) {
+        glFallbackWarned = true;
+        toast("GPU filters unavailable — using the simple ones");
+      }
+    } else {
+      video.style.filter = "";
+    }
+    paintPipelineChip();
+  }
+
+  var glFallbackWarned = false;
+
+  /// The one-line readout in the Picture panel: what the GPU is doing.
+  function paintPipelineChip() {
+    var host = document.getElementById("fx-gpu");
+    if (!host) return;
+    var plan = state.filterPlan;
+    if (!plan || !plan.active) {
+      host.textContent = "Off — the video is drawn directly";
+      host.className = "fx-gpu";
+      return;
+    }
+    var names = { grade: "grade + sharpen", deband: "deband", custom: "shader" };
+    var parts = plan.passes.map(function (p) {
+      return names[p] || p;
+    });
+    var mode = state.pipelineMode;
+    var lead = mode === "none" ? "CPU fallback · " : mode === "armed" ? "GPU ready · " : "GPU · ";
+    host.textContent = lead + parts.join(" → ");
+    host.className = "fx-gpu is-on";
+    if (mode === "none") host.className = "fx-gpu is-on is-cpu";
+  }
+
+  var FILTER_KEY = "g9-picture-fx";
+  function saveFilter() {
+    try {
+      var br = document.getElementById("fx-br");
+      localStorage.setItem(
+        FILTER_KEY,
+        JSON.stringify({
+          brightness: br ? Number(br.value) : 100,
+          contrast: Number(document.getElementById("fx-ct").value),
+          saturation: Number(document.getElementById("fx-sat").value),
+          sharpen: Number(document.getElementById("fx-sh").value),
+          deband: !!(document.getElementById("fx-deband") || {}).checked,
+        })
+      );
+    } catch (e) {}
+  }
+  function loadFilter() {
+    try {
+      var raw = localStorage.getItem(FILTER_KEY);
+      if (!raw) return;
+      var f = JSON.parse(raw);
+      var put = function (id, v) {
+        var el = document.getElementById(id);
+        if (el && v != null) el.value = String(v);
+      };
+      put("fx-br", f.brightness);
+      put("fx-ct", f.contrast);
+      put("fx-sat", f.saturation);
+      put("fx-sh", f.sharpen);
+      var d = document.getElementById("fx-deband");
+      if (d && f.deband) d.checked = true;
+    } catch (e) {}
   }
   function setSpeed(pct) {
     var rate = Math.max(0.25, Math.min(4, Number(pct) / 100));
@@ -1432,9 +1527,15 @@
     if (idx >= 0 && rows[idx] && rows[idx].scrollIntoView) rows[idx].scrollIntoView({ block: "nearest" });
   }
 
-  /* ---------- WebGL shaders ---------- */
-  var glState = null;
-  var glRaf = 0;
+  /* ---------- GPU picture pipeline (v0.13.0) ----------
+     One WebGL2 context renders what you see: colour grade → contrast-adaptive
+     sharpen → deband + dither → an optional custom .frag from the shader pack.
+     Frames are presented once per decoded frame where the platform offers
+     requestVideoFrameCallback, and once per animation frame where it does not.
+
+     With every stage neutral the canvas stays hidden and the plain <video> is
+     what you see: "off" is pixel-identical to having no pipeline at all, and
+     costs nothing. */
   var BUILTIN_SHADERS = [
     { name: "Off", src: null },
     {
@@ -1459,105 +1560,459 @@
     },
   ];
   var VERT_SRC =
-    "attribute vec2 p; varying vec2 vUv; void main(){ vUv = vec2((p.x + 1.0) * 0.5, 1.0 - (p.y + 1.0) * 0.5); gl_Position = vec4(p, 0.0, 1.0); }";
+    "attribute vec2 p; varying vec2 vUv; void main(){ vUv = (p + 1.0) * 0.5; gl_Position = vec4(p, 0.0, 1.0); }";
+
+  /* ---- the shaders ---- */
+
+  // Grade + contrast-adaptive sharpen in one pass. Every tap is graded first so
+  // the sharpening acts on the picture you actually see.
+  var FRAG_GRADE =
+    "uniform sampler2D tex; uniform vec2 px; uniform vec3 adj; uniform float sharp;\n" +
+    "vec3 gr(vec3 c){ c = (c - 0.5) * adj.y + 0.5; c *= adj.x;\n" +
+    "  float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); return mix(vec3(l), c, adj.z); }\n" +
+    "void main(){ vec3 e = gr(texture2D(tex, vUv).rgb);\n" +
+    "  if (sharp > 0.0) {\n" +
+    "    vec3 t1 = gr(texture2D(tex, vUv + vec2(0.0, -px.y)).rgb);\n" +
+    "    vec3 t2 = gr(texture2D(tex, vUv + vec2(0.0,  px.y)).rgb);\n" +
+    "    vec3 t3 = gr(texture2D(tex, vUv + vec2(-px.x, 0.0)).rgb);\n" +
+    "    vec3 t4 = gr(texture2D(tex, vUv + vec2( px.x, 0.0)).rgb);\n" +
+    "    vec3 mn = min(min(t1, t2), min(t3, t4));\n" +
+    "    vec3 mx = max(max(t1, t2), max(t3, t4));\n" +
+    "    vec3 adapt = clamp(1.0 - (mx - mn) * 1.75, 0.15, 1.0);\n" +
+    "    e += (e * 4.0 - (t1 + t2 + t3 + t4)) * (sharp * 0.05 * adapt);\n" +
+    "  }\n" +
+    "  gl_FragColor = vec4(clamp(e, 0.0, 1.0), 1.0); }";
+
+  // Deband: average toward the neighbourhood where the step is small enough to
+  // be a quantisation band, then one bit of ordered noise so what is left does
+  // not read as a smooth ramp. Cheap ordering function, no texture to load.
+  // Deband. A shallow 8-bit ramp is a set of steps about one to three levels
+  // high; averaging over a single texel cannot cross a quantisation boundary, so
+  // this samples a ring whose radius scales with the frame (a few pixels at
+  // 720p, more at 4K) and then dithers, which is what turns the average into
+  // visible intermediate values.
+  var FRAG_DEBAND =
+    "uniform sampler2D tex; uniform vec2 px; uniform vec2 step; uniform float strength;\n" +
+    "float bayer2(vec2 a){ a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }\n" +
+    "float bayer8(vec2 a){ return bayer2(0.25 * a) * 0.25 + bayer2(0.5 * a) * 0.25 + bayer2(a); }\n" +
+    "void main(){\n" +
+    "  vec3 e = texture2D(tex, vUv).rgb;\n" +
+    "  vec3 n = texture2D(tex, vUv + vec2(-step.x, -step.y)).rgb\n" +
+    "         + texture2D(tex, vUv + vec2( 0.0,    -step.y)).rgb\n" +
+    "         + texture2D(tex, vUv + vec2( step.x, -step.y)).rgb\n" +
+    "         + texture2D(tex, vUv + vec2(-step.x,  0.0   )).rgb\n" +
+    "         + texture2D(tex, vUv + vec2( step.x,  0.0   )).rgb\n" +
+    "         + texture2D(tex, vUv + vec2(-step.x,  step.y)).rgb\n" +
+    "         + texture2D(tex, vUv + vec2( 0.0,     step.y)).rgb\n" +
+    "         + texture2D(tex, vUv + vec2( step.x,  step.y)).rgb;\n" +
+    "  vec3 avg = (e + n) / 9.0;\n" +
+    "  vec3 diff = abs(e - avg);\n" +
+    // Blend only where the wide neighbourhood agrees; a real edge stays put.
+    "  float flatness = 1.0 - clamp(max(diff.r, max(diff.g, diff.b)) * 12.0, 0.0, 1.0);\n" +
+    "  vec3 c = mix(e, avg, flatness * strength);\n" +
+    "  float d = (bayer8(gl_FragCoord.xy) - 0.5) / 127.5;\n" +
+    "  gl_FragColor = vec4(clamp(c + d * strength, 0.0, 1.0), 1.0); }";
+
+  var glState = null;   // { gl, canvas, srcTex, prog{}, fbo[2], w, h, version }
+  var glRaf = 0;
+  var glRvfc = 0;
+  var glPlan = null;
+  var glFrames = 0;     // presentations since the loop started (diagnostics)
+  var glBlocked = false; // this media cannot be uploaded (cross-origin / DRM)
+
+  function glNum(v, fallback) {
+    var n = Number(v);
+    return isFinite(n) ? n : fallback;
+  }
+
+  /// What the pipeline should do for a set of picture settings.
+  /// Pure — no DOM, no GL — so it can be tested on its own, and so the UI and
+  /// the renderer can never disagree about when the canvas is showing.
+  function pipelinePlan(opts) {
+    var o = opts || {};
+    var brightness = glNum(o.brightness, 100);
+    var contrast = glNum(o.contrast, 100);
+    var saturation = glNum(o.saturation, 100);
+    var sharpen = Math.max(0, glNum(o.sharpen, 0));
+    var graded =
+      Math.abs(brightness - 100) > 0.5 ||
+      Math.abs(contrast - 100) > 0.5 ||
+      Math.abs(saturation - 100) > 0.5;
+    var passes = [];
+    if (graded || sharpen > 0) passes.push("grade");
+    if (o.deband) passes.push("deband");
+    if (o.custom) passes.push("custom");
+    return {
+      active: passes.length > 0,
+      passes: passes,
+      brightness: brightness / 100,
+      contrast: contrast / 100,
+      saturation: saturation / 100,
+      sharpen: sharpen,
+      deband: !!o.deband,
+      custom: o.custom || null,
+    };
+  }
+
+  function glCanvas() {
+    return document.getElementById("glsl");
+  }
+
+  /// Bring the context up on first use. WebGL2 preferred (RGBA8 FBOs, better
+  /// precision); a WebGL1 context still runs every shader here.
+  function glEnsure() {
+    if (glState) return glState;
+    var canvas = glCanvas();
+    if (!canvas || !canvas.getContext) return null;
+    var attrs = {
+      alpha: false,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      premultipliedAlpha: false,
+      powerPreference: "high-performance",
+      preserveDrawingBuffer: false,
+    };
+    var gl = null;
+    var version = 2;
+    try {
+      gl = canvas.getContext("webgl2", attrs);
+    } catch (e) {
+      gl = null;
+    }
+    if (!gl) {
+      version = 1;
+      try {
+        gl = canvas.getContext("webgl", attrs) || canvas.getContext("experimental-webgl", attrs);
+      } catch (e) {
+        gl = null;
+      }
+    }
+    if (!gl) return null;
+    glState = {
+      gl: gl,
+      canvas: canvas,
+      version: version,
+      srcTex: null,
+      prog: {},
+      fbo: [null, null],
+      w: 0,
+      h: 0,
+      quad: null,
+      plan: null,
+    };
+    // The video is uploaded flipped into GL's bottom-up order, so every stage —
+    // the canvas and each offscreen target alike — sees the same orientation.
+    // Flipping in the vertex stage instead would double-flip every pass after
+    // the first, which is how a two-pass chain ends up upside down.
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    glState.quad = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, glState.quad);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    return glState;
+  }
+
   function glCompile(gl, type, src) {
     var sh = gl.createShader(type);
     gl.shaderSource(sh, src);
     gl.compileShader(sh);
-    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      var log = gl.getShaderInfoLog(sh);
+      gl.deleteShader(sh);
+      throw new Error(log || "shader did not compile");
+    }
     return sh;
   }
-  function glBuild(frag) {
-    var canvas = document.getElementById("glsl");
-    var gl = canvas.getContext("webgl", { alpha: false });
-    if (!gl) throw new Error("WebGL unavailable");
+
+  /// Build (and cache) one program. `frag` is the full fragment source.
+  function glProgram(name, frag) {
+    var st = glState;
+    if (!st) return null;
+    if (st.prog[name]) return st.prog[name];
+    var gl = st.gl;
     var prog = gl.createProgram();
     gl.attachShader(prog, glCompile(gl, gl.VERTEX_SHADER, VERT_SRC));
-    gl.attachShader(
-      gl,
-      glCompile(
-        gl,
-        gl.FRAGMENT_SHADER,
-        "precision mediump float; varying vec2 vUv; uniform sampler2D tex; uniform vec2 px; " + frag
-      )
-    );
+    gl.attachShader(prog, glCompile(gl, gl.FRAGMENT_SHADER, "precision mediump float; varying vec2 vUv;\n" + frag));
+    gl.bindAttribLocation(prog, 0, "p");
     gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
-    gl.useProgram(prog);
-    var buf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-    var loc = gl.getAttribLocation(prog, "p");
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      var log = gl.getProgramInfoLog(prog);
+      gl.deleteProgram(prog);
+      throw new Error(log || "shader did not link");
+    }
+    var entry = {
+      prog: prog,
+      tex: gl.getUniformLocation(prog, "tex"),
+      px: gl.getUniformLocation(prog, "px"),
+      adj: gl.getUniformLocation(prog, "adj"),
+      sharp: gl.getUniformLocation(prog, "sharp"),
+      strength: gl.getUniformLocation(prog, "strength"),
+      step: gl.getUniformLocation(prog, "step"),
+    };
+    st.prog[name] = entry;
+    return entry;
+  }
+
+  function glSourceTexture(w, h) {
+    var st = glState;
+    var gl = st.gl;
+    if (st.srcTex && st.w === w && st.h === h) return st.srcTex;
+    if (st.srcTex) gl.deleteTexture(st.srcTex);
     var tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
-    return {
-      gl: gl,
-      canvas: canvas,
-      tex: tex,
-      uTex: gl.getUniformLocation(prog, "tex"),
-      uPx: gl.getUniformLocation(prog, "px"),
-    };
+    st.srcTex = tex;
+    return tex;
   }
-  function shaderLoop() {
+
+  /// Offscreen target for the middle of the chain (only made when needed).
+  function glTarget(slot, w, h) {
+    var st = glState;
+    var gl = st.gl;
+    var old = st.fbo[slot];
+    if (old && old.w === w && old.h === h) return old;
+    if (old) {
+      gl.deleteTexture(old.tex);
+      gl.deleteFramebuffer(old.fb);
+    }
+    var tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    var fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    var entry = { tex: tex, fb: fb, w: w, h: h };
+    st.fbo[slot] = entry;
+    return entry;
+  }
+
+  function glBindQuad(prog) {
+    var gl = glState.gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER, glState.quad);
+    var loc = gl.getAttribLocation(prog, "p");
+    if (loc >= 0) {
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    }
+  }
+
+  /// One pass: read `fromTex`, write to `toFbo` (null = the canvas).
+  function glDrawPass(entry, fromTex, toFbo, w, h, plan) {
+    var gl = glState.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, toFbo ? toFbo.fb : null);
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(entry.prog);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, fromTex);
+    if (entry.tex) gl.uniform1i(entry.tex, 0);
+    if (entry.px) gl.uniform2f(entry.px, 1 / Math.max(1, w), 1 / Math.max(1, h));
+    if (entry.adj) gl.uniform3f(entry.adj, plan.brightness, plan.contrast, plan.saturation);
+    if (entry.sharp) gl.uniform1f(entry.sharp, plan.sharpen);
+    if (entry.strength) gl.uniform1f(entry.strength, plan.deband ? 1 : 0);
+    if (entry.step) {
+      // Ring radius in texels: a few at 720p, capped at 10 for 4K.
+      var r = Math.max(6, Math.min(24, Math.round(Math.min(w, h) / 60)));
+      gl.uniform2f(entry.step, r / Math.max(1, w), r / Math.max(1, h));
+    }
+    glBindQuad(entry.prog);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  /// Throw the context away — the GPU process can die, and a lost context must
+  /// not leave the app presenting stale frames for ever.
+  function glReset() {
+    glStopLoop();
+    var st = glState;
+    if (st) {
+      try {
+        if (st.srcTex) st.gl.deleteTexture(st.srcTex);
+        st.fbo.forEach(function (f) {
+          if (f) {
+            st.gl.deleteTexture(f.tex);
+            st.gl.deleteFramebuffer(f.fb);
+          }
+        });
+      } catch (e) {}
+    }
+    glState = null;
+    glShowCanvas(false);
+    state.shaderOn = false;
+  }
+
+  /// Present one frame.
+  function glRender() {
+    var st = glState;
+    var plan = glPlan;
+    if (!st || !plan || !plan.active) return false;
+    var v = video;
+    var w = v.videoWidth || 0;
+    var h = v.videoHeight || 0;
+    if (!w || !h) return false;
+    var gl = st.gl;
+    if (st.canvas.width !== w || st.canvas.height !== h) {
+      st.canvas.width = w;
+      st.canvas.height = h;
+    }
+    // Upload once per presented frame, never per pass.
+    var src = glSourceTexture(w, h);
+    gl.bindTexture(gl.TEXTURE_2D, src);
+    try {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+    } catch (e) {
+      // Cross-origin or protected media cannot be read into a texture. Remember
+      // it so every later frame does not throw, and let the CSS path take over.
+      glBlocked = true;
+      stopShader();
+      toast("This stream cannot be processed on the GPU");
+      applyVideoFilter();
+      return false;
+    }
+    st.w = w;
+    st.h = h;
+    var from = src;
+    for (var i = 0; i < plan.passes.length; i++) {
+      var name = plan.passes[i];
+      var last = i === plan.passes.length - 1;
+      var entry;
+      try {
+        entry = name === "custom" ? glProgram("custom:" + (plan.custom || ""), plan.custom) : glProgram(name, name === "deband" ? FRAG_DEBAND : FRAG_GRADE);
+      } catch (e) {
+        // A broken .frag must not take the picture down with it: drop the pass,
+        // forget the shader so it does not come back next time, carry on.
+        toast(String((e && e.message) || e).slice(0, 80));
+        if (name === "custom") {
+          state.shaderFrag = null;
+          state.shaderName = "Off";
+        }
+        plan.passes = plan.passes.filter(function (p) {
+          return p !== name;
+        });
+        i -= 1;
+        continue;
+      }
+      if (!entry) return false;
+      var target = last ? null : glTarget(i % 2, w, h);
+      glDrawPass(entry, from, target, w, h, plan);
+      if (target) from = target.tex;
+    }
+    glFrames++;
+    return true;
+  }
+
+  function glSchedule() {
     if (!glState) return;
     var v = video;
-    var canvas = glState.canvas;
-    var w = v.videoWidth || 640;
-    var h = v.videoHeight || 360;
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-      glState.gl.viewport(0, 0, w, h);
-    }
-    try {
-      var gl = glState.gl;
-      gl.bindTexture(gl.TEXTURE_2D, glState.tex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
-      gl.uniform1i(glState.uTex, 0);
-      gl.uniform2f(glState.uPx, 1 / w, 1 / h);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    } catch (e) {
-      toast("Shader needs a local file or a CORS-allowed stream");
-      stopShader();
+    if (typeof v.requestVideoFrameCallback === "function") {
+      glRvfc = v.requestVideoFrameCallback(function () {
+        glRvfc = 0;
+        if (!glState) return;
+        glRender();
+        glSchedule();
+      });
       return;
     }
-    glRaf = requestAnimationFrame(shaderLoop);
+    // No per-frame callback (older WebView2): draw per animation frame.
+    if (typeof requestAnimationFrame === "function") {
+      glRaf = requestAnimationFrame(function () {
+        glRaf = 0;
+        if (!glState) return;
+        glRender();
+        glSchedule();
+      });
+    }
   }
-  function stopShader() {
-    if (glRaf) cancelAnimationFrame(glRaf);
+
+  function glStopLoop() {
+    if (glRvfc && video.cancelVideoFrameCallback) {
+      try {
+        video.cancelVideoFrameCallback(glRvfc);
+      } catch (e) {}
+    }
+    glRvfc = 0;
+    if (glRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(glRaf);
     glRaf = 0;
-    glState = null;
-    state.shaderOn = false;
-    var canvas = document.getElementById("glsl");
-    if (canvas) canvas.hidden = true;
   }
-  function startShader(name, frag) {
-    stopShader();
-    if (!frag) {
-      toast("Shader off");
-      paintShaderList(name);
-      return;
+
+  function glShowCanvas(on) {
+    var canvas = glCanvas();
+    if (canvas) canvas.hidden = !on;
+    // The video keeps decoding while hidden, it just is not what you see.
+    video.style.visibility = on ? "hidden" : "";
+  }
+
+  /// Mirror the fit / zoom / rotate / mirror transform onto the canvas so the
+  /// picture controls keep working while the pipeline is presenting.
+  function glSyncGeometry() {
+    var canvas = glCanvas();
+    if (!canvas || !canvas.style) return;
+    canvas.style.objectFit = video.style.objectFit || "contain";
+    canvas.style.transform = video.style.transform || "";
+  }
+
+  /// Apply a plan and report what happened:
+  ///   "off"   — nothing to do, the plain video is the picture
+  ///   "none"  — no WebGL on this machine; the caller falls back to CSS
+  ///   "armed" — WebGL is ready but there is no media to present yet
+  ///   "gpu"   — the canvas is presenting
+  function glApply(plan) {
+    glPlan = plan;
+    if (!plan.active) {
+      glStopLoop();
+      glShowCanvas(false);
+      state.shaderOn = false;
+      return "off";
     }
-    try {
-      glState = glBuild(frag);
-    } catch (e) {
-      toast(String(e.message || e));
-      return;
+    if (glBlocked || !glEnsure()) {
+      glShowCanvas(false);
+      state.shaderOn = false;
+      return "none";
     }
-    document.getElementById("glsl").hidden = false;
+    if (!state.mediaUrl) {
+      glStopLoop();
+      glShowCanvas(false);
+      state.shaderOn = false;
+      return "armed";
+    }
+    if (plan.passes.length) glShowCanvas(true);
+    glSyncGeometry();
+    glRender();
+    if (!plan.passes.length) {
+      // Every pass dropped out (a shader that would not compile, say).
+      glStopLoop();
+      glShowCanvas(false);
+      state.shaderOn = false;
+      return "off";
+    }
+    glStopLoop();
+    if (!video.paused) glSchedule();
     state.shaderOn = true;
+    return "gpu";
+  }
+
+  function stopShader() {
+    glStopLoop();
+    glShowCanvas(false);
+    state.shaderOn = false;
+    state.shaderFrag = null;
+    state.shaderName = "Off";
+  }
+
+  function startShader(name, frag) {
     state.shaderName = name;
-    shaderLoop();
-    toast("Shader: " + name);
+    state.shaderFrag = frag || null;
+    applyVideoFilter();
+    toast(frag ? "Shader: " + name : "Picture back to plain");
     paintShaderList(name);
   }
+
   function paintShaderList(active) {
     document.querySelectorAll("#shader-list [data-sh]").forEach(function (row) {
       row.classList.toggle("on", row.getAttribute("data-sh") === active);
@@ -1996,6 +2451,14 @@
     if (state.info) add("G9", "v" + state.info.version);
     add("Platform", navigator.platform || "WebView");
     add("Decoder", "WebView2 hardware (DXVA / D3D11)");
+    if (window.G9GL) {
+      var g = window.G9GL.state();
+      add(
+        "Picture pipeline",
+        g.active ? (g.version === 2 ? "WebGL2" : "WebGL1") + " · " + g.passes.join(" → ") : "direct (no filters)"
+      );
+      if (g.active) add("Presented", g.frames + " frames · " + g.loop);
+    }
     if (video.getVideoPlaybackQuality) {
       var q = video.getVideoPlaybackQuality();
       add("Dropped frames", q.droppedVideoFrames + " / " + q.totalVideoFrames);
@@ -2703,6 +3166,9 @@
     window.clearTimeout(state.reconnectTimer);
     clearSubs();
     setPlaying(false);
+    glStopLoop();
+    glShowCanvas(false);
+    state.shaderOn = false;
     poster.style.display = "grid";
     setTitle("Ready");
     document.getElementById("info-meta").textContent = "Open a file to begin";
@@ -3004,11 +3470,15 @@
     var el = document.getElementById(id);
     if (el) el.addEventListener("input", applyVideoFilter);
   });
+  var debandBox = document.getElementById("fx-deband");
+  if (debandBox) debandBox.addEventListener("change", applyVideoFilter);
   document.getElementById("fx-reset").addEventListener("click", function () {
     document.getElementById("fx-br").value = "100";
     document.getElementById("fx-ct").value = "100";
     document.getElementById("fx-sat").value = "100";
     document.getElementById("fx-sh").value = "0";
+    var d = document.getElementById("fx-deband");
+    if (d) d.checked = false;
     applyVideoFilter();
   });
   document.getElementById("fx-close").addEventListener("click", function () {
@@ -3284,6 +3754,7 @@
     restoreResume();
     paintAudioStage();
   });
+  video.addEventListener("webglcontextlost", function () {}, true);
   video.addEventListener("play", function () {
     var stage = document.getElementById("audio-stage");
     if (stage) stage.classList.add("playing");
@@ -3292,6 +3763,11 @@
     bindMediaSession();
     unlockAudio();
     warnIfSilent();
+    if (glState && glPlan && glPlan.active) {
+      glStopLoop();
+      glRender();
+      glSchedule();
+    }
   });
   video.addEventListener("pause", function () {
     var stage = document.getElementById("audio-stage");
@@ -3299,6 +3775,22 @@
     setPlaying(false);
     showChrome();
     saveResume();
+    // One last frame so the canvas is not left on the previous seek.
+    if (glState && glPlan && glPlan.active) {
+      glStopLoop();
+      glRender();
+    }
+  });
+  ["seeked", "loadeddata", "timeupdate"].forEach(function (name) {
+    video.addEventListener(name, function () {
+      if (name === "loadeddata") {
+        glBlocked = false;
+        applyVideoFilter();
+      }
+      if (!glState || !glPlan || !glPlan.active) return;
+      if (glRvfc || glRaf) return; // the loop is already presenting
+      glRender();
+    });
   });
   video.addEventListener("ended", function () {
     // Fun Mode may take over to offer the next episode.
@@ -5098,6 +5590,7 @@
     if (rot) parts.push("rotate(" + rot + "deg)");
     if (pic.flip) parts.push("scaleX(-1)");
     video.style.transform = parts.join(" ");
+    glSyncGeometry();
     var el = document.getElementById("fx-fit-val");
     if (el) el.textContent = picLabel();
   }
@@ -5827,10 +6320,40 @@
   })();
 
   loadPic();
+  loadFilter();
+  applyVideoFilter();
   paintPic();
   restoreWindow();
   window.setInterval(saveWindow, 8000);
   window.addEventListener("beforeunload", saveWindow);
+
+  /// The GPU pipeline, for the diagnostics sheet and the tests.
+  window.G9GL = {
+    plan: pipelinePlan,
+    // Kept for the browser-side shader tests: compile them for real.
+    sources: { vert: VERT_SRC, grade: FRAG_GRADE, deband: FRAG_DEBAND },
+    state: function () {
+      return {
+        context: !!glState,
+        version: glState ? glState.version : 0,
+        active: !!(glPlan && glPlan.active),
+        passes: glPlan ? glPlan.passes.slice() : [],
+        frames: glFrames,
+        loop: glRvfc ? "rvfc" : glRaf ? "raf" : "idle",
+        size: glState ? [glState.w, glState.h] : [0, 0],
+      };
+    },
+    render: function () {
+      return glRender();
+    },
+    reset: glReset,
+    stop: stopShader,
+    shader: startShader,
+    apply: function () {
+      applyVideoFilter();
+    },
+    sync: glSyncGeometry,
+  };
 
   window.G9Basics = {
     fit: function () {

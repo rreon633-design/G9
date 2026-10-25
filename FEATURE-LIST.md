@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.12.0** · source: `main`  
+Last updated: 2026-10-25 · release **v0.13.0** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -63,13 +63,24 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - **Extra player windows** (a second independent window, its own file and state)
 
 ### Picture
-- CSS filters: brightness, contrast, saturation
+- **GPU picture pipeline** (v0.13.0) — brightness, contrast, saturation, sharpening and
+  deband run as WebGL2 shader passes over the video frame, one video upload per presented
+  frame, paced by `requestVideoFrameCallback`
+- **Real sharpening** — contrast-adaptive 5-tap unsharp, 0–8 slider, no halos on edges
+- **Deband & dither** — nine-tap ring at a frame-scaled radius plus ordered dither; kills the
+  stepping in skies and dark gradients, leaves real edges alone
+- **Honest state** — the Picture panel says `GPU · grade + sharpen → deband`, `CPU fallback`
+  or off; every setting is persisted (`g9-picture-fx`)
+- CSS filters remain the fallback when WebGL cannot take the frame (old WebView2, cross-origin
+  or protected media)
 - Save frame (JPEG)
 - **Record what is playing** — video plus sound to WebM (a second click stops), or record the webcam
 - **360° look-around** for equirectangular video (WebGL, drag)
 - Audio **visualizer** (spectrum)
 - **Scene poster** (3×2 stills)
-- **Shader effects** — built-in Sharpen / Vivid / Mono / Night plus your own `.frag` files in the shaders folder (WebGL, over the video frame)
+- **Shader effects** — your own `.frag` files in the shaders folder, composed *after* the
+  grade and deband passes; a shader that will not compile is dropped with a toast, never a
+  black picture
 
 ### Subtitles
 - Sidecar `.srt` / `.vtt` / `.ass` / `.ssa`
@@ -378,11 +389,30 @@ half-built: each needs a subsystem G9 does not have yet, so it stays listed rath
 | **Airing calendar** | needs episode air dates from a metadata source | 0.12.0 |
 | **Full genre landing pages** | genre chips open a filter today; a page needs rails per genre | 0.12.0 |
 | **Send to new window / TV Mode** | needs a handoff channel between windows | 0.12.0 |
-| **OS deep links + jump list** | needs `g9://` registered in the installer and a Windows jump list | 0.13.0 |
-| **Accessibility pass (full)** | labels and keyboard shipped; no audit, high-contrast or reduced-motion yet | 0.13.0 |
-| **Community site scrapers (AnimePahe, AnimeHeaven, TokyoInsider)** | opt-in tier-C providers, deliberately last | 0.13.0 |
+| **OS deep links + jump list** | needs `g9://` registered in the installer and a Windows jump list | after the GPU roadmap |
+| **Accessibility pass (full)** | labels and keyboard shipped; no audit, high-contrast or reduced-motion yet | after the GPU roadmap |
+| **Community site scrapers (AnimePahe, AnimeHeaven, TokyoInsider)** | opt-in tier-C providers, deliberately last | after the GPU roadmap |
 
 Count: **24 shipped outright + 1 partial** of the 57 in v0.10.0, **17 of the 57** waiting on the
 torrent/cache work (0.11.0), **12** on profiles and library metadata (0.12.0), **3** on Windows
-shell integration and the a11y audit (0.13.0). The other 32 shipped features in the table above
-predate the brief.
+shell integration and the a11y audit (slipped past 0.13.0 — the GPU roadmap took that release).
+The other 32 shipped features in the table above predate the brief.
+
+### GPU and rendering (separate 12-feature plan)
+
+[`docs/GPU-QUALITY-PLAN.md`](docs/GPU-QUALITY-PLAN.md) tracks these; **3 shipped, 9 open**.
+
+| # | Feature | State |
+|---|---|---|
+| 1 | WebGL2 pipeline as the default renderer | shipped · 0.13.0 |
+| 3 | Real sharpening with a slider | shipped · 0.13.0 |
+| 4 | Deband + ordered dither | shipped · 0.13.0 |
+| 8 | Frame-paced presentation (`requestVideoFrameCallback`) | shipped · 0.13.0 |
+| 2 | FSR 1.0 upscaling (EASU + RCAS) | 0.14.0 |
+| 9 | Hardware-decode assurance + honest GPU panel | 0.14.0 |
+| 10 | Adaptive performance governor | 0.14.0 |
+| 6 | Colour pipeline + HDR→SDR tone map | 0.15.0 |
+| 7 | 3D LUT grading (`.cube`) | 0.15.0 |
+| 11 | Judder handling for 23.976/24p | 0.15.0 |
+| 5 | Temporal denoise | 0.16.0 |
+| 12 | GPU overlay compositing | 0.16.0 |

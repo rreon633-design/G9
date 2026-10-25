@@ -7,6 +7,47 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 - Nothing yet.
 
+## [0.13.0] — 2026-10-25
+
+The picture moved onto the GPU. Brightness, contrast, saturation, sharpening and a new
+deband stage are now shader passes over a WebGL2 canvas — and with every control at its
+default, nothing is drawn at all.
+
+### Added
+
+- **A real picture pipeline.** Grade and sharpen share one fragment pass, deband and
+  dither a second; offscreen targets let them chain with one video upload per presented
+  frame. WebGL2 preferred, WebGL1 runs the same shaders.
+- **Sharpening that sharpens.** Contrast-adaptive unsharp over a 5-tap neighbourhood,
+  applied to the graded image, weighted 0–8 on the slider. The old CSS `contrast()` trick
+  is gone.
+- **Deband & dither.** A nine-tap ring whose radius scales with the frame turns shallow
+  8-bit steps into a ramp; one bit of ordered noise dithers what is left so it does not
+  read as a smooth digital gradient. Edges are left alone — flatness is measured per pixel.
+- **Frame-paced presentation.** Renders from `requestVideoFrameCallback` (rAF where it does
+  not exist), so the pipeline draws once per frame the browser actually presents. Fit, zoom,
+  rotate and mirror are mirrored onto the canvas.
+- **Honest state.** Picture reads `GPU · grade + sharpen → deband`, `CPU fallback` or off;
+  Settings › Diagnostics gains "Picture pipeline" and "Presented" rows. Settings persist
+  under `g9-picture-fx`.
+
+### Fixed
+
+- **Two-pass chains came out upside down.** The vertex stage flipped the texture coordinate,
+  which is correct for the direct pass and wrong for every pass that reads an offscreen
+  target. The video is now flipped once, at upload.
+- Off means off: no canvas, no leftover CSS filter, the untouched `<video>`.
+- A stream that cannot be uploaded to a texture (cross-origin, protected) falls back to CSS
+  filters once, with a short toast, instead of throwing on every frame.
+
+### Verified
+
+Chromium with WebGL2, on a synthetic 8-bit banded clip: banding drops from 8.1% of pixels to
+none, edge rise at sharpening 6 goes up 18% without clipping, the frame stays the right way up
+and in the right place through every pass chain, and the off state is pixel-identical to the
+plain video. `domtest/smoke10.js` covers the plan, the chain, one upload per frame and both
+fallbacks. No Rust changes; the 97-test suite is untouched.
+
 ## [0.12.0] — 2026-10-25
 
 Sources became something you can actually run more than one of — and the wall no longer

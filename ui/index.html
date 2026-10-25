@@ -411,8 +411,12 @@
         <input id="fx-ct" type="range" min="50" max="180" value="100" />
         <label>Saturation <b id="fx-sat-val">100%</b></label>
         <input id="fx-sat" type="range" min="0" max="200" value="100" />
-        <label>Sharpness (contrast edge) <b id="fx-sh-val">0</b></label>
+        <label>Sharpening <b id="fx-sh-val">0</b></label>
         <input id="fx-sh" type="range" min="0" max="8" value="0" />
+        <label class="switch-row"><span>Deband &amp; dither</span>
+          <input id="fx-deband" type="checkbox" />
+        </label>
+        <p class="fx-gpu" id="fx-gpu">Off — the video is drawn directly</p>
         <label>Fit <b id="fx-fit-val">Fit</b></label>
         <div class="row-btns" id="fx-fit">
           <button type="button" data-fit="contain">Fit</button>

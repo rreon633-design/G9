@@ -11,14 +11,14 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.12.0)
+## Windows release (v0.13.0)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.12.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
-| `G9_0.12.0_x64_en-US.msi` | MSI for managed deployment |
+| `G9_0.13.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.13.0_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
 Download: **[Releases](https://github.com/rreon633-design/G9/releases)**
@@ -39,7 +39,13 @@ download small.
   more-like-this and cast pages, autoplay-next, a sleep timer and a mini player, per-title stream
   picking, addon subtitles, reader modes, watch-time stats and a cross-title queue. Sources keep
   their own headers and report their health; addon shelves page and filter through the addon
-  itself. Magnet playback lands in v0.13.0
+  itself. Magnet playback is not in yet
+- **GPU picture pipeline** — brightness, contrast, saturation, sharpening and a deband /
+  dither stage run as WebGL2 shader passes over the frame itself, one upload per presented
+  frame and paced by the video's own `requestVideoFrameCallback`. Sharpening is a real
+  contrast-adaptive unsharp, not a CSS contrast bump; deband smooths 8-bit steps in skies and
+  dark gradients and leaves real edges alone. With every control at default nothing is drawn
+  at all, and without WebGL it falls back to CSS filters
 - **Video downloader** — paste a link to a video page (YouTube, Instagram, Facebook and other
   sites), pick a quality and size, and let it run in the background; pause, resume, play, reveal
   or delete from the Downloads panel. Needs a managed `yt-dlp`, installed with one click
