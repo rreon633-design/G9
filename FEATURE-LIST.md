@@ -76,6 +76,25 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
   TV Mode read from the same tokens
 - Focus rings on every control and automatic `prefers-reduced-motion` support
 
+### Social (v0.15.0)
+- **Workspace** (`Ctrl+Shift+S`) with its own rail — rooms, who is in the room now, saved
+  contacts, unread counts, a filter box, and your identity at the foot. The one sidebar in G9.
+- **A room is one link** — a signed, expiring invite carrying the hub, the room, the seats and
+  the room key in the URL fragment, drawn as a **QR code** too. Re-inviting never locks out
+  anyone who already has a link.
+- **Sealed chat** — AES-256-GCM per frame, AAD binds room, sender and kind; the key is imported
+  from the link and never leaves the machine, and the hub only ever sees ciphertext.
+- **Voice and video calls** — mesh with mute, camera on/off mid-call, a running clock, the peer on
+  the stage and you in the corner; `Leave` stops every track, tells the room, and writes
+  "Call ended · 2:41" into the thread.
+- **Nothing is lost** — threads, messages, contacts and devices live in SQLite; reopen and the
+  conversation is where you left it.
+- **No accounts, no pairing, no same-Wi-Fi** — Ed25519 handshake against a nonce, and `g9-hub`,
+  a small relay you run anywhere reachable over HTTPS.
+- Not yet, stated plainly: mesh tops out around four people for video — a nine-person *video*
+  call needs the SFU from `docs/SOCIAL-PLAN.md` §5, which is the next release. Camera-based QR
+  scanning, TURN fallback and chat while both sides are offline follow it.
+
 ### Picture
 - **GPU picture pipeline** (v0.13.0) — brightness, contrast, saturation, sharpening and
   deband run as WebGL2 shader passes over the video frame, one video upload per presented

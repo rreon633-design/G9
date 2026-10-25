@@ -7,6 +7,75 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 - Nothing yet.
 
+## [0.15.0] — 2026-10-25
+
+Social, first release: a workspace of your own where a room is one link away — type, talk,
+see each other, leave cleanly, come back to everything you said.
+
+This is the first of the five social releases in `docs/SOCIAL-PLAN.md`. It ships the part that
+has to be perfect before anything else is worth adding: **the loop**. Open, create or paste a
+link, chat, call, leave, reopen — no accounts, no pairing, no IP addresses, no "same Wi-Fi".
+
+### Added
+
+- **Social workspace** (`Ctrl+Shift+S`, or the chat button in the top bar). Its own surface with
+  a left rail — the one deliberate exception to G9's no-sidebar rule, because it is a
+  conversation list, not player chrome. Rooms, live people in the room, saved contacts, unread
+  counts, a filter box, and your own identity at the foot of the rail.
+- **A room is a single link.** Create a room, and G9 mints a signed, expiring invite that
+  carries the hub address, the room, the seat count and a **32-byte room key in the fragment** —
+  the fragment never reaches the server, so the hub cannot read a single message. The same
+  link is drawn as a **QR code** (rendered in Rust, `qrcode` crate, SVG) for a phone or a
+  second screen: scan, open, you are in. Re-inviting never invalidates a link already shared.
+- **Chat that is sealed before it leaves the machine.** AES-256-GCM per frame, AAD binds room,
+  sender and kind, so a frame cannot be replayed into another room or another sender. Keys come
+  from Rust; plaintext never crosses the IPC boundary in either direction on the way out.
+- **Voice and video calls**, mesh, with the whole call surface built for the ninth device and
+  the second one: adaptive tiles (peer fills the stage, you in the corner), a running clock, mute,
+  camera on/off mid-call, leave, and a transcript entry that records the call and how long it ran.
+- **Leaving is not a crash.** `Leave` stops every track, closes every peer connection, tells the
+  room, drops the tiles and writes "Call ended · 2:41" into the thread. Rejoining works, and the
+  conversation is exactly where you left it.
+- **`g9-hub`** — a small axum relay you can run anywhere (VPS, container, a Raspberry Pi):
+  `/health`, nonce + signed handshake (Ed25519, no passwords), room create/join with seats,
+  signed invites, and a WebSocket fan-out. CORS is open on the REST surface because every caller
+  is a webview on another origin, and nothing is authenticated by cookie.
+- **`g9-social`** — the protocol crate: identity, room keys, frame sealing, invites, and a local
+  SQLite store (threads, messages, contacts, devices) so nothing is lost when the app closes.
+- **Reconnects that keep their place.** Announcements that arrive while your microphone is still
+  opening are buffered and replayed; a call that misses a handshake re-announces and re-offers
+  for fifteen seconds instead of silently sitting in "waiting"; simultaneous presses on both
+  ends resolve without glare.
+
+### Fixed
+
+- Two people pressing call at the same time could deadlock, or one side could try to offer while
+  answering another offer and fail with an m-line ordering error. Offers are now single-flight,
+  the collision is resolved by yielding, and a missed announcement is retried.
+- Pressing **Invite** while already in a room no longer re-enters the room. It used to drop the
+  socket — which would have ended an active call for no reason.
+
+### Verified
+
+- `cargo test --workspace --exclude g9` — 100 tests, including 26 for `g9-social` and 10
+  integration tests for `g9-hub`.
+- `node domtest/smoke12.js` — the social gate: the Rust AES-GCM vector opens in JS, create → invite
+  → QR → join, an optimistic message that goes out sealed, a peer reply that renders and is
+  acknowledged, a tampered frame that never becomes a bubble, a call offered and answered with
+  tiles, and leave/reopen.
+- `python3 scripts/e2e-social.py --devices 9` — nine real Chromium contexts against a real
+  `g9-hub`: room ready in 0.23 s, one message to eight devices in 0.04 s, video connected in
+  0.21 s, then everyone leaves and the room empties.
+- Windows x64: `cargo check -p g9 --all-targets` in CI is the compile gate for the Tauri layer.
+
+### Known limits, stated plainly
+
+- Calls are **mesh**: fine for 2–4 people. A nine-person *video* call needs the SFU from
+  `docs/SOCIAL-PLAN.md` §5 — that is the next release, not this one. Nine devices can join one
+  room, chat, and hold two-way calls; they cannot all send video to each other yet.
+- The reflex camera / QR scanning, the TURN fallback and chat while offline (store-and-forward)
+  are later releases, in that order.
+
 ## [0.14.0] — 2026-10-25
 
 The interface learned to be yours: a light theme that is a real theme and not an inversion,

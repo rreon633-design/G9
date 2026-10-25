@@ -1,20 +1,29 @@
 [workspace]
 resolver = "2"
-members = ["src-tauri", "crates/g9-core", "crates/g9-iptv", "crates/g9-store", "crates/g9-sources"]
+members = [
+    "src-tauri",
+    "crates/g9-core",
+    "crates/g9-iptv",
+    "crates/g9-store",
+    "crates/g9-sources",
+    "crates/g9-social",
+    "crates/g9-hub",
+]
 
 [workspace.package]
-version = "0.14.0"
+version = "0.15.0"
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 authors = ["G9 contributors"]
 repository = "https://github.com/g9-player/g9"
-rust-version = "1.77"
+rust-version = "1.85"
 
 [workspace.dependencies]
 g9-core = { path = "crates/g9-core" }
 g9-iptv = { path = "crates/g9-iptv" }
 g9-store = { path = "crates/g9-store" }
 g9-sources = { path = "crates/g9-sources" }
+g9-social = { path = "crates/g9-social" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

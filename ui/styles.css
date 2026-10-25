@@ -2989,3 +2989,525 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* The LIVE badge is red on every theme; only its ink has to follow. */
 [data-theme="dark"] .tv-live { color: #ffdcdc; }
+
+/* ==========================================================================
+   G9 Social — the workspace (v0.15.0)
+   A workspace, not player chrome: the film keeps its overlays, this is its own
+   surface with a rail. Every colour here is a v0.14 token, so it inherits the
+   theme, accent, density, text size and motion settings without a second set.
+   ========================================================================== */
+
+.social {
+  position: absolute;
+  inset: 40px 0 0 0;           /* below the title bar */
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+}
+.social[hidden] { display: none !important; }
+
+/* ---------- top strip ---------- */
+.social-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  flex: none;
+}
+.social-top b { font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
+.social-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted-2); flex: none; }
+.social-dot.on { background: var(--ok); box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.16); }
+.social-dot.busy { background: var(--warn); }
+.social-status { font-size: 12px; color: var(--muted); }
+.social-top .spacer { flex: 1; }
+
+/* ---------- body: rail + main ---------- */
+.social-body { display: flex; flex: 1; min-height: 0; }
+
+.social-rail {
+  width: 264px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.social-rail.collapsed { width: 64px; }
+.social-rail.collapsed .s-title,
+.social-rail.collapsed .s-preview,
+.social-rail.collapsed .s-when,
+.social-rail.collapsed .s-section,
+.social-rail.collapsed .social-search,
+.social-rail.collapsed .s-empty { display: none; }
+
+.social-search {
+  margin: 10px 10px 6px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+}
+.social-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+.social-search svg { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; }
+
+.social-list { flex: 1; overflow-y: auto; padding: 4px 8px 10px; scrollbar-width: thin; }
+.s-section {
+  padding: 10px 8px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+.s-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.s-row:hover { background: rgba(var(--ink-rgb), 0.05); }
+.s-row.on { background: var(--accent-soft); }
+.s-avatar {
+  width: 30px; height: 30px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 9px;
+  font-size: 11.5px; font-weight: 700;
+  color: var(--accent-ink);
+  background: linear-gradient(150deg, var(--accent), rgba(var(--accent-rgb), 0.62));
+}
+.s-avatar.ghost { background: rgba(var(--ink-rgb), 0.1); color: var(--ink-soft); }
+.s-body { min-width: 0; flex: 1; }
+.s-title { display: block; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s-preview { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s-when { font-size: 10.5px; color: var(--muted-2); flex: none; }
+.s-badge {
+  min-width: 18px; height: 18px; padding: 0 5px;
+  display: grid; place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10.5px; font-weight: 700;
+  flex: none;
+}
+.s-empty { padding: 10px; font-size: 11.5px; color: var(--muted-2); line-height: 1.5; }
+
+.social-rail-foot {
+  border-top: 1px solid var(--line);
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.social-rail-foot .s-body { min-width: 0; }
+.social-rail-foot .s-title { font-size: 12px; }
+.social-rail-foot .s-preview { font-family: var(--mono); font-size: 10px; }
+
+/* ---------- main pane ---------- */
+.social-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.social-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.social-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.social-head .sub { font-size: 11.5px; color: var(--muted); }
+.social-head .spacer { flex: 1; }
+.social-head .lock { font-size: 11px; color: var(--ok); }
+
+.social-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
+}
+.msg { display: flex; flex-direction: column; gap: 3px; max-width: min(620px, 74%); }
+.msg.mine { align-self: flex-end; align-items: flex-end; }
+.msg .who { font-size: 10.5px; color: var(--muted-2); }
+.msg .bubble {
+  padding: 8px 11px;
+  border-radius: 12px;
+  background: var(--surface-3);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg.mine .bubble { background: var(--accent); color: var(--accent-ink); }
+.msg .tick { font-size: 10px; color: var(--muted-2); }
+.msg.call { align-self: center; max-width: none; }
+.msg.call .bubble { background: rgba(var(--ink-rgb), 0.06); color: var(--muted); font-size: 11.5px; }
+
+.social-compose {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--line);
+  flex: none;
+}
+.social-compose textarea {
+  flex: 1;
+  min-height: 36px;
+  max-height: 140px;
+  resize: none;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  outline: 0;
+}
+.social-compose textarea:focus { border-color: rgba(var(--accent-rgb), 0.6); }
+
+/* ---------- empty state ---------- */
+.social-welcome {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  gap: 14px;
+  padding: 30px;
+  text-align: center;
+}
+.social-welcome h3 { margin: 0; font-size: 18px; font-weight: 600; }
+.social-welcome p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+.social-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.social-card {
+  margin: 0 auto;
+  width: min(560px, 90%);
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  display: grid;
+  gap: 10px;
+  text-align: left;
+}
+.social-card label { font-size: 11px; color: var(--muted); }
+.social-card input[type="text"] {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  outline: 0;
+}
+.social-card input[type="text"]:focus { border-color: rgba(var(--accent-rgb), 0.6); }
+.social-card .row { display: flex; gap: 8px; }
+.social-card .row input { flex: 1; }
+
+/* ---------- invite panel ---------- */
+.social-invite {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+}
+.social-invite .qr {
+  width: 168px; height: 168px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  display: grid; place-items: center;
+}
+.social-invite .qr svg { width: 100%; height: 100%; display: block; }
+.social-invite .link {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  word-break: break-all;
+  max-height: 46px;
+  overflow: hidden;
+}
+.social-invite .fp { font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft); }
+
+/* ---------- call ---------- */
+.social-call {
+  position: absolute;
+  inset: 48px 0 0 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: rgba(4, 6, 9, 0.96);
+  color: #eef2f7;
+}
+.social-call[hidden] { display: none !important; }
+.call-grid {
+  flex: 1;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  min-height: 0;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  align-content: center;
+}
+.call-tile {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #0d1117;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  place-items: center;
+  min-height: 140px;
+  aspect-ratio: 16 / 9;
+}
+.call-tile video { width: 100%; height: 100%; object-fit: cover; background: #0d1117; }
+.call-tile .face {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 18px; font-weight: 700;
+  background: linear-gradient(150deg, var(--accent), rgba(var(--accent-rgb), 0.5));
+  color: var(--accent-ink);
+}
+.call-tile .tag {
+  position: absolute;
+  left: 8px; bottom: 8px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+}
+.call-tile .muted-flag { position: absolute; right: 8px; bottom: 8px; font-size: 11px; opacity: 0.8; }
+.call-tile.speaking { border-color: rgba(var(--accent-rgb), 0.7); }
+.call-tile.audioonly video { display: none; }
+
+.call-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px 18px;
+  flex: none;
+}
+.call-btn {
+  height: 42px;
+  min-width: 42px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  color: #eef2f7;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.call-btn:hover { background: rgba(255, 255, 255, 0.13); }
+.call-btn.danger { background: #d33b3b; border-color: #d33b3b; color: #fff; }
+.call-btn.off { background: rgba(211, 59, 59, 0.24); border-color: rgba(211, 59, 59, 0.5); }
+.call-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.66);
+  padding: 0 6px;
+}
+
+/* Text buttons inside the workspace: the title-bar `.top-btn` is icon-sized. */
+.social-top .top-btn,
+.social-head .top-btn,
+.social-card .top-btn,
+.social-compose .top-btn {
+  height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.social-top .top-btn:hover,
+.social-head .top-btn:hover,
+.social-card .top-btn:hover,
+.social-compose .top-btn:hover { background: rgba(var(--ink-rgb), 0.08); }
+.social-head #social-call-video,
+.social-card #social-create,
+.social-compose #social-send {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.social-head #social-call-video:hover,
+.social-card #social-create:hover,
+.social-compose #social-send:hover { filter: brightness(1.08); }
+
+/* ---------- social polish pass ---------- */
+/* The title-bar button is icon-sized; every button with a word in it needs room. */
+.social .top-btn,
+.social-modal .top-btn,
+.call-btn {
+  width: auto;
+  min-width: 30px;
+  flex: none;
+}
+.social-main { position: relative; }
+
+/* Invite is a centred dialog over the conversation, not a strip under it. */
+.social-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(4, 6, 9, 0.55);
+  backdrop-filter: blur(2px);
+}
+.social-modal[hidden] { display: none !important; }
+.social-modal .social-card {
+  width: min(420px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+.social-invite .link {
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.social-invite .row { width: 100%; }
+.social-invite .row .top-btn { flex: 1; justify-content: center; }
+.social .top-btn.accent,
+.social-modal #social-copy {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* ---------- call ---------- */
+.social-call { inset: 0; }
+.call-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  flex: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.call-title { font-size: 13px; font-weight: 600; }
+.call-time { font-family: var(--mono); font-size: 12px; color: rgba(238, 242, 247, 0.72); }
+.call-head .spacer { flex: 1; }
+.call-count { font-size: 11.5px; color: rgba(238, 242, 247, 0.6); }
+
+.call-grid {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+.call-grid.solo {
+  grid-template-columns: minmax(0, 620px);
+  justify-content: center;
+  align-content: center;
+  grid-auto-rows: auto;
+}
+.call-grid.solo .call-tile { aspect-ratio: 16 / 9; height: auto; }
+.call-wait {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(238, 242, 247, 0.6);
+  padding-top: 4px;
+}
+.call-tile {
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+.call-grid.has-peers .call-tile[data-tile="self"] {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2;
+  height: auto;
+  width: min(220px, 24%);
+  aspect-ratio: 16 / 9;
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+}
+.call-tile .tag { z-index: 1; }
+.call-bar { gap: 12px; }
+.call-badge { flex: none; }
+
+.social-call { background: var(--bg); }
+.social-invite .link { max-height: 84px; overflow: auto; }
+
+/* The call surface is a cinema surface: dark in every theme, like the player. */
+.social-call,
+.social-call .call-head,
+.social-call .call-bar {
+  background: #0a0c11;
+  color: #eef2f7;
+}
+.social-call .call-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #eef2f7;
+}
+.social-call .call-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.social-call .call-btn.danger { background: #d33b3b; border-color: #d33b3b; color: #fff; }
+.social-call .call-btn.off { background: rgba(211, 59, 59, 0.26); border-color: rgba(211, 59, 59, 0.55); }
+.social-call .call-title { color: #eef2f7; }
+.social-call .call-time,
+.social-call .call-badge,
+.social-call .call-count { color: rgba(238, 242, 247, 0.68); }

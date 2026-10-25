@@ -1,0 +1,21 @@
+[package]
+name = "g9-social"
+description = "G9 Social: identity, invite links, room keys and local history"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+rusqlite = { workspace = true }
+url = { workspace = true }
+base64 = "0.22"
+sha2 = "0.10"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+aes-gcm = "0.10"
+rand = "0.8"
+
+[dev-dependencies]
+tempfile = "3"

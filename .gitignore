@@ -13,3 +13,5 @@ coverage
 .cache
 .local
 /domtest/node_modules
+__pycache__/
+*.pyc

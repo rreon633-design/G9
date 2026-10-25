@@ -8,6 +8,7 @@ mod ffmpeg;
 mod files;
 mod fun;
 mod ipc;
+mod social;
 mod state;
 mod subs;
 mod tools;
@@ -28,6 +29,9 @@ pub fn run() {
             let handle = app.handle().clone();
             let state = AppState::init(&handle)?;
             app.manage(state);
+            // Social keeps its own database and its own key file, so it can be removed
+            // or backed up on its own.
+            app.manage(crate::social::SocialState::init(&handle)?);
             crate::ffmpeg::init(&handle);
             crate::dl::restore(&handle);
             crate::dl::spawn_reaper(handle.clone());
@@ -57,6 +61,21 @@ pub fn run() {
             commands::set_setting,
             commands::stats,
             commands::load_demo_playlist,
+            social::social_identity,
+            social::social_set_name,
+            social::social_handshake,
+            social::social_invite,
+            social::social_parse_invite,
+            social::social_qr,
+            social::social_threads,
+            social::social_upsert_thread,
+            social::social_messages,
+            social::social_save_message,
+            social::social_set_state,
+            social::social_mark_read,
+            social::social_contacts,
+            social::social_devices,
+            social::social_data_dir,
             commands::find_subtitles,
             commands::apply_subtitle,
             commands::update_check,

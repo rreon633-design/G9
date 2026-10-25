@@ -165,6 +165,10 @@
         </nav>
 
         <div class="top-tools">
+          <button type="button" class="top-btn" id="social-btn" title="Social — chat, voice and video (Ctrl+Shift+S)" aria-label="Social" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a7 7 0 01-7 7H8l-3 3v-4.2A7 7 0 0111 5h2a7 7 0 017 7z" /><path d="M9 11h6M9 14h4" /></svg>
+            <span class="notif-badge" id="social-badge" hidden>0</span>
+          </button>
           <button type="button" class="top-btn" id="notif-btn" title="Notifications" aria-label="Notifications" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 6-2 7-2 7h16s-2-1-2-7" /><path d="M10.3 20a2 2 0 003.4 0" /></svg>
             <span class="notif-badge" id="notif-badge" hidden>0</span>
@@ -192,6 +196,8 @@
           </button>
         </div>
       </header>
+
+      <section class="social" id="social" hidden aria-label="G9 Social"></section>
 
       <aside class="notif-panel" id="notif-panel" hidden aria-label="Notifications">
         <div class="notif-head">
@@ -768,6 +774,7 @@
       </div>
     </div>
 
+    <script src="./social.js"></script>
     <script src="./fun.js"></script>
     <script src="./app.js"></script>
   </body>

@@ -3625,6 +3625,19 @@
     }
   }
   document.getElementById("btn-tv").addEventListener("click", toggleTv);
+
+  // Social: a workspace of its own, not player chrome. Ctrl+Shift+S from anywhere.
+  function toggleSocial() {
+    if (!window.G9Social) return;
+    var open = window.G9Social.toggle();
+    var button = document.getElementById("social-btn");
+    if (button) button.setAttribute("aria-expanded", open ? "true" : "false");
+    // The film keeps playing; the workspace sits above it and the transport is hidden
+    // underneath so nobody types into a composer while a seek bar has focus.
+    if (open) hideChrome();
+    else showChrome();
+  }
+  document.getElementById("social-btn").addEventListener("click", toggleSocial);
   document.getElementById("btn-fav").addEventListener("click", function () {
     if (!state.current) {
       toast("Tune a live channel first");
@@ -3867,6 +3880,11 @@
 
   window.addEventListener("keydown", function (ev) {
     var typing = ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA");
+    if (ev.ctrlKey && ev.shiftKey && (ev.key === "S" || ev.key === "s")) {
+      ev.preventDefault();
+      toggleSocial();
+      return;
+    }
     if (ev.ctrlKey && ev.altKey) {
       var map = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "full", ArrowDown: "bottom" };
       var side = map[ev.key];

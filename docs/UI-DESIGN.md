@@ -125,3 +125,14 @@ G9Notify.list() / unread() / readAll() / clear() / paint()
   platform because it stubs WebGL and the Tauri bridge.
 - `preview/shoot_theme.py` — real Chromium screenshots of both themes, the sheet, the
   centre, the profile card, Fun Mode and TV Mode. Run with the static server on :8123.
+
+## The one sidebar: the social workspace
+
+Social is the exception, and only social. A conversation list is not chrome over a picture — it
+is the page. So `#social` is its own surface (`Ctrl+Shift+S`) with a persistent 264 px rail:
+rooms, people in the room right now, saved contacts, unread counts, a filter box, and your
+identity at the foot. Everything else in G9 is unchanged: the player still has no sidebar, and
+the rail never appears over video.
+
+The call overlay inside it is a *cinema* surface: `#0a0c11` in every theme, because a call is
+picture, and light chrome around a dark picture is how a video call starts to look cheap.
