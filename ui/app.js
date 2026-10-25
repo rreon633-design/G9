@@ -165,6 +165,9 @@
     if (!toastEl) return;
     var text = String(msg == null ? "" : msg).replace(/\s+/g, " ").trim();
     if (text.length > 96) text = text.slice(0, 94).replace(/[,;:.]$/, "") + "…";
+    // Every toast is also a notification: the centre keeps what the strip only
+    // shows for three seconds. capture() returns false when toasts are off.
+    if (window.G9Notify && window.G9Notify.capture(text) === false) return;
     toastEl.textContent = text;
     toastEl.classList.add("show");
     window.clearTimeout(toast._t);
@@ -2599,6 +2602,9 @@
     var body = document.getElementById("settings-body");
     if (!modal || !body) return;
     var html = "";
+    // Appearance and notifications come from ui/theme.js so this sheet and the
+    // theme engine can never disagree about the current look.
+    if (window.G9Theme) html += window.G9Theme.settingsGroup();
     html +=
       '<div class="settings-group"><p class="settings-label">Display</p>' +
       '<div class="settings-row"><div class="txt"><b>TV Mode</b><span>Large type and spacing for a living-room screen</span></div>' +
@@ -2636,6 +2642,7 @@
     var ver = document.getElementById("set-ver");
     if (ver && state.info) ver.textContent = "G9 v" + state.info.version + " · Apache-2.0 OR MIT";
 
+    if (window.G9Theme) window.G9Theme.bindSettings(body);
     body.querySelectorAll("[data-set]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var what = btn.getAttribute("data-set");
@@ -6417,6 +6424,15 @@
     seek: function (seconds) {
       if (!state.mediaUrl || !isFinite(seconds)) return;
       try { video.currentTime = Number(seconds) || 0; } catch (e) {}
+    },
+    // The start-screen widgets (ui/theme.js) read these.
+    stats: function () {
+      var st = state.stats || {};
+      return {
+        history: Array.isArray(state.history) ? state.history.length : 0,
+        channels: st.channels || 0,
+        sources: st.sources || 0
+      };
     },
     showChrome: showChrome,
     hideTv: function () { if (state.tv) { tvHide(); setTv(false); } },

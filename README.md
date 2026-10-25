@@ -11,14 +11,14 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.13.0)
+## Windows release (v0.14.0)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.13.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
-| `G9_0.13.0_x64_en-US.msi` | MSI for managed deployment |
+| `G9_0.14.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.14.0_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
 Download: **[Releases](https://github.com/rreon633-design/G9/releases)**
@@ -28,6 +28,12 @@ Windows 11; the installer fetches it on older PCs. No Chromium is bundled, which
 download small.
 
 ## What it does
+
+- **Dark and light themes, and every colour in between** — the accent is yours (eight presets
+  or any colour), and so are the corner radius, density, overlay text size, interface font,
+  animation, translucency and icon weight. Auto follows the Windows app theme live. A profile
+  name and avatar, a notification centre that keeps what a toast said, and three start-screen
+  widgets (clock, continue watching, library) that can each be switched off
 
 - **Fun Mode** — movies, web series, anime, drama, manga / manhwa / manhua on one Netflix-shaped
   wall. It opens **already populated** from the Internet Archive's public-domain film collections

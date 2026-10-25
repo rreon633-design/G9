@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.13.0** · source: `main`  
+Last updated: 2026-10-25 · release **v0.14.0** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -61,6 +61,20 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - Touch **gestures**: horizontal seek, vertical volume
 - **Sleep timer** (pause G9, or schedule a Windows shutdown)
 - **Extra player windows** (a second independent window, its own file and state)
+
+### Appearance & interface (v0.14.0)
+- **Dark, light and Auto** themes (Auto follows the Windows app theme live), applied before
+  the first paint so nothing flashes
+- **Accent colour** — eight presets or any colour; the ink on top is picked from its luminance
+- **Personalisation** — corner radius, density, overlay text size, interface font (Geist,
+  Segoe UI, Georgia, JetBrains Mono), animation on/off, translucency on/off, icon weight
+- **Profile** — name and local avatar, shown in the top bar, the profile card and Fun Mode
+- **Notification centre** — every toast kept in a bell menu with categories, unread badge,
+  mark-read, clear, and independent switches for toasts / history / downloads / playback / errors
+- **Start-screen widgets** — Now, Continue watching (with progress), Library; each switchable
+- **Token-based stylesheet** — one token set, one override block per theme; Fun Mode and
+  TV Mode read from the same tokens
+- Focus rings on every control and automatic `prefers-reduced-motion` support
 
 ### Picture
 - **GPU picture pipeline** (v0.13.0) — brightness, contrast, saturation, sharpening and
