@@ -54,6 +54,15 @@ nothing here pretends to be mpv.
 - "Load demo clips" removed — G9 ships no sample channel pack
 - Version stamped in every package file, so installers are named `G9_0.2.0_*`
 
+### Fixed
+
+- Windows release build: `reqwest` was compiled without the `json` feature, so
+  `Translate captions` (`tools.rs`) did not compile off Linux — every `v0.2.0` release run
+  failed until the feature was enabled
+- CI now compiles the app crate on **windows-latest**, so a Windows-only compile error fails
+  CI instead of a release tag
+- Installer filenames carry the real version (`G9_0.2.0_*`)
+
 ### Docs
 
 - `FEATURE-LIST.md` now separates **shipped** from **requested but not implemented**
