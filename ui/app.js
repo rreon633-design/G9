@@ -26,6 +26,7 @@
     hideTimer: 0,
     repeat: false,
     shuffle: false,
+    tv: false,
     title: "Ready",
   };
 
@@ -122,6 +123,9 @@
     sheet.hidden = state.view === "watch";
     document.getElementById("btn-repeat").classList.toggle("on", state.repeat);
     document.getElementById("btn-shuffle").classList.toggle("on", state.shuffle);
+    app.classList.toggle("tv", state.tv);
+    document.getElementById("btn-tv").classList.toggle("on", state.tv);
+    document.getElementById("btn-tv").textContent = state.tv ? "Exit TV" : "TV Mode";
     if (state.info) {
       var legal = document.getElementById("legal");
       if (legal) legal.textContent = state.info.content_policy;
@@ -136,6 +140,10 @@
       chipsEl.innerHTML = "";
       count.textContent = String((state.sources || []).length);
       var html = '<p class="legal">' + escapeHtml(state.info ? state.info.content_policy : "") + "</p>";
+      html +=
+        '<div class="row" id="row-tv"><div class="n">TV</div><div class="meta"><b>TV Mode</b><span>Large type, living-room controls. Esc to exit.</span></div><button type="button" id="sheet-tv">' +
+        (state.tv ? "On" : "Off") +
+        "</button></div>";
       if (!state.sources.length) html += '<div class="empty">No playlists yet. Media → Add playlist.</div>';
       state.sources.forEach(function (s) {
         html +=
@@ -152,6 +160,12 @@
           '">Remove</button></div>';
       });
       listEl.innerHTML = html;
+      var sheetTv = document.getElementById("sheet-tv");
+      if (sheetTv)
+        sheetTv.addEventListener("click", function () {
+          setTv(!state.tv);
+          renderSheet();
+        });
       listEl.querySelectorAll("[data-del]").forEach(function (btn) {
         btn.addEventListener("click", function () {
           invoke("delete_source", { id: Number(btn.getAttribute("data-del")) }).then(refresh).catch(fail);
@@ -595,6 +609,22 @@
     state.shuffle = !state.shuffle;
     paint();
   });
+  function setTv(on) {
+    state.tv = !!on;
+    try {
+      localStorage.setItem("g9-tv", state.tv ? "1" : "0");
+    } catch (e) {}
+    paint();
+    showChrome();
+    if (state.tv) {
+      if (app.requestFullscreen) app.requestFullscreen().catch(function () {});
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen().catch(function () {});
+    }
+  }
+  document.getElementById("btn-tv").addEventListener("click", function () {
+    setTv(!state.tv);
+  });
   document.getElementById("btn-fav").addEventListener("click", function () {
     if (state.current)
       invoke("toggle_favourite", { id: state.current.id }).then(loadChannels).catch(fail);
@@ -690,8 +720,17 @@
     var typing = ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA");
     if (ev.key === "Escape") {
       importModal.hidden = true;
+      if (state.tv) {
+        setTv(false);
+        return;
+      }
       state.view = "watch";
       paint();
+      return;
+    }
+    if (state.tv && (ev.key === "Enter" || ev.key === "MediaPlayPause")) {
+      ev.preventDefault();
+      togglePlay();
       return;
     }
     if (typing) return;
@@ -713,5 +752,8 @@
     }
   });
 
+  try {
+    if (localStorage.getItem("g9-tv") === "1") setTv(true);
+  } catch (e) {}
   refresh();
 })();

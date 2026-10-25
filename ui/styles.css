@@ -192,6 +192,43 @@ video {
   border-top: 1px solid var(--line);
   margin: 4px 6px;
 }
+.menu-pop.wide { min-width: 220px; max-height: min(70vh, 520px); overflow: auto; }
+.menu-label {
+  padding: 8px 10px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tv-toggle { margin-left: 8px; }
+.tv-toggle.on {
+  background: var(--accent);
+  color: #071018;
+  font-weight: 600;
+}
+
+/* 10-foot TV mode */
+.tv .titlebar { height: 52px; padding-left: 28px; }
+.tv .word { font-size: 20px; }
+.tv .menu-btn { font-size: 16px; padding: 8px 16px; }
+.tv .info { top: 80px; left: 40px; }
+.tv .info-title { font-size: 36px; }
+.tv .info-meta { font-size: 16px; }
+.tv .osd { padding: 12px 40px 28px; }
+.tv .time { font-size: 16px; }
+.tv .icon-btn { width: 48px; height: 48px; }
+.tv .icon-btn svg { width: 22px; height: 22px; }
+.tv .play-lg { width: 72px; height: 72px; }
+.tv .play-lg svg { width: 28px; height: 28px; }
+.tv .zap { left: 40px; top: 88px; padding: 18px 22px; }
+.tv .zap .num { font-size: 28px; }
+.tv .zap .ch { font-size: 24px; }
+.tv .sheet { left: 40px; right: 40px; bottom: 140px; max-height: 50%; }
+.tv .row { padding: 14px 12px; }
+.tv .row .meta b { font-size: 18px; }
+.tv .win-btns { display: none; }
+.tv .cluster.left .icon-btn:nth-child(n+3) { display: none; }
 
 .win-btns { display: flex; margin-left: auto; }
 .win-btns button {
