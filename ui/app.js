@@ -7,6 +7,10 @@
     '<svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7z" fill="currentColor" stroke="none" /></svg>';
   var ICO_PAUSE =
     '<svg viewBox="0 0 24 24"><path d="M7 6h3.2v12H7zM13.8 6H17v12h-3.2z" fill="currentColor" stroke="none" /></svg>';
+  var ICO_VOL =
+    '<svg viewBox="0 0 24 24"><path d="M4 10v4h3l4 3V7L7 10H4zM16 9a4 4 0 010 6" /></svg>';
+  var ICO_MUTE =
+    '<svg viewBox="0 0 24 24"><path d="M4 10v4h3l4 3V7L7 10H4zM16 10l5 5M21 10l-5 5" /></svg>';
 
   var state = {
     view: "watch",
@@ -187,13 +191,13 @@
 
   function openInfo() {
     var rows = [];
-    function add(k, v) {
+    function add(k, v, wide) {
       if (v == null || v === "") return;
-      rows.push({ k: k, v: String(v) });
+      rows.push({ k: k, v: String(v), wide: !!wide });
     }
-    add("Title", state.title);
+    add("Title", state.title, true);
+    add("Source", state.mediaPath || state.mediaUrl || video.currentSrc || "—", true);
     add("Kind", state.mediaKind || (state.current ? "live" : video.src ? "file" : "none"));
-    add("Source", state.mediaPath || state.mediaUrl || video.currentSrc || "—");
     add("Playing", video.paused ? "Paused" : "Playing");
     add("Current time", fmt(video.currentTime));
     add("Duration", isFinite(video.duration) ? fmt(video.duration) : "Live / unknown");
@@ -226,7 +230,15 @@
     var list = document.getElementById("info-list");
     list.innerHTML = rows
       .map(function (r) {
-        return "<li><span>" + escapeHtml(r.k) + "</span><b>" + escapeHtml(r.v) + "</b></li>";
+        return (
+          "<li" +
+          (r.wide ? ' class="span2"' : "") +
+          "><span>" +
+          escapeHtml(r.k) +
+          "</span><b>" +
+          escapeHtml(r.v) +
+          "</b></li>"
+        );
       })
       .join("");
     infoModal.hidden = false;
@@ -405,7 +417,7 @@
       });
 
     if (!state.channels.length) {
-      listEl.innerHTML = '<div class="empty">Media → Add playlist, or load demo clips.</div>';
+      listEl.innerHTML = '<div class="empty">Media → Add playlist.</div>';
       return;
     }
     listEl.innerHTML = state.channels
@@ -686,7 +698,7 @@
   }
 
   document.querySelectorAll(".menu-btn").forEach(function (btn) {
-    if (btn.id === "btn-about" || btn.id === "btn-tv") return;
+    if (btn.id === "btn-tv") return;
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
       var menu = btn.parentElement;
@@ -724,14 +736,6 @@
   document.getElementById("btn-import").addEventListener("click", function () {
     importModal.hidden = false;
     showChrome();
-  });
-  document.getElementById("btn-demo").addEventListener("click", function () {
-    invoke("load_demo_playlist")
-      .then(function () {
-        state.view = "live";
-        return refresh();
-      })
-      .catch(fail);
   });
 
   document.querySelectorAll("[data-view]").forEach(function (el) {
@@ -865,7 +869,6 @@
     aboutModal.hidden = false;
     showChrome();
   }
-  document.getElementById("btn-about").addEventListener("click", openAbout);
   document.getElementById("about-close").addEventListener("click", function () {
     aboutModal.hidden = true;
   });
@@ -895,9 +898,25 @@
   seekEl.addEventListener("input", function () {
     if (video.duration) video.currentTime = (Number(seekEl.value) / 1000) * video.duration;
   });
+  function paintMute() {
+    var btn = document.getElementById("btn-mute");
+    if (!btn) return;
+    var off = video.muted || video.volume === 0;
+    btn.innerHTML = off ? ICO_MUTE : ICO_VOL;
+    btn.title = off ? "Unmute" : "Mute";
+    btn.classList.toggle("on", off);
+  }
+  document.getElementById("btn-mute").addEventListener("click", function () {
+    video.muted = !video.muted;
+    paintMute();
+  });
   document.getElementById("vol").addEventListener("input", function (ev) {
     video.volume = Number(ev.target.value) / 100;
+    if (video.volume > 0) video.muted = false;
+    paintMute();
   });
+  video.addEventListener("volumechange", paintMute);
+  paintMute();
 
   video.addEventListener("timeupdate", function () {
     document.getElementById("time-cur").textContent = fmt(video.currentTime);

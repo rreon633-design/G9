@@ -38,26 +38,11 @@
               <button type="button" id="btn-file">Open file…</button>
               <button type="button" id="btn-url">Open URL…</button>
               <button type="button" id="btn-import">Add playlist…</button>
-              <hr />
-              <button type="button" id="btn-demo">Load demo clips</button>
-            </div>
-          </div>
-          <div class="menu">
-            <button type="button" class="menu-btn">Playback</button>
-            <div class="menu-pop">
-              <button type="button" data-act="toggle">Play / Pause</button>
-              <button type="button" data-act="stop">Stop</button>
-              <button type="button" data-act="seek-back">Back 10 seconds</button>
-              <button type="button" data-act="seek-fwd">Forward 10 seconds</button>
             </div>
           </div>
           <div class="menu">
             <button type="button" class="menu-btn">Settings</button>
-            <div class="menu-pop wide">
-              <div class="menu-label">Audio</div>
-              <button type="button" data-act="mute">Mute / Unmute</button>
-              <div class="menu-label">Video</div>
-              <button type="button" data-act="fs">Fullscreen</button>
+            <div class="menu-pop">
               <div class="menu-label">Subtitles</div>
               <button type="button" data-act="subs">Search & apply best</button>
               <button type="button" data-act="subs-off">Hide subtitles</button>
@@ -68,14 +53,12 @@
               <button type="button" data-view="library">Library</button>
               <hr />
               <div class="menu-label">Tools</div>
-              <button type="button" data-act="info">Media info</button>
               <button type="button" data-act="diag">Diagnostics</button>
               <button type="button" data-view="settings">Preferences</button>
               <hr />
               <button type="button" data-act="about">About G9</button>
             </div>
           </div>
-          <button type="button" class="menu-btn" id="btn-about">About G9</button>
           <button type="button" class="menu-btn tv-toggle" id="btn-tv" title="TV mode">TV Mode</button>
         </nav>
 
@@ -158,7 +141,9 @@
 
           <div class="cluster right">
             <div class="vol">
-              <svg viewBox="0 0 24 24"><path d="M4 10v4h3l4 3V7L7 10H4zM16 9a4 4 0 010 6" /></svg>
+              <button type="button" class="icon-btn" id="btn-mute" title="Mute">
+                <svg viewBox="0 0 24 24"><path d="M4 10v4h3l4 3V7L7 10H4zM16 9a4 4 0 010 6" /></svg>
+              </button>
               <input id="vol" type="range" min="0" max="100" value="100" />
             </div>
             <button type="button" class="icon-btn" id="btn-cc" title="Search subtitles">
@@ -198,9 +183,9 @@
     </div>
 
     <div class="modal-back" id="info-modal" hidden>
-      <div class="modal" role="dialog">
+      <div class="modal info-card" role="dialog">
         <h3>Media info</h3>
-        <ul class="about-meta" id="info-list"></ul>
+        <ul class="info-grid" id="info-list"></ul>
         <div class="modal-actions">
           <button type="button" id="info-subs">Find subtitles</button>
           <span class="spacer"></span>
