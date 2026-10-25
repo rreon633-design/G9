@@ -64,6 +64,51 @@ pub fn remux_repair(path: &str, dest: &str) -> Result<ToolResult, String> {
     }
 }
 
+pub fn probe(path: &str) -> Result<String, String> {
+    let out = run_hidden(Command::new("ffprobe").args([
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
+        "-show_format",
+        "-show_streams",
+        "-show_chapters",
+        path,
+    ]))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).into_owned());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+pub fn rtmp_out(path: &str, rtmp: &str) -> Result<ToolResult, String> {
+    if !rtmp.starts_with("rtmp://") && !rtmp.starts_with("rtmps://") {
+        return Err("RTMP URL required".into());
+    }
+    let out = run_hidden(Command::new("ffmpeg").args([
+        "-re",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        path,
+        "-c",
+        "copy",
+        "-f",
+        "flv",
+        rtmp,
+    ]))?;
+    if out.status.success() {
+        Ok(ToolResult {
+            ok: true,
+            output: rtmp.into(),
+        })
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).into_owned())
+    }
+}
+
 pub fn convert(path: &str, dest: &str) -> Result<ToolResult, String> {
     let lower = dest.to_ascii_lowercase();
     let mut args: Vec<&str> = vec![

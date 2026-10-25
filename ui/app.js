@@ -55,6 +55,12 @@
     abA: null,
     abB: null,
     resumeTimer: 0,
+    queue: [],
+    queueIdx: -1,
+    vizOn: false,
+    lineRepeat: false,
+    lastCueIdx: -1,
+    onTop: false,
   };
 
   var video = document.getElementById("video");
@@ -246,12 +252,18 @@
     if (!el) return;
     var t = video.currentTime + (state.subDelay || 0);
     var hit = null;
+    var idx = -1;
     for (var i = 0; i < state.cues.length; i++) {
       if (t >= state.cues[i].start && t < state.cues[i].end) {
         hit = state.cues[i];
+        idx = i;
         break;
       }
     }
+    if (state.lineRepeat && state.lastCueIdx >= 0 && idx < 0) {
+      video.pause();
+    }
+    state.lastCueIdx = idx;
     if (!hit) {
       el.textContent = "";
       return;
@@ -380,9 +392,12 @@
       });
       var gain = ctx.createGain();
       gain.gain.value = state.boost / 100;
+      var analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
       last.connect(gain);
-      gain.connect(ctx.destination);
-      audioGraph = { ctx: ctx, filters: filters, gain: gain };
+      gain.connect(analyser);
+      analyser.connect(ctx.destination);
+      audioGraph = { ctx: ctx, filters: filters, gain: gain, analyser: analyser };
       return audioGraph;
     } catch (e) {
       return null;
@@ -992,6 +1007,308 @@
     if (cmd === "mute") video.muted = true;
     if (cmd === "unmute") video.muted = false;
   }
+  function enqueue(title, url) {
+    if (!url) return;
+    var i = -1;
+    state.queue.forEach(function (q, n) {
+      if (q.url === url) i = n;
+    });
+    if (i >= 0) {
+      state.queueIdx = i;
+      return;
+    }
+    state.queue.push({
+      title: title || url,
+      url: url,
+      path: state.mediaPath,
+      kind: state.mediaKind,
+    });
+    state.queueIdx = state.queue.length - 1;
+  }
+  function playQueueNext() {
+    var n = state.queueIdx + 1;
+    if (n <= 0 || n >= state.queue.length) return false;
+    var item = state.queue[n];
+    state.queueIdx = n;
+    state.mediaKind = item.kind;
+    state.mediaPath = item.path;
+    playUrl(item.title, item.url);
+    return true;
+  }
+  function toggleViz() {
+    state.vizOn = !state.vizOn;
+    var canvas = document.getElementById("viz");
+    canvas.hidden = !state.vizOn;
+    if (state.vizOn) {
+      ensureAudio();
+      drawViz();
+      toast("Visualizer on");
+    } else toast("Visualizer off");
+  }
+  function drawViz() {
+    var canvas = document.getElementById("viz");
+    if (!state.vizOn || !canvas) return;
+    var g = ensureAudio();
+    var ctx2 = canvas.getContext("2d");
+    canvas.width = canvas.clientWidth || 640;
+    canvas.height = canvas.clientHeight || 120;
+    ctx2.clearRect(0, 0, canvas.width, canvas.height);
+    if (g && g.analyser) {
+      var data = new Uint8Array(g.analyser.frequencyBinCount);
+      g.analyser.getByteFrequencyData(data);
+      var n = 48;
+      var w = canvas.width / n;
+      for (var i = 0; i < n; i++) {
+        var v = data[Math.floor((i * data.length) / n)] / 255;
+        var h = v * canvas.height;
+        ctx2.fillStyle = "rgba(78,163,255," + (0.35 + v * 0.65) + ")";
+        ctx2.fillRect(i * w + 1, canvas.height - h, w - 2, h);
+      }
+    }
+    requestAnimationFrame(drawViz);
+  }
+  function togglePip() {
+    if (!document.pictureInPictureEnabled) {
+      toast("PiP not available");
+      return;
+    }
+    if (document.pictureInPictureElement) document.exitPictureInPicture();
+    else video.requestPictureInPicture().catch(function (e) {
+      toast(String(e.message || e));
+    });
+  }
+  function toggleOnTop() {
+    state.onTop = !state.onTop;
+    win().then(function (w) {
+      if (w && w.setAlwaysOnTop) return w.setAlwaysOnTop(state.onTop);
+    }).then(function () {
+      toast(state.onTop ? "Always on top" : "On top off");
+    }).catch(function () {
+      toast("Always on top unavailable");
+    });
+  }
+  function showCues() {
+    var host = document.getElementById("cue-list");
+    var panel = document.getElementById("cue-panel");
+    if (!host || !panel) return;
+    if (!state.cues.length) {
+      host.innerHTML = '<div class="empty">No subtitle lines.</div>';
+    } else {
+      host.innerHTML = state.cues
+        .map(function (c, i) {
+          return (
+            '<div class="mark-row" data-ci="' +
+            i +
+            '"><span>' +
+            escapeHtml(c.text).slice(0, 80) +
+            "</span><b>" +
+            fmt(c.start) +
+            "</b></div>"
+          );
+        })
+        .join("");
+      host.querySelectorAll("[data-ci]").forEach(function (row) {
+        row.addEventListener("click", function () {
+          var c = state.cues[Number(row.getAttribute("data-ci"))];
+          if (c) video.currentTime = c.start;
+        });
+      });
+    }
+    panel.hidden = false;
+    showChrome();
+  }
+  function loadChapters() {
+    if (!state.mediaPath || state.mediaKind !== "file") {
+      toast("Open a local file");
+      return;
+    }
+    toast("Reading chapters…");
+    invoke("probe_media", { path: state.mediaPath })
+      .then(function (json) {
+        var data = JSON.parse(json);
+        var ch = data.chapters || [];
+        if (!ch.length) {
+          toast("No chapters");
+          return;
+        }
+        state.view = "queue";
+        state.queue = ch.map(function (c, i) {
+          var t = Number(c.start_time || 0);
+          return {
+            title: (c.tags && (c.tags.title || c.tags.TITLE)) || "Chapter " + (i + 1),
+            url: video.currentSrc || state.mediaUrl,
+            path: state.mediaPath,
+            kind: state.mediaKind,
+            t: t,
+          };
+        });
+        paint();
+        listEl; // render via view chapters as queue jump
+        var title = document.getElementById("sheet-title");
+        state.view = "live";
+        sheet.hidden = false;
+        document.getElementById("sheet-title").textContent = "Chapters";
+        document.getElementById("sheet-count").textContent = String(ch.length);
+        chipsEl.innerHTML = "";
+        listEl.innerHTML = ch
+          .map(function (c, i) {
+            var t = Number(c.start_time || 0);
+            var name = (c.tags && (c.tags.title || c.tags.TITLE)) || "Chapter " + (i + 1);
+            return (
+              '<div class="row" data-chp="' +
+              t +
+              '"><div class="n">' +
+              (i + 1) +
+              '</div><div class="meta"><b>' +
+              escapeHtml(name) +
+              "</b><span>" +
+              fmt(t) +
+              "</span></div></div>"
+            );
+          })
+          .join("");
+        listEl.querySelectorAll("[data-chp]").forEach(function (row) {
+          row.addEventListener("click", function () {
+            video.currentTime = Number(row.getAttribute("data-chp"));
+          });
+        });
+        state.view = "watch";
+        sheet.hidden = false;
+        showChrome();
+      })
+      .catch(function (e) {
+        toast(String(e && e.message ? e.message : e));
+      });
+  }
+  function inspectFile() {
+    if (!state.mediaPath || state.mediaKind !== "file") {
+      openInfo();
+      return;
+    }
+    invoke("probe_media", { path: state.mediaPath })
+      .then(function (json) {
+        diag.classList.add("on");
+        state.showDiag = true;
+        diag.textContent = json.slice(0, 4000);
+        toast("Inspect (ffprobe)");
+      })
+      .catch(function () {
+        openInfo();
+      });
+  }
+  function scenePoster() {
+    if (!video.videoWidth || !video.duration) {
+      toast("Nothing to capture");
+      return;
+    }
+    var cols = 3;
+    var rows = 2;
+    var fw = 320;
+    var fh = Math.round((video.videoHeight / video.videoWidth) * fw);
+    var c = document.createElement("canvas");
+    c.width = cols * fw;
+    c.height = rows * fh;
+    var ctx = c.getContext("2d");
+    var n = cols * rows;
+    var i = 0;
+    var origin = video.currentTime;
+    var paused = video.paused;
+    video.pause();
+    function step() {
+      if (i >= n) {
+        video.currentTime = origin;
+        if (!paused) video.play();
+        c.toBlob(function (blob) {
+          if (!blob) return;
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = (state.title || "g9") + "-poster.jpg";
+          a.click();
+          toast("Poster saved");
+        }, "image/jpeg", 0.88);
+        return;
+      }
+      video.currentTime = ((i + 0.5) / n) * video.duration;
+      video.onseeked = function () {
+        video.onseeked = null;
+        var x = (i % cols) * fw;
+        var y = Math.floor(i / cols) * fh;
+        try {
+          ctx.drawImage(video, x, y, fw, fh);
+        } catch (e) {}
+        i++;
+        setTimeout(step, 40);
+      };
+    }
+    step();
+  }
+  function sleepTimer() {
+    var m = Number(window.prompt("Sleep after minutes (0 cancels)", "30"));
+    window.clearTimeout(state.sleepId);
+    if (!m) {
+      toast("Sleep timer off");
+      return;
+    }
+    state.sleepId = window.setTimeout(function () {
+      video.pause();
+      toast("Sleep timer");
+    }, m * 60 * 1000);
+    toast("Sleep in " + m + " min");
+  }
+  function exportCfg() {
+    var data = {};
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf("g9-") === 0) data[k] = localStorage.getItem(k);
+      }
+    } catch (e) {}
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "g9-settings.json";
+    a.click();
+    toast("Settings exported");
+  }
+  function importCfg() {
+    var inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = "application/json";
+    inp.onchange = function () {
+      var f = inp.files && inp.files[0];
+      if (!f) return;
+      var r = new FileReader();
+      r.onload = function () {
+        try {
+          var data = JSON.parse(r.result);
+          Object.keys(data).forEach(function (k) {
+            if (k.indexOf("g9-") === 0) localStorage.setItem(k, data[k]);
+          });
+          toast("Settings imported — reopen G9 to apply all");
+        } catch (e) {
+          toast("Invalid settings file");
+        }
+      };
+      r.readAsText(f);
+    };
+    inp.click();
+  }
+  function broadcastRtmp() {
+    if (state.mediaKind !== "file" || !state.mediaPath) {
+      toast("Open a local file first");
+      return;
+    }
+    var url = window.prompt("RTMP URL (rtmp://…)");
+    if (!url) return;
+    toast("Starting ffmpeg broadcast…");
+    invoke("rtmp_out", { path: state.mediaPath, rtmp: url })
+      .then(function () {
+        toast("Broadcast finished");
+      })
+      .catch(function (e) {
+        toast(String(e && e.message ? e.message : e));
+      });
+  }
   function openPath() {
     var p = window.prompt("File path or SMB share (\\\\server\\share\\video.mp4)");
     if (!p) return;
@@ -1183,6 +1500,10 @@
     if (state.info) add("G9", "v" + state.info.version);
     add("Platform", navigator.platform || "WebView");
     add("Decoder", "WebView2 hardware (DXVA / D3D11)");
+    if (video.getVideoPlaybackQuality) {
+      var q = video.getVideoPlaybackQuality();
+      add("Dropped frames", q.droppedVideoFrames + " / " + q.totalVideoFrames);
+    }
     var list = document.getElementById("info-list");
     list.innerHTML = rows
       .map(function (r) {
@@ -1271,6 +1592,52 @@
   function renderSheet() {
     var title = document.getElementById("sheet-title");
     var count = document.getElementById("sheet-count");
+    if (state.view === "queue") {
+      title.textContent = "Playlist";
+      chipsEl.innerHTML = "";
+      count.textContent = String(state.queue.length);
+      if (!state.queue.length) {
+        listEl.innerHTML = '<div class="empty">Queue is empty. Open files to add them.</div>';
+        return;
+      }
+      listEl.innerHTML = state.queue
+        .map(function (q, i) {
+          return (
+            '<div class="row' +
+            (i === state.queueIdx ? " on" : "") +
+            '" data-qi="' +
+            i +
+            '"><div class="n">' +
+            (i + 1) +
+            '</div><div class="meta"><b>' +
+            escapeHtml(q.title) +
+            "</b><span>queued</span></div><button type=\"button\" data-qrm=\"" +
+            i +
+            '">✕</button></div>'
+          );
+        })
+        .join("");
+      listEl.querySelectorAll("[data-qi]").forEach(function (row) {
+        row.addEventListener("click", function (ev) {
+          if (ev.target.closest("[data-qrm]")) return;
+          var i = Number(row.getAttribute("data-qi"));
+          var item = state.queue[i];
+          if (!item) return;
+          state.queueIdx = i;
+          state.mediaKind = item.kind;
+          state.mediaPath = item.path;
+          playUrl(item.title, item.url);
+        });
+      });
+      listEl.querySelectorAll("[data-qrm]").forEach(function (btn) {
+        btn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          state.queue.splice(Number(btn.getAttribute("data-qrm")), 1);
+          renderSheet();
+        });
+      });
+      return;
+    }
     if (state.view === "podcast") {
       title.textContent = "Podcast";
       chipsEl.innerHTML = "";
@@ -1614,6 +1981,7 @@
     setTitle(title);
     state.lastQuery = title || url || "";
     state.mediaUrl = url || "";
+    enqueue(title, url);
     poster.style.display = "none";
     stopHls();
     clearSubs();
@@ -1897,6 +2265,21 @@
       if (act === "convert") convertMedia();
       if (act === "360") toggle360();
       if (act === "livetx") setLiveTx();
+      if (act === "pip") togglePip();
+      if (act === "ontop") toggleOnTop();
+      if (act === "viz") toggleViz();
+      if (act === "chapters") loadChapters();
+      if (act === "cues") showCues();
+      if (act === "linerep") {
+        state.lineRepeat = !state.lineRepeat;
+        toast(state.lineRepeat ? "Pause after each line" : "Line repeat off");
+      }
+      if (act === "sleep") sleepTimer();
+      if (act === "poster") scenePoster();
+      if (act === "inspect") inspectFile();
+      if (act === "rtmp") broadcastRtmp();
+      if (act === "exportcfg") exportCfg();
+      if (act === "importcfg") importCfg();
       if (act === "ad") enableAudioDescription();
       if (act === "translate") translateCaptions();
       if (act === "extract") extractAudio();
@@ -1997,6 +2380,44 @@
   document.getElementById("mark-close").addEventListener("click", function () {
     markPanel.hidden = true;
   });
+  var cueClose = document.getElementById("cue-close");
+  if (cueClose)
+    cueClose.addEventListener("click", function () {
+      document.getElementById("cue-panel").hidden = true;
+    });
+  (function gestures() {
+    var startX = 0;
+    var startY = 0;
+    var startT = 0;
+    var startVol = 1;
+    app.addEventListener(
+      "touchstart",
+      function (ev) {
+        if (!ev.touches.length) return;
+        startX = ev.touches[0].clientX;
+        startY = ev.touches[0].clientY;
+        startT = video.currentTime;
+        startVol = video.volume;
+      },
+      { passive: true }
+    );
+    app.addEventListener(
+      "touchend",
+      function (ev) {
+        var t = ev.changedTouches[0];
+        if (!t) return;
+        var dx = t.clientX - startX;
+        var dy = t.clientY - startY;
+        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+          video.currentTime = Math.max(0, startT + (dx / app.clientWidth) * 60);
+        } else if (Math.abs(dy) > 60) {
+          video.volume = Math.max(0, Math.min(1, startVol - dy / 300));
+          paintMute();
+        }
+      },
+      { passive: true }
+    );
+  })();
   if ("preservesPitch" in video) video.preservesPitch = true;
   document.querySelectorAll("[data-cue-color]").forEach(function (btn) {
     btn.addEventListener("click", function () {
@@ -2180,6 +2601,8 @@
     if (state.repeat) {
       video.currentTime = 0;
       video.play();
+    } else if (playQueueNext()) {
+      return;
     } else setPlaying(false);
   });
   video.addEventListener("error", function () {

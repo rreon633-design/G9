@@ -320,6 +320,20 @@ pub async fn remux_repair(path: String, dest: String) -> Result<crate::tools::To
 }
 
 #[tauri::command]
+pub async fn probe_media(path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::tools::probe(&path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn rtmp_out(path: String, rtmp: String) -> Result<crate::tools::ToolResult, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::tools::rtmp_out(&path, &rtmp))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn convert_media(path: String, dest: String) -> Result<crate::tools::ToolResult, String> {
     tauri::async_runtime::spawn_blocking(move || crate::tools::convert(&path, &dest))
         .await

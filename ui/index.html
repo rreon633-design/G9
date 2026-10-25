@@ -11,6 +11,7 @@
     <div id="app" class="chrome-on" role="application" aria-label="G9 media player">
       <video id="video" playsinline aria-label="Video"></video>
       <canvas id="view360" hidden></canvas>
+      <canvas id="viz" hidden></canvas>
       <div id="region" hidden>
         <div id="region-box"></div>
         <p id="region-hint">Drag a rectangle. Release to record. Esc cancels.</p>
@@ -74,12 +75,25 @@
               <button type="button" data-view="watch">Player</button>
               <button type="button" data-view="live">Live TV</button>
               <button type="button" data-view="library">Library</button>
+              <button type="button" data-view="queue">Playlist</button>
               <hr />
               <div class="menu-label">Tools</div>
               <button type="button" data-act="snap">Save frame</button>
               <button type="button" data-act="gif">Export GIF</button>
               <button type="button" data-act="record">Record screen / webcam / region</button>
               <button type="button" data-act="convert">Convert / Save…</button>
+              <button type="button" data-act="pip">Picture-in-picture</button>
+              <button type="button" data-act="ontop">Always on top</button>
+              <button type="button" data-act="viz">Audio visualizer</button>
+              <button type="button" data-act="chapters">Chapters</button>
+              <button type="button" data-act="cues">Subtitle browser</button>
+              <button type="button" data-act="linerep">Pause after each line</button>
+              <button type="button" data-act="sleep">Sleep timer</button>
+              <button type="button" data-act="poster">Scene poster</button>
+              <button type="button" data-act="inspect">Inspect file</button>
+              <button type="button" data-act="rtmp">Broadcast RTMP…</button>
+              <button type="button" data-act="exportcfg">Export settings</button>
+              <button type="button" data-act="importcfg">Import settings</button>
               <button type="button" data-act="marks">Bookmarks</button>
               <button type="button" data-act="extract">Extract audio</button>
               <button type="button" data-act="repair">Repair / remux file</button>
@@ -199,6 +213,13 @@
         <label>Playback <b id="speed-val">1.00×</b></label>
         <input id="speed" type="range" min="25" max="200" value="100" />
         <label class="boost-row"><input id="speed-pitch" type="checkbox" checked /> Keep pitch (no chipmunk)</label>
+      </div>
+      <div class="panel" id="cue-panel" hidden>
+        <div class="panel-head">
+          <h3>Subtitle browser</h3>
+          <button type="button" class="icon-btn" id="cue-close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        </div>
+        <div class="list" id="cue-list"></div>
       </div>
       <div class="panel" id="mark-panel" hidden>
         <div class="panel-head">

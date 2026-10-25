@@ -24,6 +24,13 @@ Last updated: 2026-10-25 · source: `main`
 - TV Mode (large type, living-room chrome)
 - System media keys (Media Session / SMTC)
 - JSON IPC on `127.0.0.1:18765` (one JSON object per line)
+- File **playlist queue** (View → Playlist; plays next on end)
+- **Chapters** (ffprobe, if on PATH)
+- **Picture-in-picture**
+- **Always on top**
+- Background audio while minimized (WebView keeps decoding)
+- Touch **gestures**: horizontal seek, vertical volume
+- **Sleep timer**
 
 ### Picture
 - Hover **scrub preview**
@@ -34,6 +41,8 @@ Last updated: 2026-10-25 · source: `main`
 - Screen / webcam recording (MediaRecorder → WebM)
 - **360° look-around** for equirectangular video (WebGL, drag)
 - **Region** screen capture (draw a rectangle, then record)
+- Audio **visualizer** (spectrum)
+- **Scene poster** (3×2 stills)
 
 ### Subtitles
 - Sidecar `.srt` / `.vtt` / `.ass` / `.ssa`
@@ -47,6 +56,8 @@ Last updated: 2026-10-25 · source: `main`
 - Size, colour, vertical position, outline
 - Translate existing captions (MyMemory)
 - Live translate of the current cue while playing
+- **Subtitle browser** (click a line to seek)
+- **Pause after each line** (language-learning)
 
 ### Audio
 - Mute + volume on the transport
@@ -64,12 +75,15 @@ Last updated: 2026-10-25 · source: `main`
 - Extract audio (MP3)
 - Repair / remux (copy codecs, ignore errors)
 - Convert / Save (MP4 / WebM / MP3)
+- **Inspect** (ffprobe JSON in Diagnostics)
+- **RTMP broadcast** (copy to `rtmp://…`)
 
 ### Chrome
 - Frameless cinema UI: Media · Settings · TV Mode
 - About G9 dialog
 - Diagnostics
 - ARIA application/toolbar roles, labelled controls
+- **Export / import settings** (JSON)
 
 ---
 
@@ -116,6 +130,13 @@ These are standard in VLC / PotPlayer / mpv. They are **not** coming to G9 while
 | Full libass karaoke / signs | Would need native libass |
 | True independent pitch shifter (tempo unchanged) | Needs Rubber Band / SoundTouch |
 | Full NAS file manager | UNC path open only |
+| DVD / Blu-ray / VCD **menus** | Needs libdvdnav, not HTML video |
+| Chromecast / AirPlay **output** | Needs a cast stack, not WebView sink |
+| Cloud Drive / Dropbox OAuth | No bundled cloud accounts |
+| Cross-device watch sync | No G9 cloud account |
+| Plex / Jellyfin / Emby client | Separate product; play their HTTP URLs |
+| Downloadable **skins** marketplace | Cinema chrome is fixed |
+| Multi-process extra player windows | One window + PiP |
 
 G9 will not grow a second media core unless you explicitly switch the product to mpv/FFmpeg.
 

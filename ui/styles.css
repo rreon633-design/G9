@@ -760,6 +760,15 @@ input[type="range"]::-webkit-slider-thumb {
   border: 2px solid var(--accent);
   background: rgba(78, 163, 255, 0.12);
 }
+#viz {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28%;
+  z-index: 2;
+  pointer-events: none;
+}
 #region-hint {
   position: absolute;
   left: 50%;
