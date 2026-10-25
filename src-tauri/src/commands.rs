@@ -270,9 +270,12 @@ pub async fn find_subtitles(
 pub async fn apply_best_subtitles(
     query: String,
     language: Option<String>,
+    path: Option<String>,
 ) -> Result<crate::subs::SubResult, String> {
     let lang = language.unwrap_or_else(|| "en".into());
-    tauri::async_runtime::spawn_blocking(move || crate::subs::fetch_best(&query, &lang))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::subs::fetch_best(&query, &lang, path.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

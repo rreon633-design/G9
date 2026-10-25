@@ -153,7 +153,8 @@
     var cc = document.getElementById("btn-cc");
     if (cc) cc.classList.add("on");
     var label = result.movie || result.release || result.query || "captions";
-    toast("Subtitles · " + label);
+    var src = result.provider ? " · " + result.provider : "";
+    toast("Subtitles · " + label + src);
   }
 
   function mediaQuery() {
@@ -167,7 +168,8 @@
       return Promise.resolve();
     }
     toast("Searching subtitles…");
-    return invoke("apply_best_subtitles", { query: q, language: "en" })
+    var path = state.mediaKind === "file" && state.mediaPath ? state.mediaPath : null;
+    return invoke("apply_best_subtitles", { query: q, language: "en", path: path })
       .then(applyVtt)
       .catch(function (e) {
         toast(e && e.message ? e.message : String(e));
@@ -220,6 +222,7 @@
     }
     if (state.subMeta) {
       add("Subtitles", "On · " + (state.subMeta.movie || state.subMeta.query));
+      add("Sub source", state.subMeta.provider || "online");
       add("Sub language", state.subMeta.language);
       add("Sub release", state.subMeta.release);
     } else {

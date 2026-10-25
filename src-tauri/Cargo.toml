@@ -27,6 +27,7 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 url = { workspace = true }
 thiserror = { workspace = true }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+md-5 = "0.10"
 
 [features]
 default = ["custom-protocol"]
