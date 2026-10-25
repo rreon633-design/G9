@@ -27,7 +27,17 @@ pub fn ffmpeg_available() -> bool {
 
 pub fn extract_audio(path: &str, dest: &str) -> Result<ToolResult, String> {
     let out = run_hidden(Command::new("ffmpeg").args([
-        "-y", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", path, "-vn", "-q:a", "2", dest,
+        "-y",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        path,
+        "-vn",
+        "-q:a",
+        "2",
+        dest,
     ]))?;
     if out.status.success() {
         Ok(ToolResult {
@@ -125,7 +135,9 @@ pub fn convert(path: &str, dest: &str) -> Result<ToolResult, String> {
     } else if lower.ends_with(".webm") {
         args.extend(["-c:v", "libvpx", "-b:v", "1M", "-c:a", "libvorbis"]);
     } else {
-        args.extend(["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac"]);
+        args.extend([
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac",
+        ]);
     }
     args.push(dest);
     let out = run_hidden(Command::new("ffmpeg").args(&args))?;
@@ -170,7 +182,9 @@ fn urlencoding_q(s: &str) -> String {
     let mut o = String::new();
     for b in s.bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => o.push(b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                o.push(b as char)
+            }
             b' ' => o.push('+'),
             _ => o.push_str(&format!("%{b:02X}")),
         }

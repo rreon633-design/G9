@@ -31,7 +31,12 @@ fn http_get_raw(url: &str) -> Result<String, String> {
             .timeout(Duration::from_secs(8))
             .build()
             .map_err(|e| e.to_string())?;
-        let t = client.get(url).send().map_err(|e| e.to_string())?.text().map_err(|e| e.to_string())?;
+        let t = client
+            .get(url)
+            .send()
+            .map_err(|e| e.to_string())?
+            .text()
+            .map_err(|e| e.to_string())?;
         return Ok(t);
     }
     let host = parsed.host_str().ok_or("host")?;
@@ -44,7 +49,11 @@ fn http_get_raw(url: &str) -> Result<String, String> {
     let q = parsed.query().map(|q| format!("?{q}")).unwrap_or_default();
     let addr = format!("{host}:{port}");
     let mut stream = TcpStream::connect_timeout(
-        &addr.to_socket_addrs().map_err(|e| e.to_string())?.next().ok_or("resolve")?,
+        &addr
+            .to_socket_addrs()
+            .map_err(|e| e.to_string())?
+            .next()
+            .ok_or("resolve")?,
         Duration::from_secs(4),
     )
     .map_err(|e| e.to_string())?;
@@ -53,7 +62,9 @@ fn http_get_raw(url: &str) -> Result<String, String> {
         "GET {path}{q} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\nUser-Agent: {}\r\n\r\n",
         g9_core::USER_AGENT
     );
-    stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    stream
+        .write_all(req.as_bytes())
+        .map_err(|e| e.to_string())?;
     let mut buf = Vec::new();
     stream.read_to_end(&mut buf).ok();
     let text = String::from_utf8_lossy(&buf);
@@ -212,11 +223,7 @@ fn parse_didl(xml: &str) -> Result<Vec<DlnaItem>, String> {
             let title = xml_tag(block, "dc:title")
                 .or_else(|| xml_tag(block, "title"))
                 .unwrap_or_else(|| id.clone());
-            let url = if container {
-                None
-            } else {
-                res_url(block)
-            };
+            let url = if container { None } else { res_url(block) };
             if !id.is_empty() {
                 items.push(DlnaItem {
                     id,

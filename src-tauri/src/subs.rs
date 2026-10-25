@@ -325,8 +325,7 @@ fn search_opensubtitles_hash(path: &str, language: &str) -> Result<Vec<SubHit>, 
 fn search_podnapisi(query: &str, language: &str) -> Result<Vec<SubHit>, String> {
     let l2 = lang2(language);
     let encoded = urlencoding_simple(query);
-    let url =
-        format!("https://www.podnapisi.net/subtitles/search/old?sXML=1&sL={l2}&sK={encoded}");
+    let url = format!("https://www.podnapisi.net/subtitles/search/old?sXML=1&sL={l2}&sK={encoded}");
     let body = String::from_utf8_lossy(&http_get(&url, USER_AGENT)?).into_owned();
     let mut hits = Vec::new();
     let mut rest = body.as_str();
@@ -545,7 +544,10 @@ fn transcribe_whisper(path: &str) -> Result<SubResult, String> {
             }
             Ok(out) => tried.push(format!(
                 "{bin}: {}",
-                String::from_utf8_lossy(&out.stderr).chars().take(80).collect::<String>()
+                String::from_utf8_lossy(&out.stderr)
+                    .chars()
+                    .take(80)
+                    .collect::<String>()
             )),
             Err(e) => tried.push(format!("{bin}: {e}")),
         }
@@ -623,7 +625,11 @@ fn ass_to_vtt(ass: &str) -> String {
         for _ in 0..6 {
             let _ = fields.next();
         }
-        let text = fields.next().unwrap_or("").replace("\\N", "\n").replace("\\n", "\n");
+        let text = fields
+            .next()
+            .unwrap_or("")
+            .replace("\\N", "\n")
+            .replace("\\n", "\n");
         let mut clean = String::new();
         let mut chars = text.chars().peekable();
         while let Some(c) = chars.next() {
