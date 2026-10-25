@@ -28,7 +28,7 @@ Click any card for episodes or chapters, source chips and **Play** (or **Read**)
 a grid you can sort and filter by genre, year and quality; the box at the top searches every enabled
 source at once and merges the same title from several addons into one card that says how many
 carry it. Magnet results are labelled `Magnet` and start playing when the torrent engine lands in
-v0.11.0.
+v0.12.0.
 
 ### Keeping track
 
