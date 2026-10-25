@@ -149,5 +149,21 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         "INSERT OR IGNORE INTO schema_migrations (version) VALUES (4)",
         [],
     )?;
+
+    // v5: two things a source needs once you run more than one of them — the
+    // request headers it should be called with, and how it answered last time.
+    // SQLite has no ADD COLUMN IF NOT EXISTS, so a failed ALTER is expected on
+    // an install that already ran this migration.
+    for sql in [
+        "ALTER TABLE fun_sources ADD COLUMN headers TEXT",
+        "ALTER TABLE fun_sources ADD COLUMN last_ms INTEGER",
+        "ALTER TABLE fun_sources ADD COLUMN last_error TEXT",
+    ] {
+        let _ = conn.execute(sql, []);
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO schema_migrations (version) VALUES (5)",
+        [],
+    )?;
     Ok(())
 }

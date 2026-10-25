@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.11.0** · source: `main`  
+Last updated: 2026-10-25 · release **v0.12.0** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -258,10 +258,18 @@ libplacebo-grade Anime4K/FSRCNNX chain does not. The rest are engine-level or ac
 
 **“23 long-tail”** — playlist, chapters (ffprobe), visualizer, PiP, background audio, cue browser, line-repeat, inspect, poster, sleep, settings JSON, gestures, RTMP: shipped. **v0.3.0** adds multi-window, a downloaded FFmpeg, a transcript pane, WebGL shader effects and a PC shutdown timer. Disc menus, cast-out, cloud, Plex/Jellyfin/Emby, skins, album art/TMDB library: **not implemented**.
 
+## Sources you control (v0.12.0)
+
+- Per-source request headers (Accept-Language, User-Agent, any `Key: value`), edited in Sources
+- Source health: last round trip, "slow" above 1.5 s, the reason a source failed, and a Test button
+- Addon-declared genre/year filters on *See all*, sent to the addon rather than applied locally
+- Catalog paging with *Load more*, keeping the selected filters
+- A fresh install seeds Internet Archive + MangaDex, so Fun Mode never opens empty
+
 ## Fun Mode — second list (v0.11.0)
 
-Nineteen more Fun Mode features, all inside the player or the wall. **Seventeen shipped in
-0.11.0**; the last two need provider metadata G9 does not have yet.
+Nineteen more Fun Mode features, all inside the player or the wall. **All nineteen shipped**:
+seventeen in 0.11.0, the last two in 0.12.0.
 
 | # | Feature | Status |
 |---|---|---|
@@ -279,10 +287,10 @@ Nineteen more Fun Mode features, all inside the player or the wall. **Seventeen 
 | 12 | Cross-title queue | **Shipped** — `g9.fun.queue`, started when an episode ends |
 | 13 | Search inside a series | **Shipped** — episode search box |
 | 14 | Catalog paging | **Shipped** — `fun_catalog`, *Load more* in browse |
-| 15 | Filters the addon declares itself | **Open** — needs `catalog.extra` option lists parsed per addon; 0.12.0 |
+| 15 | Filters the addon declares itself | **Shipped (0.12.0)** — `stremio::catalog_facets`, `fun_catalog_filters`, chips in *See all* |
 | 16 | Surprise me | **Shipped** — *Random* on long seasons and the wall |
 | 17 | Thumbs → recommendations | **Shipped** — `g9.fun.likes`, reorders *Because you watched* |
-| 18 | Per-source `Accept-Language` | **Open** — Stremio addons have no such extra; needs a header override per source; 0.12.0 |
+| 18 | Per-source `Accept-Language` | **Shipped (0.12.0)** — per-source headers, `fun_source_headers`, cache keyed on them |
 | 19 | Pre-play GB + Mbps estimate | **Shipped** — on every stream row |
 
 ## Fun Mode (v0.10.0)

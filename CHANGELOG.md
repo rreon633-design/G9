@@ -7,6 +7,40 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 - Nothing yet.
 
+## [0.12.0] — 2026-10-25
+
+Sources became something you can actually run more than one of — and the wall no longer
+asks a new install to configure anything before it opens.
+
+### Added
+
+- **Per-source request headers.** Any source can carry its own `Accept-Language`,
+  `User-Agent` and free-form headers (`Cookie`, `Referer`, …), edited from Sources. The
+  request cache is keyed on the header set, so a source asked in two languages does not
+  hand back the other body.
+- **Source health.** Every wall refresh times each source and remembers the result. Sources
+  shows `120 ms`, `1.8 s — slow` or the reason it failed, and **Test** probes one on demand.
+- **Addon-declared filters.** *See all* on an addon shelf now reads the manifest and offers
+  exactly the genres and years that addon declares; picking one re-queries the addon instead
+  of filtering only the forty titles already on the wall.
+- **Catalog paging.** *Load more* asks the addon for the next page with `skip`, and keeps the
+  chosen genre and year when it does.
+- `fun_catalog_filters`, `fun_source_headers` and `fun_source_test`; `stremio::catalog_facets`
+  and `stremio::filter_extra` with tests.
+
+### Changed
+
+- **No setup before the first wall.** A fresh install seeds two keyless providers — Internet
+  Archive and MangaDex — so Fun Mode opens populated. Nothing is added when sources already
+  exist, and starters you removed stay removed (`fun.seeded`).
+- The first-run tour no longer gates the wall: it appears only when there is genuinely no
+  source, and says the built-ins are already on.
+
+### Fixed
+
+- The Sources sheet could not show that a source had failed, and the source list reported
+  every entry as having no headers.
+
 ## [0.11.0] — 2026-10-25
 
 Fun Mode now opens with something to watch on a machine that has never been configured,

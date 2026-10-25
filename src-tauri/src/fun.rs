@@ -41,34 +41,67 @@ fn cache() -> &'static Cache {
 
 /// GET a body as text, cached for [`TTL`]. The cache exists so switching tabs
 /// does not re-hit every addon; it is memory-only and dies with the app.
-fn get_cached(url: &str) -> Result<String, String> {
+/// The same cache, keyed on the headers too — a source called with and without
+/// its own `Accept-Language` must not hand back the other's body.
+fn get_cached_with(url: &str, headers: &[(String, String)]) -> Result<String, String> {
+    let key = if headers.is_empty() {
+        url.to_string()
+    } else {
+        let joined: Vec<String> = headers.iter().map(|(k, v)| format!("{k}={v}")).collect();
+        format!("{url}|{}", joined.join("&"))
+    };
     if let Ok(map) = cache().lock() {
-        if let Some((at, body)) = map.get(url) {
+        if let Some((at, body)) = map.get(&key) {
             if at.elapsed() < TTL {
                 return Ok(body.clone());
             }
         }
     }
-    let body = get(url)?;
+    let body = get_with(url, headers)?;
     if let Ok(mut map) = cache().lock() {
         if map.len() > 200 {
             map.clear();
         }
-        map.insert(url.to_string(), (Instant::now(), body.clone()));
+        map.insert(key, (Instant::now(), body.clone()));
     }
     Ok(body)
 }
 
+/// A source's own request headers, parsed from the column the editor writes.
+/// Anything malformed is ignored — a broken header must not break the source.
+fn headers_of(src: &FunSourceRow) -> Vec<(String, String)> {
+    let Some(raw) = src.headers.as_deref().filter(|h| !h.trim().is_empty()) else {
+        return Vec::new();
+    };
+    let Ok(map) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(raw) else {
+        return Vec::new();
+    };
+    map.into_iter()
+        .filter_map(|(k, v)| v.as_str().map(|s| (k, s.to_string())))
+        .filter(|(k, v)| !k.trim().is_empty() && !v.trim().is_empty())
+        .collect()
+}
+
+/// Fetch one URL as this source — its headers, and the shared cache.
+fn fetch(src: &FunSourceRow, url: &str) -> Result<String, String> {
+    get_cached_with(url, &headers_of(src))
+}
+
 fn get(url: &str) -> Result<String, String> {
+    get_with(url, &[])
+}
+
+fn get_with(url: &str, headers: &[(String, String)]) -> Result<String, String> {
     let parsed = url::Url::parse(url).map_err(|_| "That source URL is not a URL".to_string())?;
     match parsed.scheme() {
         "http" | "https" => {}
         _ => return Err("Only http and https sources are supported".into()),
     }
-    let resp = client()?
-        .get(parsed)
-        .send()
-        .map_err(|e| short(e.to_string()))?;
+    let mut req = client()?.get(parsed);
+    for (k, v) in headers {
+        req = req.header(k.as_str(), v.as_str());
+    }
+    let resp = req.send().map_err(|e| short(e.to_string()))?;
     let status = resp.status();
     if !status.is_success() {
         return Err(if status.as_u16() == 403 {
@@ -146,6 +179,12 @@ pub struct FunSource {
     pub url: String,
     pub enabled: bool,
     pub detail: String,
+    /// The source's own request headers, as stored JSON (`None` when it has none).
+    pub headers: Option<String>,
+    /// Milliseconds the source needed the last time the wall was built.
+    pub last_ms: Option<i64>,
+    /// Why it failed then, when it did.
+    pub last_error: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -203,7 +242,7 @@ fn manifest_of(row: &FunSourceRow) -> Result<stremio::Manifest, String> {
             return Ok(m);
         }
     }
-    stremio::parse_manifest(&get_cached(&row.url)?)
+    stremio::parse_manifest(&fetch(row, &row.url)?)
 }
 
 fn shelf_kind(raw: &str) -> Kind {
@@ -242,6 +281,9 @@ pub fn fun_sources(state: State<AppState>) -> Result<Vec<FunSource>, String> {
                 url: r.url,
                 enabled: r.enabled,
                 detail,
+                headers: r.headers,
+                last_ms: r.last_ms,
+                last_error: r.last_error,
             }
         })
         .collect())
@@ -299,6 +341,9 @@ pub async fn fun_source_add(
         url: raw,
         enabled: true,
         detail: "added".into(),
+        headers: None,
+        last_ms: None,
+        last_error: None,
     })
 }
 
@@ -372,11 +417,18 @@ fn demo_items() -> Vec<Item> {
     out
 }
 
-/// A fresh install still gets a wall: the Internet Archive is added once, with
-/// no account and no key. Removing it in Sources is remembered — it never
-/// comes back on its own.
-fn ensure_starter_source(state: &State<'_, AppState>) -> Result<(), String> {
+/// A fresh install gets a wall, not a setup form. Two providers that need no
+/// account, no key and no terms to accept are added once: the Internet Archive
+/// (public-domain film and TV) and MangaDex (manga, with the built-in reader).
+///
+/// Two guards keep this from becoming a pest: nothing is added when the user
+/// already has sources, and nothing is added again after they have removed the
+/// starters themselves (the `fun.seeded` row remembers that).
+fn ensure_starter_sources(state: &State<'_, AppState>) -> Result<(), String> {
     let store = store_of(state)?;
+    if !store.fun_sources().map_err(store_err)?.is_empty() {
+        return Ok(());
+    }
     if store.setting("fun.seeded").map_err(store_err)?.is_some() {
         return Ok(());
     }
@@ -388,13 +440,16 @@ fn ensure_starter_source(state: &State<'_, AppState>) -> Result<(), String> {
             Some("{\"starter\":true}"),
         )
         .map_err(store_err)?;
+    store
+        .fun_source_add("mangadex", "MangaDex", mangadex::API, None)
+        .map_err(store_err)?;
     store.set_setting("fun.seeded", "1").map_err(store_err)?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn fun_home(state: State<'_, AppState>) -> Result<FunHome, String> {
-    let _ = ensure_starter_source(&state);
+    let _ = ensure_starter_sources(&state);
     let sources = all_sources(&state)?;
     let enabled: Vec<FunSourceRow> = sources.into_iter().filter(|s| s.enabled).collect();
     let views = fun_sources(state.clone()).unwrap_or_default();
@@ -417,32 +472,38 @@ pub async fn fun_home(state: State<'_, AppState>) -> Result<FunHome, String> {
     let built = work(move || {
         let mut shelves: Vec<Shelf> = Vec::new();
         let mut errors: Vec<String> = Vec::new();
+        let mut health: Vec<(i64, Option<i64>, Option<String>)> = Vec::new();
         for src in &enabled {
-            match src.kind.as_str() {
-                "stremio" => match build_stremio_home(src) {
-                    Ok(mut rows) => shelves.append(&mut rows),
-                    Err(e) => errors.push(format!("{}: {e}", src.name)),
-                },
-                "rss" => match build_rss_shelf(src) {
-                    Ok(row) => shelves.push(row),
-                    Err(e) => errors.push(format!("{}: {e}", src.name)),
-                },
-                "mangadex" => match build_mangadex_shelf(src) {
-                    Ok(row) => shelves.push(row),
-                    Err(e) => errors.push(format!("{}: {e}", src.name)),
-                },
-                "archive" => match build_archive_shelves(src) {
-                    Ok(mut rows) => shelves.append(&mut rows),
-                    Err(e) => errors.push(format!("{}: {e}", src.name)),
-                },
-                _ => {}
+            let started = Instant::now();
+            let got: Result<Vec<Shelf>, String> = match src.kind.as_str() {
+                "stremio" => build_stremio_home(src),
+                "rss" => build_rss_shelf(src).map(|row| vec![row]),
+                "mangadex" => build_mangadex_shelf(src).map(|row| vec![row]),
+                "archive" => build_archive_shelves(src),
+                _ => Ok(Vec::new()),
+            };
+            let ms = started.elapsed().as_millis() as i64;
+            match got {
+                Ok(mut rows) => {
+                    shelves.append(&mut rows);
+                    health.push((src.id, Some(ms), None));
+                }
+                Err(e) => {
+                    errors.push(format!("{}: {e}", src.name));
+                    health.push((src.id, None, Some(short(e))));
+                }
             }
         }
-        Ok((shelves, errors))
+        Ok((shelves, errors, health))
     })
     .await?;
 
-    let (mut shelves, errors) = built;
+    let (mut shelves, errors, health) = built;
+    if let Ok(store) = store_of(&state) {
+        for (id, ms, err) in &health {
+            let _ = store.fun_source_health(*id, *ms, err.as_deref());
+        }
+    }
     // Continue watching goes on top when there is anything to resume.
     let recent = store_of(&state)
         .ok()
@@ -500,7 +561,7 @@ fn build_stremio_home(src: &FunSourceRow) -> Result<Vec<Shelf>, String> {
             continue;
         }
         let url = stremio::catalog_url(&base, &cat.kind, &cat.id, None);
-        let body = match get_cached(&url) {
+        let body = match fetch(src, &url) {
             Ok(b) => b,
             Err(_) => continue,
         };
@@ -533,7 +594,9 @@ fn build_archive_shelves(src: &FunSourceRow) -> Result<Vec<Shelf>, String> {
     let mut rows = Vec::new();
     for (collection, title) in archive::COLLECTIONS.iter().take(2) {
         let url = archive::search_url("", collection, 20, 1);
-        let Ok(body) = get_cached(&url) else { continue };
+        let Ok(body) = fetch(src, &url) else {
+            continue;
+        };
         let items = archive::parse_search(&body, src.id)?;
         if items.is_empty() {
             continue;
@@ -553,7 +616,7 @@ fn build_archive_shelves(src: &FunSourceRow) -> Result<Vec<Shelf>, String> {
 }
 
 fn build_rss_shelf(src: &FunSourceRow) -> Result<Shelf, String> {
-    let body = get_cached(&src.url)?;
+    let body = fetch(src, &src.url)?;
     let entries = rss::parse_feed(&body, &src.name, Kind::Anime);
     if entries.is_empty() {
         return Err("feed has no magnets".into());
@@ -574,7 +637,7 @@ fn build_mangadex_shelf(src: &FunSourceRow) -> Result<Shelf, String> {
          &order[followedCount]=desc",
         mangadex::API
     );
-    let body = get_cached(&url)?;
+    let body = fetch(src, &url)?;
     let items = mangadex::parse_search(&body, src.id)?;
     Ok(Shelf {
         id: format!("{}:popular", src.id),
@@ -617,7 +680,7 @@ pub async fn fun_search(state: State<'_, AppState>, q: String) -> Result<Vec<Ite
                             &cat.id,
                             Some(&stremio::search_extra(&query, 0)),
                         );
-                        if let Ok(body) = get_cached(&url) {
+                        if let Ok(body) = fetch(src, &url) {
                             if let Ok(mut got) = stremio::parse_catalogs(&body, &cat.kind, src.id) {
                                 all.append(&mut got);
                             }
@@ -626,14 +689,14 @@ pub async fn fun_search(state: State<'_, AppState>, q: String) -> Result<Vec<Ite
                 }
                 "archive" => {
                     let url = archive::search_url(&query, "", 40, 1);
-                    if let Ok(body) = get_cached(&url) {
+                    if let Ok(body) = fetch(src, &url) {
                         if let Ok(mut got) = archive::parse_search(&body, src.id) {
                             all.append(&mut got);
                         }
                     }
                 }
                 "rss" => {
-                    if let Ok(body) = get_cached(&src.url) {
+                    if let Ok(body) = fetch(src, &src.url) {
                         let needle = query.to_ascii_lowercase();
                         all.extend(
                             rss::parse_feed(&body, &src.name, Kind::Anime)
@@ -651,7 +714,7 @@ pub async fn fun_search(state: State<'_, AppState>, q: String) -> Result<Vec<Ite
                         mangadex::API,
                         stremio::search_extra(&query, 0).trim_start_matches("search=")
                     );
-                    if let Ok(body) = get_cached(&url) {
+                    if let Ok(body) = fetch(src, &url) {
                         if let Ok(mut got) = mangadex::parse_search(&body, src.id) {
                             all.append(&mut got);
                         }
@@ -696,7 +759,7 @@ pub async fn fun_details(
             } else {
                 &kind_hint
             };
-            let meta = get_cached(&stremio::meta_url(&base, kind, &item_id))?;
+            let meta = fetch(&src, &stremio::meta_url(&base, kind, &item_id))?;
             let d = stremio::parse_meta(&meta, src.id, season)?;
             let video = d
                 .episodes
@@ -704,7 +767,7 @@ pub async fn fun_details(
                 .map(|e| e.id.clone())
                 .unwrap_or_else(|| item_id.clone());
             let streams = stremio::parse_streams(
-                &get_cached(&stremio::stream_url(&base, kind, &video))
+                &fetch(&src, &stremio::stream_url(&base, kind, &video))
                     .unwrap_or_else(|_| "{}".into()),
                 &src.name,
             )
@@ -712,7 +775,7 @@ pub async fn fun_details(
             Ok((d, streams))
         }
         "rss" => {
-            let body = get_cached(&src.url)?;
+            let body = fetch(&src, &src.url)?;
             let entries = rss::parse_feed(&body, &src.name, Kind::Anime);
             let entry = entries
                 .iter()
@@ -728,17 +791,20 @@ pub async fn fun_details(
         }
         "mangadex" => {
             let url = format!("{}/manga/{item_id}?includes[]=cover_art", mangadex::API);
-            let body = get_cached(&url)?;
+            let body = fetch(&src, &url)?;
             let mut items = mangadex::parse_search(&body, src.id)
                 .or_else(|_| mangadex::parse_search(&format!("{{\"data\":[{body}]}}"), src.id))
                 .unwrap_or_default();
             let item = items
                 .pop()
                 .unwrap_or_else(|| Item::new(item_id.clone(), "Manga", Kind::Manga));
-            let feed = get_cached(&format!(
-                "{}/manga/{item_id}/feed?limit=200&translatedLanguage[]=en&order[chapter]=asc",
-                mangadex::API
-            ))?;
+            let feed = fetch(
+                &src,
+                &format!(
+                    "{}/manga/{item_id}/feed?limit=200&translatedLanguage[]=en&order[chapter]=asc",
+                    mangadex::API
+                ),
+            )?;
             let chapters: Vec<Episode> = mangadex::parse_chapters(&feed).unwrap_or_default();
             let details = Details {
                 item,
@@ -749,7 +815,7 @@ pub async fn fun_details(
             Ok((details, Vec::new()))
         }
         "archive" => {
-            let body = get_cached(&archive::metadata_url(&item_id))?;
+            let body = fetch(&src, &archive::metadata_url(&item_id))?;
             let (details, streams) = archive::parse_item(&body, src.id, &src.name)?;
             Ok((details, streams))
         }
@@ -789,7 +855,7 @@ pub async fn fun_streams(
             stremio::parse_streams(&body, &src.name)
         }
         "rss" => {
-            let body = get_cached(&src.url)?;
+            let body = fetch(&src, &src.url)?;
             let entries = rss::parse_feed(&body, &src.name, Kind::Anime);
             entries
                 .iter()
@@ -798,11 +864,109 @@ pub async fn fun_streams(
                 .ok_or_else(|| "That release left the feed".to_string())
         }
         "archive" => {
-            let body = get_cached(&archive::metadata_url(&item_id))?;
+            let body = fetch(&src, &archive::metadata_url(&item_id))?;
             let (_, streams) = archive::parse_item(&body, src.id, &src.name)?;
             Ok(streams)
         }
         other => Err(format!("{other} sources stream through their own screen")),
+    })
+    .await
+}
+
+/// What a source answered last time, in the shape the Sources sheet paints.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct FunSourceHealth {
+    pub ok: bool,
+    pub ms: i64,
+    pub error: Option<String>,
+}
+
+/// Store a source's extra request headers (and its `Accept-Language`).
+/// `None` or empty clears them. Bad JSON is refused before it reaches the DB.
+#[tauri::command]
+pub fn fun_source_headers(
+    state: State<'_, AppState>,
+    id: i64,
+    headers: Option<String>,
+) -> Result<(), String> {
+    let clean = headers.filter(|h| !h.trim().is_empty());
+    if let Some(raw) = clean.as_deref() {
+        let map: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(raw).map_err(|_| "Headers must be a JSON object")?;
+        if map.len() > 24 {
+            return Err("That is more headers than a source needs".into());
+        }
+        for (name, value) in &map {
+            let Some(text) = value.as_str() else {
+                return Err("Every header value must be text".into());
+            };
+            if name.trim().is_empty() || name.chars().any(|c| c.is_whitespace()) {
+                return Err("Header names cannot contain spaces".into());
+            }
+            if text.contains('\n') || text.contains('\r') || text.chars().count() > 512 {
+                return Err("That header value is not a single line".into());
+            }
+        }
+    }
+    store_of(&state)?
+        .fun_source_headers(id, clean.as_deref())
+        .map_err(store_err)
+}
+
+/// Probe a source now and remember how it answered — the "Test" button.
+#[tauri::command]
+pub async fn fun_source_test(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<FunSourceHealth, String> {
+    let src = source_row(&state, id)?;
+    let result = work(move || {
+        let started = Instant::now();
+        let got = if src.kind == "stremio" {
+            manifest_of(&src).map(|m| m.name)
+        } else {
+            fetch(&src, &src.url).map(|_| src.name.clone())
+        };
+        Ok((started.elapsed().as_millis() as i64, got))
+    })
+    .await?;
+    let (ms, got) = result;
+    let health = match got {
+        Ok(_) => FunSourceHealth {
+            ok: true,
+            ms,
+            error: None,
+        },
+        Err(e) => FunSourceHealth {
+            ok: false,
+            ms,
+            error: Some(short(e)),
+        },
+    };
+    if let Ok(store) = store_of(&state) {
+        let _ = store.fun_source_health(id, Some(ms), health.error.as_deref());
+    }
+    Ok(health)
+}
+
+/// The filter options a shelf declares for itself, so the filter bar can offer
+/// the addon's own genre list instead of a guessed one.
+#[tauri::command]
+pub async fn fun_catalog_filters(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<stremio::Facets, String> {
+    let mut parts = id.splitn(3, ':');
+    let source_id: i64 = parts
+        .next()
+        .and_then(|p| p.parse().ok())
+        .ok_or_else(|| "That shelf has no source".to_string())?;
+    let kind = parts.next().unwrap_or_default().to_string();
+    let catalog = parts.next().unwrap_or_default().to_string();
+    let src = source_row(&state, source_id)?;
+    work(move || {
+        let manifest = manifest_of(&src)?;
+        Ok(stremio::catalog_facets(&manifest, &kind, &catalog))
     })
     .await
 }
@@ -814,6 +978,8 @@ pub async fn fun_catalog(
     state: State<'_, AppState>,
     id: String,
     skip: Option<u32>,
+    genre: Option<String>,
+    year: Option<String>,
 ) -> Result<Vec<Item>, String> {
     let mut parts = id.splitn(3, ':');
     let source_id: i64 = parts
@@ -829,7 +995,11 @@ pub async fn fun_catalog(
     let base = src.url.trim_end_matches("/manifest.json").to_string();
     let at = skip.unwrap_or(0);
     work(move || {
-        let extra = format!("skip={at}");
+        let extra = stremio::filter_extra(
+            genre.as_deref().unwrap_or(""),
+            year.as_deref().unwrap_or(""),
+            at,
+        );
         let url = stremio::catalog_url(&base, &kind, &catalog, Some(&extra));
         let body = get(&url)?;
         let mut items = stremio::parse_catalogs(&body, &kind, source_id)?;
@@ -1018,5 +1188,49 @@ mod tests {
         assert!(!e.contains("http"), "{e}");
         assert!(e.len() <= 90);
         assert!(short("timed out".into()).contains("did not answer"));
+    }
+}
+
+#[cfg(test)]
+mod header_tests {
+    use super::*;
+
+    fn row(headers: Option<&str>) -> FunSourceRow {
+        FunSourceRow {
+            id: 1,
+            kind: "stremio".to_string(),
+            name: "Test addon".to_string(),
+            url: "https://addon.example/manifest.json".to_string(),
+            enabled: true,
+            manifest: None,
+            added_at: String::new(),
+            checked_at: None,
+            headers: headers.map(str::to_string),
+            last_ms: None,
+            last_error: None,
+        }
+    }
+
+    #[test]
+    fn headers_parse_a_json_object() {
+        let got = headers_of(&row(Some(r#"{"Accept-Language":"hi,en;q=0.8","X-A":"1"}"#)));
+        assert_eq!(got.len(), 2);
+        assert!(got
+            .iter()
+            .any(|(k, v)| k == "Accept-Language" && v == "hi,en;q=0.8"));
+    }
+
+    #[test]
+    fn headers_ignore_broken_json_and_blank_values() {
+        assert!(headers_of(&row(None)).is_empty());
+        assert!(headers_of(&row(Some("   "))).is_empty());
+        assert!(headers_of(&row(Some("not json"))).is_empty());
+        assert!(headers_of(&row(Some(r#"{"empty":"   ","also":""}"#))).is_empty());
+    }
+
+    #[test]
+    fn headers_keep_only_string_values() {
+        let got = headers_of(&row(Some(r#"{"a":"1","b":2,"c":null}"#)));
+        assert_eq!(got, vec![("a".to_string(), "1".to_string())]);
     }
 }

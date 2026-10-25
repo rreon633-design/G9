@@ -29,6 +29,12 @@ pub struct FunSourceRow {
     pub manifest: Option<String>,
     pub added_at: String,
     pub checked_at: Option<String>,
+    /// JSON object of extra request headers (`{"Accept-Language":"hi"}`).
+    pub headers: Option<String>,
+    /// How long the source took to answer last time, in milliseconds.
+    pub last_ms: Option<i64>,
+    /// Why it failed last time, trimmed to a sentence.
+    pub last_error: Option<String>,
 }
 
 /// One title the user has started. Doubles as the recents row.
@@ -510,7 +516,8 @@ impl Store {
 
     pub fn fun_sources(&self) -> Result<Vec<FunSourceRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, kind, name, url, enabled, manifest, added_at, checked_at
+            "SELECT id, kind, name, url, enabled, manifest, added_at, checked_at,
+                    headers, last_ms, last_error
              FROM fun_sources ORDER BY id",
         )?;
         let rows = stmt
@@ -524,6 +531,9 @@ impl Store {
                     manifest: r.get(5)?,
                     added_at: r.get(6)?,
                     checked_at: r.get(7)?,
+                    headers: r.get(8)?,
+                    last_ms: r.get(9)?,
+                    last_error: r.get(10)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -559,6 +569,25 @@ impl Store {
             params![kind, name, url, manifest],
         )?;
         Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Replace a source's extra request headers. `None` clears them.
+    pub fn fun_source_headers(&self, id: i64, headers: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE fun_sources SET headers = ?1 WHERE id = ?2",
+            params![headers, id],
+        )?;
+        Ok(())
+    }
+
+    /// Record how a source answered: timing on success, message on failure.
+    pub fn fun_source_health(&self, id: i64, ms: Option<i64>, error: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE fun_sources SET checked_at = datetime('now'), last_ms = ?1, last_error = ?2
+             WHERE id = ?3",
+            params![ms, error, id],
+        )?;
+        Ok(())
     }
 
     pub fn fun_source_set_enabled(&self, id: i64, enabled: bool) -> Result<()> {

@@ -958,7 +958,8 @@
     state.layer = "sources";
     var card = sheetHost(true);
     card.innerHTML = '<div class="fun-plain"><h2>Sources</h2>' +
-      '<p class="lead">G9 ships no catalogue. Add an addon, a feed, or turn on MangaDex.</p>' +
+      '<p class="lead">Two keyless sources are already on — Internet Archive and MangaDex. ' +
+      'Add an addon or a feed if you want more; nothing here is required.</p>' +
       '<div id="fun-source-list"><div class="fun-empty">Loading…</div></div>' +
       '<div class="fun-addrow"><input id="fun-add-url" placeholder="Paste an addon manifest.json or an RSS feed URL" />' +
       '<button type="button" class="fun-btn is-acc" id="fun-add-btn">Add</button></div>' +
@@ -976,6 +977,65 @@
       if (ev.key === "Enter") addSourceFromInputs();
     });
     paintSources();
+  }
+
+  /// Per-source request headers: the two that matter, plus a free-form list.
+  /// Stored as JSON so the fetch path can apply them verbatim.
+  function openSourceHeaders(row, r) {
+    var existing = {};
+    try { existing = JSON.parse(r.headers || "{}") || {}; } catch (e) { existing = {}; }
+    var known = { "accept-language": 1, "user-agent": 1 };
+    var extra = Object.keys(existing).filter(function (k) {
+      return !known[String(k).toLowerCase()];
+    }).map(function (k) { return k + ": " + existing[k]; }).join("\n");
+    var pick = function (name) {
+      var hit = "";
+      Object.keys(existing).forEach(function (k) {
+        if (String(k).toLowerCase() === name) hit = existing[k];
+      });
+      return hit;
+    };
+
+    var card = document.createElement("div");
+    card.className = "fun-srchead";
+    card.innerHTML =
+      '<label>Accept-Language<input data-h="accept-language" value="' + esc(pick("accept-language")) + '" placeholder="hi,en;q=0.8" /></label>' +
+      '<label>User-Agent<input data-h="user-agent" value="' + esc(pick("user-agent")) + '" placeholder="default" /></label>' +
+      '<label class="wide">Other headers <code>Name: value</code>, one per line' +
+      '<textarea data-h-extra rows="3" placeholder="Cookie: session=…">' + esc(extra) + "</textarea></label>" +
+      '<div class="fun-rowend"><button type="button" class="fun-tag" data-h-cancel>Cancel</button>' +
+      '<button type="button" class="fun-btn is-acc" data-h-save>Save headers</button></div>';
+
+    var old = row.nextElementSibling;
+    if (old && old.classList.contains("fun-srchead")) { old.remove(); return; }
+    row.parentNode.insertBefore(card, row.nextSibling);
+
+    card.querySelector("[data-h-cancel]").addEventListener("click", function () { card.remove(); });
+    card.querySelector("[data-h-save]").addEventListener("click", function () {
+      var out = {};
+      card.querySelectorAll("input[data-h]").forEach(function (input) {
+        var v = String(input.value || "").trim();
+        if (v) out[input.getAttribute("data-h")] = v;
+      });
+      var bad = "";
+      String(card.querySelector("[data-h-extra]").value || "").split("\n").forEach(function (line) {
+        var t = line.trim();
+        if (!t) return;
+        var at = t.indexOf(":");
+        if (at < 1) { bad = t; return; }
+        out[t.slice(0, at).trim()] = t.slice(at + 1).trim();
+      });
+      if (bad) { toast("That line is not a header: " + bad.slice(0, 40)); return; }
+      var raw = Object.keys(out).length ? JSON.stringify(out) : null;
+      invoke("fun_source_headers", { id: r.id, headers: raw })
+        .then(function () {
+          r.headers = raw;
+          toast(raw ? r.name + " sends its own headers now" : r.name + " uses the default headers");
+          card.remove();
+          paintSources();
+        })
+        .catch(function (e) { toast(String(e || "Could not save those headers").slice(0, 90)); });
+    });
   }
 
   function addSourceFromInputs() {
@@ -1006,7 +1066,8 @@
         (list || []).forEach(function (s) {
           rows.push({
             id: s.id, kind: s.kind, name: s.name, detail: s.detail || s.kind,
-            on: s.enabled, removable: true, url: s.url
+            on: s.enabled, removable: true, url: s.url,
+            headers: s.headers || null, last_ms: s.last_ms, last_error: s.last_error || null
           });
         });
         builtins.forEach(function (b) {
@@ -1022,10 +1083,24 @@
           return;
         }
         host.innerHTML = rows.map(function (r, i) {
-          var ic = r.kind === "stremio" ? "ST" : r.kind === "rss" ? "RS" : r.kind === "mangadex" ? "MD" : "YT";
+          var ic = r.kind === "stremio" ? "ST" : r.kind === "rss" ? "RS" : r.kind === "mangadex" ? "MD" : r.kind === "archive" ? "IA" : "YT";
+          // How it answered last time — the one number that explains a slow wall.
+          var health = "";
+          if (r.last_error) {
+            health = '<span class="fun-srchealth is-bad">' + esc(r.last_error) + "</span>";
+          } else if (r.last_ms != null) {
+            var slow = r.last_ms > 1500;
+            health = '<span class="fun-srchealth' + (slow ? " is-slow" : "") + '">' +
+              (slow ? (r.last_ms / 1000).toFixed(1) + " s — slow" : r.last_ms + " ms") + "</span>";
+          }
           return '<div class="fun-srcitem" data-i="' + i + '">' +
             '<div class="ic">' + ic + "</div>" +
-            "<div><div class=\"nm\">" + esc(r.name) + "</div><div class=\"ds\">" + esc(r.detail) + "</div></div>" +
+            "<div><div class=\"nm\">" + esc(r.name) + "</div><div class=\"ds\">" +
+            esc(r.detail) + (r.headers ? " · own headers" : "") + health + "</div></div>" +
+            (r.id != null ? '<button type="button" class="fun-round" data-test="' + r.id + '" aria-label="Test ' + esc(r.name) + '" title="Test now">' +
+              '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.7M4 12V7m0 5h5"/></svg></button>' +
+              '<button type="button" class="fun-round" data-headers="' + i + '" aria-label="Headers for ' + esc(r.name) + '" title="Request headers">' +
+              '<svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg></button>' : "") +
             '<button type="button" class="fun-switch" role="switch" aria-checked="' + r.on + '" aria-label="' + esc(r.name) + '"></button>' +
             (r.removable ? '<button type="button" class="fun-round" data-remove="' + r.id + '" aria-label="Remove">' +
               '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' : "") +
@@ -1051,6 +1126,21 @@
               })
               .catch(function () { toast("Could not change that source"); });
           });
+          var test = row.querySelector("[data-test]");
+          if (test) test.addEventListener("click", function () {
+            var health = row.querySelector(".fun-srchealth");
+            if (health) health.textContent = "testing…";
+            invoke("fun_source_test", { id: r.id })
+              .then(function (res) {
+                toast(res && res.ok
+                  ? r.name + " answered in " + res.ms + " ms"
+                  : (res && res.error) || "That source did not answer");
+                paintSources();
+              })
+              .catch(function () { toast("Could not test that source"); });
+          });
+          var headBtn = row.querySelector("[data-headers]");
+          if (headBtn) headBtn.addEventListener("click", function () { openSourceHeaders(row, r); });
           var rm = row.querySelector("[data-remove]");
           if (rm) rm.addEventListener("click", function () {
             invoke("fun_source_remove", { id: r.id })
@@ -1132,11 +1222,15 @@
     var row = null;
     for (var i = 0; i < state.rows.length; i++) if (state.rows[i].id === rowId) row = state.rows[i];
     if (!row) return;
-    state.browse = { title: row.title, items: row.items.slice() };
+    // A shelf id of the form `source:kind:catalog` can be paged and filtered by
+    // the addon itself; anything else is the forty items already on the wall.
+    var page = String(row.id).split(":").length >= 3 ? row.id : null;
+    state.browse = { title: row.title, items: row.items.slice(), page: page, facets: null, addon: { genre: "", year: "" } };
     state.filters = { genre: "", year: "", quality: "" };
     el("fun-browse-title").textContent = row.title;
     paintBrowse();
     el("fun-browse").hidden = false;
+    if (page) loadFacets(page);
   }
 
   var SORTS = {
@@ -1163,6 +1257,32 @@
         (all.length ? "No title matches those filters." : "Add a source to fill this shelf.") + "</div>";
   }
 
+  /// The addon's own genre/year lists for one shelf. Failure is silent: a shelf
+  /// without declared filters just shows the ones G9 derives from the items.
+  function loadFacets(page) {
+    invoke("fun_catalog_filters", { id: page })
+      .then(function (facets) {
+        if (!state.browse || state.browse.page !== page) return;
+        state.browse.facets = {
+          genres: (facets && facets.genres) || [],
+          years: (facets && facets.years) || []
+        };
+        paintFilters();
+      })
+      .catch(function () {});
+  }
+
+  /// One page straight from the addon, with whatever filters it accepts.
+  function loadCatalogPage(page, skip, done) {
+    var addon = (state.browse && state.browse.addon) || {};
+    invoke("fun_catalog", {
+      id: page, skip: skip,
+      genre: addon.genre || "", year: addon.year || ""
+    })
+      .then(function (items) { done(null, items || []); })
+      .catch(function (e) { done(e); });
+  }
+
   /// Paging for shelves that came from an addon catalog: ask for the next 40.
   function paintBrowseMore(have) {
     var host = el("fun-browse-more");
@@ -1177,17 +1297,18 @@
       if (state.browse.loading) return;
       state.browse.loading = true;
       paintBrowseMore(have);
-      invoke("fun_catalog", { id: page, skip: have })
-        .then(function (items) {
+      loadCatalogPage(page, have, function (err, items) {
+        if (!state.browse) return;
+        if (err) { toast("The addon stopped answering"); }
+        else {
           var seen = {};
           state.browse.items.forEach(function (i) { seen[i.id] = 1; });
-          (items || []).forEach(function (i) { if (!seen[i.id]) state.browse.items.push(i); });
-          if (!items || !items.length) { state.browse.page = null; toast("That is the end of this shelf"); }
-        })
-        .catch(function () { toast("The addon stopped answering"); })
-        .then(function () {
-          if (state.browse) { state.browse.loading = false; paintBrowse(); }
-        });
+          items.forEach(function (i) { if (!seen[i.id]) state.browse.items.push(i); });
+          if (!items.length) { state.browse.page = null; toast("That is the end of this shelf"); }
+        }
+        state.browse.loading = false;
+        paintBrowse();
+      });
     });
   }
 
@@ -1720,6 +1841,9 @@
   function openBrowseItems(title, items, opts) {
     state.browse = Object.assign({ title: title, items: items.slice() }, opts || {});
     state.browse.page = (opts && opts.page) || null;
+    state.browse.facets = null;
+    state.browse.addon = { genre: "", year: "" };
+    if (state.browse.page) loadFacets(state.browse.page);
     state.filters = { genre: (opts && opts.genre) || "", year: "", quality: "" };
     el("fun-browse-title").textContent = title;
     paintBrowse();
@@ -1869,9 +1993,26 @@
     var quals = facetOf(items, "quality").filter(function (q) { return q && q !== "unknown"; });
 
     var f = state.filters;
-    if (!genres.length && !years.length && !quals.length) { host.hidden = true; host.innerHTML = ""; return; }
+    if (!genres.length && !years.length && !quals.length && !facets.genres.length && !facets.years.length) {
+      host.hidden = true;
+      host.innerHTML = "";
+      return;
+    }
     host.hidden = false;
+    var facets = (state.browse.facets || { genres: [], years: [] });
     host.innerHTML =
+      (facets.genres.length ? '<div class="fun-fgroup"><span>From this addon</span><div class="fun-fchips">' +
+        '<button type="button" data-ag="" aria-pressed="' + !state.browse.addon.genre + '">Everything</button>' +
+        facets.genres.slice(0, 14).map(function (g) {
+          return '<button type="button" data-ag="' + esc(g) + '" aria-pressed="' +
+            (state.browse.addon.genre === g) + '">' + esc(g) + "</button>";
+        }).join("") + "</div></div>" : "") +
+      (facets.years.length ? '<div class="fun-fgroup"><span>Year · addon</span><div class="fun-fchips">' +
+        '<button type="button" data-ay="" aria-pressed="' + !state.browse.addon.year + '">Any</button>' +
+        facets.years.slice(0, 10).map(function (y) {
+          return '<button type="button" data-ay="' + esc(y) + '" aria-pressed="' +
+            (state.browse.addon.year === String(y)) + '">' + esc(y) + "</button>";
+        }).join("") + "</div></div>" : "") +
       (genres.length ? '<div class="fun-fgroup"><span>Genre</span><div class="fun-fchips">' +
         '<button type="button" data-fg="" aria-pressed="' + !f.genre + '">All</button>' +
         genres.slice(0, 12).map(function (g) {
@@ -1889,6 +2030,40 @@
             esc(qualLabel(q)) + "</button>";
         }).join("") + "</div></div>" : "");
 
+    host.querySelectorAll("[data-ag]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var page = state.browse.page;
+        if (!page) return;
+        state.browse.addon.genre = b.getAttribute("data-ag");
+        state.browse.loading = true;
+        paintFilters();
+        loadCatalogPage(page, 0, function (err, items) {
+          if (!state.browse) return;
+          state.browse.loading = false;
+          if (err) { toast("That filter is not available from this addon"); paintBrowse(); return; }
+          state.browse.items = items;
+          state.browse.page = items.length ? page : null;
+          paintBrowse();
+        });
+      });
+    });
+    host.querySelectorAll("[data-ay]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var page = state.browse.page;
+        if (!page) return;
+        state.browse.addon.year = b.getAttribute("data-ay");
+        state.browse.loading = true;
+        paintFilters();
+        loadCatalogPage(page, 0, function (err, items) {
+          if (!state.browse) return;
+          state.browse.loading = false;
+          if (err) { toast("That filter is not available from this addon"); paintBrowse(); return; }
+          state.browse.items = items;
+          state.browse.page = items.length ? page : null;
+          paintBrowse();
+        });
+      });
+    });
     host.querySelectorAll("[data-fg]").forEach(function (b) {
       b.addEventListener("click", function () { state.filters.genre = b.getAttribute("data-fg"); paintBrowse(); });
     });
@@ -2525,6 +2700,9 @@
     var done = null;
     try { done = localStorage.getItem("g9.fun.wizard"); } catch (e) {}
     if (done) return;
+    // Nothing to set up when the built-in sources are already painting a wall.
+    // The tour is for the case where even those could not be added.
+    if (((state.home && state.home.sources) || []).length) return;
     var host = el("fun-wizard");
     if (!host) return;
     host.hidden = false;
@@ -2535,9 +2713,9 @@
           return '<i class="' + (i === step ? "on" : "") + '"></i>';
         }).join("") + "</div>" +
         (step === 0
-          ? "<h2>Welcome to Fun Mode</h2><p>G9 ships no catalogue. You point it at the addons, feeds and manga sources you already trust, and it builds the wall from them. Nothing is suggested by us.</p>"
+          ? "<h2>Welcome to Fun Mode</h2><p>G9 fills the wall by itself: the Internet Archive's public-domain films and MangaDex are built in, with no account and no key. Add your own addons or feeds whenever you want.</p>"
           : step === 1
-            ? "<h2>Add your first source</h2><p>A Stremio addon manifest, an RSS feed, or the built-in MangaDex. You can add more later from Sources.</p>" +
+            ? "<h2>Add a source (optional)</h2><p>Nothing here is required — the built-ins are already on. Paste a Stremio addon manifest or an RSS feed only if you want more.</p>" +
               '<div class="wiz-row"><input id="wiz-url" placeholder="https://…/manifest.json" />' +
               '<button type="button" class="fun-btn is-acc" id="wiz-add">Add</button></div>'
             : "<h2>Set the defaults</h2><p>Quality cap keeps mobile tethering in check; languages pick the best-matching stream label. Change any of it later in settings.</p>" +

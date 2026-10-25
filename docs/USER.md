@@ -259,3 +259,14 @@ A new install arrives with **Internet Archive** as its only source. It serves fi
 are public domain or openly licensed (feature films, classic TV, noir, sci-fi, animation), streams
 straight over HTTPS, and needs no account. Remove it in **Fun Mode → Sources → Remove** and it will
 not come back; the wall then waits for sources you add yourself.
+
+## Sources you control
+
+Every source row in **Fun Mode → Sources** carries its own settings:
+
+- **Health** — the wall times each source every time it refreshes, so the row shows `120 ms`,
+  `1.8 s — slow`, or the reason it failed. **Test** probes one right now.
+- **Headers** — `Accept-Language`, `User-Agent`, and any extra `Name: value` lines (cookies,
+  referers) for addons that need them. Requests are cached per header set.
+- **Filters and paging** — *See all* on an addon shelf offers the genres and years that addon
+  declares, and *Load more* pages through it with `skip`, keeping your filter.

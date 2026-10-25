@@ -170,6 +170,62 @@ pub fn subtitle_url(base: &str, kind: &str, video_id: &str) -> String {
     )
 }
 
+/// The filter options one catalog declares for itself. G9 only renders the two
+/// names every addon understands; the rest are passed through when paging.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Facets {
+    pub genres: Vec<String>,
+    pub years: Vec<String>,
+}
+
+impl Facets {
+    pub fn is_empty(&self) -> bool {
+        self.genres.is_empty() && self.years.is_empty()
+    }
+}
+
+/// Pull `genre` and `year` option lists out of a catalog's declared extras.
+/// `catalog` is the catalog id from the manifest; `kind` disambiguates ids that
+/// repeat across types.
+pub fn catalog_facets(manifest: &Manifest, kind: &str, catalog: &str) -> Facets {
+    let mut out = Facets::default();
+    let Some(cat) = manifest
+        .catalogs
+        .iter()
+        .find(|c| c.id == catalog && (kind.is_empty() || c.kind == kind))
+    else {
+        return out;
+    };
+    for prop in &cat.extra {
+        match prop.name.as_str() {
+            "genre" => out.genres = prop.options.clone(),
+            "year" => out.years = prop.options.clone(),
+            _ => {}
+        }
+    }
+    out.genres.retain(|g| !g.trim().is_empty());
+    out.years.retain(|y| !y.trim().is_empty());
+    out
+}
+
+/// `genre=Drama&year=2024&skip=40` — empty parts are left out, order follows the
+/// protocol's `key=value&key=value` form.
+pub fn filter_extra(genre: &str, year: &str, skip: u32) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let g = genre.trim();
+    if !g.is_empty() {
+        parts.push(format!("genre={}", urlencode(g)));
+    }
+    let y = year.trim();
+    if !y.is_empty() {
+        parts.push(format!("year={}", urlencode(y)));
+    }
+    if skip > 0 {
+        parts.push(format!("skip={skip}"));
+    }
+    parts.join("&")
+}
+
 /// Parse `manifest.json`. Rejects bodies that are not an addon manifest.
 pub fn parse_manifest(body: &str) -> Result<Manifest, String> {
     let v: Value =
@@ -644,5 +700,34 @@ mod tests {
         );
         assert_eq!(subs.len(), 1);
         assert_eq!(subs[0].label, "English");
+    }
+
+    #[test]
+    fn facets_come_from_the_manifest() {
+        let body = r#"{"id":"x","name":"X","types":["movie"],"resources":["catalog"],
+            "catalogs":[{"type":"movie","id":"top","name":"Top","extra":[
+              {"name":"genre","options":["Action","Drama",""],"isRequired":false},
+              {"name":"skip","options":[],"isRequired":false},
+              {"name":"year","options":["2024","2023"]}
+            ]}]}"#;
+        let m = parse_manifest(body).unwrap();
+        let f = catalog_facets(&m, "movie", "top");
+        assert_eq!(f.genres, vec!["Action", "Drama"]);
+        assert_eq!(f.years, vec!["2024", "2023"]);
+        assert!(!f.is_empty());
+        // Wrong kind or unknown catalog -> empty, not an error.
+        assert!(catalog_facets(&m, "series", "top").is_empty());
+        assert!(catalog_facets(&m, "movie", "nope").is_empty());
+    }
+
+    #[test]
+    fn filter_extra_skips_empty_parts() {
+        assert_eq!(filter_extra("", "", 0), "");
+        assert_eq!(filter_extra("Drama", "", 0), "genre=Drama");
+        assert_eq!(filter_extra("", "2024", 40), "year=2024&skip=40");
+        assert_eq!(
+            filter_extra("Sci-Fi & Fantasy", "2024", 0),
+            "genre=Sci-Fi%20%26%20Fantasy&year=2024"
+        );
     }
 }
