@@ -190,6 +190,40 @@ pub fn list_channels(
 }
 
 #[tauri::command]
+pub fn channel_total(
+    state: State<AppState>,
+    group: Option<String>,
+    query: Option<String>,
+    favourites_only: Option<bool>,
+    country: Option<String>,
+    language: Option<String>,
+    quality: Option<String>,
+) -> Result<i64, String> {
+    let clean = |v: Option<String>| v.filter(|x| !x.is_empty() && x != "All");
+    let group = clean(group);
+    let query_text = clean(query);
+    let country = clean(country);
+    let language = clean(language);
+    let quality = clean(quality);
+    state
+        .store
+        .lock()
+        .map_err(|e| e.to_string())?
+        .count_channels(&ChannelQuery {
+            group: group.as_deref(),
+            query: query_text.as_deref(),
+            favourites_only: favourites_only.unwrap_or(false),
+            country: country.as_deref(),
+            language: language.as_deref(),
+            quality: quality.as_deref(),
+            sort: "number",
+            limit: 1,
+            offset: 0,
+        })
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn channel_facets(state: State<AppState>) -> Result<Facets, String> {
     state
         .store
@@ -555,6 +589,11 @@ pub fn epg_clear() {
 #[tauri::command]
 pub fn epg_now(ids: Vec<String>) -> Vec<crate::epg::Guide> {
     crate::epg::now_next(&ids, None)
+}
+
+#[tauri::command]
+pub fn epg_upcoming(ids: Vec<String>, count: Option<usize>) -> Vec<crate::epg::Upcoming> {
+    crate::epg::upcoming(&ids, None, count.unwrap_or(3))
 }
 
 #[tauri::command]

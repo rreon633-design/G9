@@ -106,7 +106,6 @@
               <hr />
               <div class="menu-label">Tools</div>
               <button type="button" data-act="snap">Save frame</button>
-              <button type="button" data-act="gif">Export GIF</button>
               <button type="button" data-act="record">Record what is playing</button>
               <button type="button" data-act="webcamrtc">Record webcam</button>
               <button type="button" data-act="convert">Convert / Save…</button>
@@ -176,13 +175,31 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
             <input id="tv-q" type="search" placeholder="Search channels, groups, countries" autocomplete="off" />
           </div>
+          <button type="button" class="tv-chip tv-guide" id="tv-guide" title="Load or refresh the programme guide">Guide</button>
           <button type="button" class="tv-icon" id="tv-close" title="Close (Esc)">
             <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </header>
+        <div class="tv-recents" id="tv-recents" hidden></div>
         <div class="tv-chips" id="tv-chips"></div>
         <div class="tv-grid" id="tv-grid"></div>
+        <div class="tv-more" id="tv-more" hidden>
+          <button type="button" id="tv-more-btn">Show more channels</button>
+        </div>
         <div class="tv-empty" id="tv-empty" hidden></div>
+        <div class="tv-nowbar" id="tv-nowbar" hidden>
+          <div class="tv-now-logo" id="tv-now-logo"></div>
+          <div class="tv-now-text">
+            <b id="tv-now-name"></b>
+            <span id="tv-now-meta"></span>
+          </div>
+          <button type="button" class="tv-now-btn" id="tv-now-toggle" title="Play / pause">Pause</button>
+          <button type="button" class="tv-now-btn primary" id="tv-now-watch">Watch</button>
+        </div>
+        <div class="tv-pop tv-sched" id="tv-sched" hidden>
+          <div class="tv-pop-head" id="tv-sched-head">What's on</div>
+          <div class="tv-pop-list" id="tv-sched-list"></div>
+        </div>
         <div class="tv-pop" id="tv-pop" hidden>
           <div class="tv-pop-head" id="tv-pop-head"></div>
           <div class="tv-pop-list" id="tv-pop-list"></div>
@@ -394,9 +411,6 @@
             <button type="button" class="icon-btn" id="btn-snap" title="Save frame">
               <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2" /><circle cx="12" cy="13.5" r="3" /><path d="M8 7l1.5-3h5L16 7" /></svg>
             </button>
-            <button type="button" class="icon-btn" id="btn-gif" title="Export GIF">
-              <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M8 12h2M12 9v6M16 12h2" /></svg>
-            </button>
           </div>
 
           <div class="cluster center">
@@ -509,7 +523,6 @@
       </div>
     </div>
 
-    <script src="./gif.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

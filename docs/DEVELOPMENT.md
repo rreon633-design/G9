@@ -30,7 +30,7 @@ small MSE loader already in `ui/app.js`).
 
 Tauri APIs are used through `window.__TAURI__` (`withGlobalTauri: true`).
 
-CI asserts `ui/index.html`, `ui/styles.css`, `ui/app.js`, `ui/gif.js` exist and that no
+CI asserts `ui/index.html`, `ui/styles.css`, `ui/app.js` exist and that no
 `ui/main.ts` appears.
 
 ## Tests of note

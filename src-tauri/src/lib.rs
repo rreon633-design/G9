@@ -45,6 +45,7 @@ pub fn run() {
             commands::list_groups,
             commands::list_channels,
             commands::channel_facets,
+            commands::channel_total,
             commands::get_channel,
             commands::neighbours,
             commands::toggle_favourite,
@@ -97,6 +98,7 @@ pub fn run() {
             commands::dl_reveal,
             commands::epg_clear,
             commands::epg_now,
+            commands::epg_upcoming,
             commands::xtream_import,
         ])
         .run(tauri::generate_context!())

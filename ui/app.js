@@ -695,53 +695,6 @@
         toast(shortError(e, "Could not save the frame"));
       });
   }
-  function exportGif() {
-    if (!video.videoWidth || typeof encodeGif !== "function") {
-      toast("Nothing to export");
-      return;
-    }
-    var start = state.abA != null ? state.abA : Math.max(0, video.currentTime - 1.2);
-    var end = state.abB != null ? state.abB : Math.min(video.duration || start + 2.4, start + 2.4);
-    if (end <= start) end = start + 1.5;
-    toast("Encoding GIF…");
-    var w = 160;
-    var h = Math.max(90, Math.round((video.videoHeight / video.videoWidth) * w));
-    var fps = 8;
-    var frames = [];
-    var t = start;
-    var wasPaused = video.paused;
-    var origin = video.currentTime;
-    function grab() {
-      if (t > end || frames.length >= 24) {
-        video.currentTime = origin;
-        if (!wasPaused) video.play();
-        if (!frames.length) {
-          toast("Nothing to export");
-          return;
-        }
-        var bytes = encodeGif(frames, w, h, Math.max(2, Math.round(100 / fps)));
-        var blob = new Blob([bytes], { type: "image/gif" });
-        saveBlob(blob, safeName(".gif"), "GIF image", "gif");
-        toast("GIF · " + frames.length + " frames");
-        return;
-      }
-      video.pause();
-      video.currentTime = t;
-      video.onseeked = function () {
-        video.onseeked = null;
-        var c = document.createElement("canvas");
-        c.width = w;
-        c.height = h;
-        try {
-          c.getContext("2d").drawImage(video, 0, 0, w, h);
-          frames.push(c.getContext("2d").getImageData(0, 0, w, h).data);
-        } catch (e) {}
-        t += 1 / fps;
-        window.setTimeout(grab, 20);
-      };
-    }
-    grab();
-  }
   function applyVideoFilter() {
     var br = document.getElementById("fx-br");
     var ct = document.getElementById("fx-ct");
@@ -1025,7 +978,7 @@
             first = false;
           }
           return chain.then(function () {
-            toast(ext === "gif" ? "GIF saved" : "Recording saved");
+            toast("Recording saved");
           });
         });
       })
@@ -2117,6 +2070,7 @@
     if (gate) gate.hidden = true;
   }
   function setPlaying(on) {
+    if (typeof tvNowBar === "function") tvNowBar();
     document.getElementById("play").innerHTML = on ? ICO_PAUSE : ICO_PLAY;
     document.getElementById("play").title = on ? "Pause" : "Play";
   }
@@ -2880,7 +2834,6 @@
         showChrome();
       }
       if (act === "snap") snapshot();
-      if (act === "gif") exportGif();
       if (act === "gen") {
         state.wantGenerate = true;
         toast("Generating captions…");
@@ -3011,7 +2964,6 @@
   });
   document.getElementById("btn-ab").addEventListener("click", cycleAb);
   document.getElementById("btn-snap").addEventListener("click", snapshot);
-  document.getElementById("btn-gif").addEventListener("click", exportGif);
   document.getElementById("sub-pos").addEventListener("input", function (ev) {
     setCuePos(Number(ev.target.value));
   });
@@ -4183,6 +4135,10 @@
   var tvList = [];
   var tvFacets = null;
   var tvTimer = 0;
+  var tvPage = 0;
+  var TV_PAGE = 120;
+  var tvTotal = 0;
+  var tvRecents = [];
 
   function tvEl(id) {
     return document.getElementById(id);
@@ -4232,6 +4188,9 @@
       '" data-tv-fav="' +
       c.id +
       '" title="Favourite">★</button>' +
+      '<button type="button" class="tv-more-btn" data-tv-sched="' +
+      c.id +
+      '" title="What is on">⋯</button>' +
       "</div>" +
       '<div class="tv-text"><b>' +
       escapeHtml(c.name) +
@@ -4248,7 +4207,17 @@
     var empty = tvEl("tv-empty");
     if (!grid) return;
     var count = tvEl("tv-count");
-    if (count) count.textContent = tvList.length ? tvList.length + " channels" : "";
+    if (count) {
+      if (!tvList.length) count.textContent = "";
+      else if (tvTotal > tvList.length) count.textContent = "showing " + tvList.length + " of " + tvTotal;
+      else count.textContent = tvList.length + " channels";
+    }
+    var more = tvEl("tv-more");
+    if (more) {
+      more.hidden = !(tvTotal > tvList.length);
+      var mb = tvEl("tv-more-btn");
+      if (mb) mb.textContent = "Show more (" + Math.min(TV_PAGE, tvTotal - tvList.length) + ")";
+    }
     if (!tvList.length) {
       grid.innerHTML = "";
       if (empty) {
@@ -4283,6 +4252,12 @@
           ev.preventDefault();
           tvTune(id);
         }
+      });
+    });
+    grid.querySelectorAll("[data-tv-sched]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        tvOpenSchedule(Number(btn.getAttribute("data-tv-sched")), btn);
       });
     });
     grid.querySelectorAll("[data-tv-fav]").forEach(function (btn) {
@@ -4450,16 +4425,12 @@
   function tvClosePop() {
     var pop = tvEl("tv-pop");
     if (pop) pop.hidden = true;
+    var sched = tvEl("tv-sched");
+    if (sched) sched.hidden = true;
   }
 
-  function tvLoad() {
-    tvChips();
-    if (state.sources && !state.sources.length) {
-      tvList = [];
-      tvRender();
-      return Promise.resolve([]);
-    }
-    return invoke("list_channels", {
+  function tvQuery(limit, offset) {
+    return {
       group: null,
       query: tvFilter.q || null,
       favouritesOnly: !!tvFilter.fav,
@@ -4467,19 +4438,47 @@
       language: tvFilter.language || null,
       quality: tvFilter.quality || null,
       sort: tvFilter.sort,
-      limit: 2000,
-      offset: 0,
-    })
-      .then(function (list) {
-        tvList = Array.isArray(list) ? list : [];
-        state.channels = tvList.length ? tvList : state.channels;
+      limit: limit,
+      offset: offset,
+    };
+  }
+
+  function tvLoad(more) {
+    if (!more) {
+      tvPage = 0;
+      tvList = [];
+    }
+    tvChips();
+    if (state.sources && !state.sources.length) {
+      tvList = [];
+      tvTotal = 0;
+      tvRender();
+      return Promise.resolve([]);
+    }
+    var offset = tvPage * TV_PAGE;
+    var want = TV_PAGE;
+    return Promise.all([
+      invoke("list_channels", tvQuery(want, offset)),
+      invoke("channel_total", tvQuery(1, 0)).catch(function () {
+        return null;
+      }),
+    ])
+      .then(function (both) {
+        var page = Array.isArray(both[0]) ? both[0] : [];
+        tvList = more ? tvList.concat(page) : page;
+        tvTotal = typeof both[1] === "number" ? both[1] : tvList.length;
+        tvPage += 1;
+        if (!more) state.channels = tvList.length ? tvList : state.channels;
         tvRender();
         return tvList;
       })
       .catch(function () {
-        tvList = [];
+        if (!more) {
+          tvList = [];
+          tvTotal = 0;
+        }
         tvRender();
-        return [];
+        return tvList;
       });
   }
 
@@ -4534,8 +4533,11 @@
     tvOpenButton();
     showChrome();
     tvFacetsLoad();
+    tvRecentsLoad();
+    invoke("epg_status").then(tvPaintGuideStatus).catch(function () {});
     tvLoad().then(function () {
       tvAutoTune();
+      tvNowBar();
     });
   }
 
@@ -4544,6 +4546,7 @@
     if (el) el.hidden = true;
     tvClosePop();
     tvOpenButton();
+    tvNowBar();
   }
 
   function tvVisible() {
@@ -4574,11 +4577,358 @@
     if (btn) btn.hidden = !state.tv || tvVisible();
   }
 
+
+  /* ---------- TV mode: schedule, recents, now bar, keyboard ---------- */
+  function tvClock(ts) {
+    if (!ts) return "";
+    var d = new Date(ts * 1000);
+    var h = d.getHours();
+    var m = d.getMinutes();
+    var suffix = h < 12 ? "am" : "pm";
+    var h12 = h % 12 === 0 ? 12 : h % 12;
+    return h12 + ":" + (m < 10 ? "0" : "") + m + suffix;
+  }
+
+  function tvOpenSchedule(id, anchor) {
+    var ch = tvList.find(function (c) {
+      return c.id === id;
+    });
+    var pop = tvEl("tv-sched");
+    var head = tvEl("tv-sched-head");
+    var list = tvEl("tv-sched-list");
+    if (!ch || !pop || !list) return;
+    head.textContent = ch.name;
+    list.innerHTML = '<p class="tv-sched-empty">Reading the guide…</p>';
+    tvClosePop();
+    pop.hidden = false;
+    var rect = anchor.getBoundingClientRect();
+    var width = 340;
+    pop.style.left = Math.max(12, Math.min(rect.left - width + 40, window.innerWidth - width - 12)) + "px";
+    pop.style.top = Math.min(rect.top, window.innerHeight - 360) + "px";
+
+    invoke("epg_upcoming", { ids: [ch.tvg_id || ch.name], count: 4 })
+      .then(function (res) {
+        var slots = res && res[0] && res[0].slots ? res[0].slots : [];
+        if (!slots.length) {
+          list.innerHTML =
+            '<p class="tv-sched-empty">No guide data for this channel yet.<br />Press Guide to load one.</p>';
+          return;
+        }
+        var now = Math.floor(Date.now() / 1000);
+        list.innerHTML = slots
+          .map(function (slot) {
+            var live = slot.start <= now && slot.stop > now;
+            return (
+              '<button type="button" class="tv-sched-row" data-tv-ch="' +
+              ch.id +
+              '">' +
+              '<span class="tv-sched-time">' +
+              escapeHtml(tvClock(slot.start)) +
+              "</span>" +
+              '<span class="row-title"><b>' +
+              escapeHtml(slot.title) +
+              "</b>" +
+              (slot.description ? "<span>" + escapeHtml(slot.description) + "</span>" : "") +
+              "</span>" +
+              (live ? '<span class="on-air">NOW</span>' : "") +
+              "</button>"
+            );
+          })
+          .join("");
+        list.querySelectorAll("[data-tv-ch]").forEach(function (row) {
+          row.addEventListener("click", function (ev) {
+            ev.stopPropagation();
+            tvClosePop();
+            tvTune(ch.id);
+          });
+        });
+      })
+      .catch(function () {
+        list.innerHTML = '<p class="tv-sched-empty">Could not read the guide.</p>';
+      });
+  }
+
+  function tvRecentsLoad() {
+    var box = tvEl("tv-recents");
+    if (!box) return;
+    invoke("list_history", { limit: 24 })
+      .then(function (rows) {
+        var seen = {};
+        var out = [];
+        (rows || []).forEach(function (row) {
+          if (row.kind !== "live" || !row.url || seen[row.url]) return;
+          seen[row.url] = true;
+          out.push({ name: row.title, url: row.url });
+        });
+        tvRecents = out.slice(0, 8);
+        if (!tvRecents.length || tvFilter.country || tvFilter.language || tvFilter.quality || tvFilter.fav || tvFilter.q) {
+          box.hidden = true;
+          return;
+        }
+        box.hidden = false;
+        box.innerHTML =
+          '<span class="label">Recent</span>' +
+          tvRecents
+            .map(function (r, i) {
+              return (
+                '<button type="button" class="tv-recent" data-tv-recent="' +
+                i +
+                '"><i>' +
+                escapeHtml(tvInitials(r.name)) +
+                "</i>" +
+                escapeHtml(r.name) +
+                "</button>"
+              );
+            })
+            .join("");
+        box.querySelectorAll("[data-tv-recent]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var r = tvRecents[Number(btn.getAttribute("data-tv-recent"))];
+            if (!r) return;
+            // Prefer the real channel row so favourites and the guide follow.
+            var ch = tvList.find(function (c) {
+              return c.stream_url === r.url;
+            });
+            if (ch) {
+              tvTune(ch.id);
+              return;
+            }
+            tvHide();
+            state.mediaKind = "live";
+            state.mediaPath = r.url;
+            playUrl(r.name, r.url);
+          });
+        });
+      })
+      .catch(function () {
+        box.hidden = true;
+      });
+  }
+
+  function tvNowBar() {
+    var bar = tvEl("tv-nowbar");
+    if (!bar) return;
+    if (!state.current || state.view !== "watch" || !video.src) {
+      bar.hidden = true;
+      return;
+    }
+    bar.hidden = false;
+    var ch = state.current;
+    var logo = tvEl("tv-now-logo");
+    if (logo)
+      logo.innerHTML = ch.logo_url
+        ? '<img src="' + escapeHtml(ch.logo_url) + '" alt="" referrerpolicy="no-referrer" />'
+        : escapeHtml(tvInitials(ch.name));
+    tvEl("tv-now-name").textContent = ch.name;
+    var meta = tvEl("tv-now-meta");
+    if (meta) {
+      var bits = [tvCountry(ch.country), ch.group_name, ch.language].filter(Boolean);
+      meta.textContent = bits.join(" · ") || "Live";
+    }
+    var toggle = tvEl("tv-now-toggle");
+    if (toggle) toggle.textContent = video.paused ? "Play" : "Pause";
+    var slot = tvEl("tv-now-now");
+    if (slot && ch.tvg_id) {
+      invoke("epg_now", { ids: [ch.tvg_id] })
+        .then(function (res) {
+          var g = res && res[0];
+          if (g && g.now_title && meta) meta.textContent = "Now · " + g.now_title;
+        })
+        .catch(function () {});
+    }
+  }
+
+  function tvMoveFocus(dx, dy) {
+    var cards = Array.prototype.slice.call(document.querySelectorAll("[data-tv-ch]"));
+    if (!cards.length) return;
+    var at = cards.indexOf(document.activeElement);
+    if (at < 0) {
+      cards[0].focus();
+      return;
+    }
+    var cols = 1;
+    var top = cards[0].getBoundingClientRect().top;
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getBoundingClientRect().top > top + 4) break;
+      cols = i + 1;
+    }
+    var next = at + dx + dy * cols;
+    if (next < 0) next = 0;
+    if (next >= cards.length) next = cards.length - 1;
+    cards[next].focus();
+    var box = cards[next].getBoundingClientRect();
+    if ((box.bottom > window.innerHeight - 8 || box.top < 90) && cards[next].scrollIntoView) {
+      cards[next].scrollIntoView({ block: "center" });
+    }
+  }
+
+  function tvNumberJump(digit) {
+    tvKeys = (tvKeys + digit).slice(-3);
+    var n = Number(tvKeys);
+    var hit = tvList.find(function (c) {
+      return Number(c.number) === n;
+    });
+    if (hit) {
+      var card = document.querySelector('[data-tv-ch="' + hit.id + '"]');
+      if (card) card.focus();
+    }
+    window.clearTimeout(tvKeyTimer);
+    tvKeyTimer = window.setTimeout(function () {
+      tvKeys = "";
+    }, 1200);
+  }
+  var tvKeys = "";
+  var tvKeyTimer = 0;
+
+  function tvAnyPopOpen() {
+    var pop = tvEl("tv-pop");
+    var sched = tvEl("tv-sched");
+    return !!((pop && !pop.hidden) || (sched && !sched.hidden));
+  }
+
+  function tvOnKey(ev) {
+    if (!tvVisible()) return;
+    // Escape backs out one level: popover first, then the wall.
+    if (ev.key === "Escape" && tvAnyPopOpen()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      tvClosePop();
+      return;
+    }
+    var typing = ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA");
+    if (ev.key === "/" && !typing) {
+      ev.preventDefault();
+      var q = tvEl("tv-q");
+      if (q) q.focus();
+      return;
+    }
+    if (typing) return;
+    if (ev.key === "ArrowRight") {
+      ev.preventDefault();
+      tvMoveFocus(1, 0);
+    } else if (ev.key === "ArrowLeft") {
+      ev.preventDefault();
+      tvMoveFocus(-1, 0);
+    } else if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      tvMoveFocus(0, 1);
+    } else if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      tvMoveFocus(0, -1);
+    } else if (ev.key === "Enter" && document.activeElement && document.activeElement.getAttribute("data-tv-ch")) {
+      ev.preventDefault();
+      tvTune(Number(document.activeElement.getAttribute("data-tv-ch")));
+    } else if (/^[0-9]$/.test(ev.key)) {
+      ev.preventDefault();
+      tvNumberJump(ev.key);
+    } else if (ev.key === "f" || ev.key === "F") {
+      var focused = document.activeElement && document.activeElement.getAttribute("data-tv-ch");
+      if (focused)
+        invoke("toggle_favourite", { id: Number(focused) })
+          .then(function () {
+            return tvLoad();
+          })
+          .catch(function () {});
+    } else if (ev.key === "g" || ev.key === "G") {
+      tvGuideLoad();
+    }
+  }
+
+  function tvGuideLoad() {
+    var btn = tvEl("tv-guide");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Guide…";
+    }
+    var step = invoke("epg_status").then(function (st) {
+      if (st && st.loaded) return st;
+      return tvGuideFromSource();
+    });
+    step
+      .then(function (st) {
+        if (!st || !st.loaded) return tvGuideAsk().then(function (again) { return again; });
+        return st;
+      })
+      .then(function (st) {
+        tvPaintGuideStatus(st);
+        if (st && st.loaded) {
+          toast("Guide ready");
+          tvPaintGuide();
+          tvNowBar();
+        }
+      })
+      .catch(function (e) {
+        toast(shortError(e, "Could not load the guide"));
+      })
+      .then(function () {
+        if (btn) {
+          btn.disabled = false;
+          tvPaintGuideStatus(null);
+        }
+      });
+  }
+
+  function tvGuideFromSource() {
+    var src = (state.sources || []).filter(function (x) {
+      return x.kind === "url";
+    })[0];
+    if (!src) return Promise.resolve(null);
+    return invoke("epg_load_source", { id: src.id }).catch(function () {
+      return null;
+    });
+  }
+
+  function tvGuideAsk() {
+    return ask({
+      title: "Guide address",
+      hint: "Paste an XMLTV guide (.xml or .xml.gz)",
+      input: true,
+      value: "",
+      okText: "Load",
+    }).then(function (url) {
+      if (!url) return null;
+      return invoke("epg_load", { url: url });
+    });
+  }
+
+  function tvPaintGuideStatus(st) {
+    var btn = tvEl("tv-guide");
+    if (!btn) return;
+    if (st && st.loaded) {
+      btn.textContent = "Guide · " + (st.channels || 0);
+      btn.classList.add("ready");
+      return;
+    }
+    if (btn.disabled) return;
+    btn.textContent = "Guide";
+    btn.classList.remove("ready");
+  }
+
   (function tvWire() {
     var close = tvEl("tv-close");
     if (close) close.addEventListener("click", tvHide);
     var open = tvEl("tv-open");
     if (open) open.addEventListener("click", tvShow);
+    var guide = tvEl("tv-guide");
+    if (guide) guide.addEventListener("click", tvGuideLoad);
+    var moreBtn = tvEl("tv-more-btn");
+    if (moreBtn)
+      moreBtn.addEventListener("click", function () {
+        tvLoad(true);
+      });
+    var nowToggle = tvEl("tv-now-toggle");
+    if (nowToggle)
+      nowToggle.addEventListener("click", function () {
+        if (video.paused) video.play();
+        else video.pause();
+        tvNowBar();
+      });
+    var nowWatch = tvEl("tv-now-watch");
+    if (nowWatch)
+      nowWatch.addEventListener("click", function () {
+        tvHide();
+      });
+    document.addEventListener("keydown", tvOnKey);
     var q = tvEl("tv-q");
     if (q)
       q.addEventListener("input", function () {
@@ -4587,9 +4937,8 @@
         tvTimer = window.setTimeout(tvLoad, 220);
       });
     document.addEventListener("click", function (ev) {
-      var pop = tvEl("tv-pop");
-      if (!pop || pop.hidden) return;
-      if (!ev.target.closest("#tv-pop") && !ev.target.closest("[data-tv-open]")) tvClosePop();
+      if (ev.target.closest(".tv-pop")) return;
+      if (!ev.target.closest("[data-tv-open]") && !ev.target.closest("[data-tv-sched]")) tvClosePop();
     });
   })();
 

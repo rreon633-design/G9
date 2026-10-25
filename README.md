@@ -11,14 +11,14 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.6.0)
+## Windows release (v0.7.0)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.6.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
-| `G9_0.6.0_x64_en-US.msi` | MSI for managed deployment |
+| `G9_0.7.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.7.0_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
 Download: **[Releases](https://github.com/rreon633-design/G9/releases)**
@@ -33,8 +33,8 @@ download small.
   sites), pick a quality and size, and let it run in the background; pause, resume, play, reveal
   or delete from the Downloads panel. Needs a managed `yt-dlp`, installed with one click
 - **TV Mode** — a YouTube-style channel browser: logo grid, search, **Country / Language /
-  Quality** filters, sorting, now/next on every card; it tunes the last channel you watched
-  and keeps a **Channels** pill on screen to switch
+  Quality** filters, sorting, now/next on every card, a **now-playing bar**, a **RECENT** row,
+  paging for huge playlists, **what's on** per channel, and full keyboard/remote control
 - **IPTV guide** — XMLTV now/next under each channel, Xtream Codes portals, gzip guides
 - **Windows "Open with"** for video, audio and playlist files — double-click plays in G9
 - **Split screen**: snap left/right or `Ctrl+Alt+←/→`, responsive down to small windows
@@ -44,7 +44,7 @@ download small.
   SRT/VTT/ASS; subtitle browser; live cue translation
 - Chapters, playlist queue, PiP, always-on-top, 360° look-around, transcript pane
 - EQ / boost, speed 0.25–2× with pitch lock, A–B loop, bookmarks, sleep timer
-- Working GIF export, frame save, record-what-is-playing, webcam recording, scene poster
+- Frame save, record-what-is-playing, webcam recording, scene poster
 - DLNA browse, podcast RSS
 - Optional **ffmpeg on PATH**: convert / extract / remux / RTMP / embedded subs
 - JSON IPC on `127.0.0.1:18765`
@@ -73,7 +73,7 @@ npm run dev
 cargo test -p g9-core -p g9-iptv -p g9-store
 ```
 
-Frontend is `ui/index.html`, `ui/styles.css`, `ui/app.js`, `ui/gif.js` — copied as `frontendDist`.
+Frontend is `ui/index.html`, `ui/styles.css`, `ui/app.js` — copied as `frontendDist`.
 
 ## CI / CD
 

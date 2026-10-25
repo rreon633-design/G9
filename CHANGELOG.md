@@ -10,6 +10,42 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 - Dismissing a Save dialog no longer falls back to a browser download (save results are now
   `path` / `cancelled` / `unsupported`).
 
+## [0.7.0] — 2026-10-25
+
+GIF out, TV mode in.
+
+### Removed
+
+- **GIF export is gone** — the toolbar button, the Media → Tools entry and `ui/gif.js` are removed,
+  and CI no longer expects the encoder. Save frame, recording and webcam recording stay.
+
+### Added
+
+- **Now-playing bar in the channel wall.** While browsing, a bar at the bottom shows the channel
+  that is actually playing — logo, name, country · group · language, and its current programme —
+  with **Play/Pause** and **Watch** (back to full screen).
+- **RECENT row** — the channels you actually watched, newest first, straight from history. Hidden
+  while a filter is on.
+- **What's on** — the `⋯` on a channel card opens the next programmes for that channel with
+  times and a **NOW** marker; click a row to tune. (`epg_upcoming` command.)
+- **Guide button** in the wall: loads the guide the playlist points at, or asks for an address,
+  and shows how many channels it covers.
+- **Paging** — the wall asks for 120 channels at a time and offers **Show more**, so a
+  5,000-channel playlist paints instantly. The header says *showing 120 of 5,000*.
+  (`channel_total` command shares the filter builder with `list_channels`.)
+- **Keyboard and remote control** — arrows walk the wall (2-D, so left/right stays in the row),
+  Enter tunes the focused channel, digits jump to a channel number, `F` toggles the favourite,
+  `/` jumps to search, `G` reloads the guide. `Esc` now backs out one level: popover first,
+  then the wall.
+
+### Fixed
+
+- **One-line XMLTV programmes were dropped.** `<programme …><title>X</title></programme>` on a
+  single line lost every entry but the last, because the parser only closed a programme when
+  `</programme>` started a line. Multi-entry guides (now/next and what's on) now list correctly;
+  covered by a test.
+- `scrollIntoView` is guarded, so keyboard focus works in engines without it.
+
 ## [0.6.0] — 2026-10-25
 
 A download that downloads, and a TV mode you can browse.
@@ -297,6 +333,7 @@ multi-window, independent pitch shift. See the gap list in `FEATURE-LIST.md`.
 - Local files, URL / HLS, M3U / IPTV import, Live TV sheet
 - Diagnostics overlay, keyboard map
 
+[0.7.0]: https://github.com/rreon633-design/G9/releases/tag/v0.7.0
 [0.6.0]: https://github.com/rreon633-design/G9/releases/tag/v0.6.0
 [0.5.0]: https://github.com/rreon633-design/G9/releases/tag/v0.5.0
 [0.4.0]: https://github.com/rreon633-design/G9/releases/tag/v0.4.0

@@ -1,7 +1,7 @@
 # G9 architecture
 
 ```
-ui/  HTML + CSS + JS  (+ gif.js)
+ui/  HTML + CSS + JS
         │  window.__TAURI__.core.invoke  /  event.listen
         ▼
 src-tauri  (crate g9)

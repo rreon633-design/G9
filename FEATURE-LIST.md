@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.6.0** · source: `main`  
+Last updated: 2026-10-25 · release **v0.7.0** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -25,6 +25,10 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - **TV Mode channel browser** (YouTube-shaped): logo grid, search, Country / Language / Quality
   chips with counts, sort by order / name / country / quality / group, now/next per card
 - TV Mode tunes the last watched channel on entry and keeps a **Channels** pill while watching
+- **Now-playing bar** in the wall (logo, channel, current programme, Play/Pause, Watch)
+- **RECENT** row of watched channels; **what's on** popover per card with times and a NOW marker
+- **Guide** button in the wall, and paging (120 at a time) for playlists of thousands
+- Keyboard / remote: arrows, Enter, digits to jump, F favourites, / search, G guide
 - Channel metadata: `tvg-country`, `tvg-language`, `4K / FHD / HD / SD`, stored and indexed in SQLite
 - IPTV guide: XMLTV now/next per channel, `url-tvg` discovery or a pasted address, gzip, kept on disk
 - Xtream Codes portal import (server, user, password)
@@ -53,7 +57,6 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 ### Picture
 - CSS filters: brightness, contrast, saturation
 - Save frame (JPEG)
-- Export **GIF** (A–B range, or ~2.4s around now)
 - **Record what is playing** — video plus sound to WebM (a second click stops), or record the webcam
 - **360° look-around** for equirectangular video (WebGL, drag)
 - Audio **visualizer** (spectrum)

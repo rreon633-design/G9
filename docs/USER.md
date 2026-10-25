@@ -66,12 +66,23 @@ and country, and **now / next** from the guide. It tunes the last channel you wa
 away — that is what you hear behind the wall — and a **Channels** pill stays on the screen while you
 watch, so you can come back at any time. `Esc` closes the browser.
 
+- A **now-playing bar** stays at the bottom of the wall showing what is on the screen behind it
+  (logo, channel, current programme) with **Play/Pause** and **Watch**.
+- **RECENT** lists the channels you watched last — one click goes back.
 - **Search** the box at the top for a channel, group, country or language.
 - **Chips** filter: Favourites, **Country**, **Language**, **Quality** (4K / FHD / HD / SD), and
   **Sort** by channel order, name, country, quality or group. Each value shows how many channels
   have it; **Clear filters** resets everything.
-- Click a card (or press Enter on it) to watch. The star on a card toggles a favourite.
-- Filters and sorting run in the database, so playlists with thousands of channels stay quick.
+- Click a card (or press Enter on it) to watch. The star on a card toggles a favourite; the `⋯`
+  on a card shows **what's on next** for that channel, with a **NOW** marker on the current show.
+- **Guide** in the wall loads the guide your playlist points at (or one you paste) and shows how
+  many channels it covers.
+- Big playlists load a page at a time — the header says *showing 120 of 5,000* and **Show more**
+  fetches the next page. Filters and sorting run in the database, so thousands of channels stay
+  quick.
+- **Keyboard and remote:** arrow keys walk the wall, Enter tunes the focused channel, number keys
+  jump to a channel number, `F` favourites the focused channel, `/` jumps to search, `G` reloads
+  the guide, and `Esc` backs out one level (open popover first, then the wall).
 
 Windowed mode keeps the older list: **Live** in the top bar. It groups channels, searches them and
 keeps favourites on top.
@@ -142,7 +153,6 @@ RTMP out and embedded subtitle extraction then use that copy; if you prefer, put
 - **Save frame** (camera icon or `S`) asks where to write a JPEG — default folder is your Pictures.
   If the source is copy-protected and the frame cannot be read, G9 falls back to FFmpeg when the
   file is local.
-- **Export GIF** writes a real multi-frame GIF of the A–B range (or ~2.4 s around the playhead).
 - **Record what is playing** records the picture and the sound to WebM; press again to stop and
   choose where to save. **Record webcam** does the same from the camera.
 - Desktop/window capture is not part of G9: the webview has no screen-capture API.

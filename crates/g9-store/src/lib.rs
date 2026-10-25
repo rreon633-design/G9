@@ -3,6 +3,7 @@
 mod schema;
 
 use g9_core::{ParseReport, ParsedChannel, SourceKind};
+use rusqlite::types::Value;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -202,16 +203,8 @@ impl Store {
         Ok(rows.flatten().collect())
     }
 
-    /// Everything TV mode can ask the channel table for.
-    pub fn list_channels(&self, q: &ChannelQuery<'_>) -> Result<Vec<ChannelRow>> {
-        let limit = q.limit.clamp(1, 5000);
-        let offset = q.offset.max(0);
-        let mut sql = String::from(
-            "SELECT id, source_id, number, name, group_name, logo_url, stream_url, tvg_id,
-                    country, language, quality, is_favourite, is_hidden
-             FROM channels WHERE is_hidden = 0",
-        );
-        let mut args: Vec<rusqlite::types::Value> = Vec::new();
+    /// WHERE clause shared by the list and the count, so paging agrees with filters.
+    fn channel_filter(q: &ChannelQuery<'_>, sql: &mut String, args: &mut Vec<Value>) {
         if q.favourites_only {
             sql.push_str(" AND is_favourite = 1");
         }
@@ -236,6 +229,19 @@ impl Store {
                 args.push(like.clone().into());
             }
         }
+    }
+
+    /// Everything TV mode can ask the channel table for.
+    pub fn list_channels(&self, q: &ChannelQuery<'_>) -> Result<Vec<ChannelRow>> {
+        let limit = q.limit.clamp(1, 5000);
+        let offset = q.offset.max(0);
+        let mut sql = String::from(
+            "SELECT id, source_id, number, name, group_name, logo_url, stream_url, tvg_id,
+                    country, language, quality, is_favourite, is_hidden
+             FROM channels WHERE is_hidden = 0",
+        );
+        let mut args: Vec<Value> = Vec::new();
+        Self::channel_filter(q, &mut sql, &mut args);
         // Sorting: quality high-to-low, then the number the playlist gave.
         let order = match q.sort {
             "name" => "name COLLATE NOCASE",
@@ -275,7 +281,17 @@ impl Store {
         Ok(rows)
     }
 
-    /// Distinct values (with counts) that the TV filter chips offer.
+    /// How many channels the same filters would return; TV mode pages with it.
+    pub fn count_channels(&self, q: &ChannelQuery<'_>) -> Result<i64> {
+        let mut sql = String::from("SELECT COUNT(*) FROM channels WHERE is_hidden = 0");
+        let mut args: Vec<Value> = Vec::new();
+        Self::channel_filter(q, &mut sql, &mut args);
+        let n = self
+            .conn
+            .query_row(&sql, rusqlite::params_from_iter(args), |r| r.get(0))?;
+        Ok(n)
+    }
+
     pub fn channel_facets(&self) -> Result<Facets> {
         let mut facets = Facets::default();
         for (sql, bucket) in [

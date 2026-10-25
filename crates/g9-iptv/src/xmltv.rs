@@ -177,10 +177,21 @@ pub fn parse(text: &str) -> Vec<Programme> {
                 }
                 _ => current = None,
             }
-            // Self-closing or title on the same line.
+            // Self-closing, or the whole entry on one line — common in exported
+            // guides, and it must not be lost when the next line starts anew.
             if let Some(p) = current.as_mut() {
                 if let Some(t) = inner_text(line, "title") {
                     p.title = t;
+                }
+                if let Some(d) = inner_text(line, "desc") {
+                    p.description = Some(d);
+                }
+                let closes = line.contains("</programme>");
+                if closes && !p.title.is_empty() {
+                    out.push(p.clone());
+                    current = None;
+                } else if closes {
+                    current = None;
                 }
             }
             continue;

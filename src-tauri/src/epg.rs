@@ -92,6 +92,21 @@ pub struct Guide {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct Slot {
+    pub title: String,
+    pub description: Option<String>,
+    pub start: i64,
+    pub stop: i64,
+}
+
+/// What is on now and what follows, for the "what's on" card.
+#[derive(Debug, Clone, Serialize)]
+pub struct Upcoming {
+    pub channel: String,
+    pub slots: Vec<Slot>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct GuideStatus {
     pub loaded: bool,
     pub programmes: usize,
@@ -204,6 +219,41 @@ pub fn now_next(ids: &[String], at: Option<i64>) -> Vec<Guide> {
     out
 }
 
+/// Now plus the next `count` programmes for each channel id / name.
+pub fn upcoming(ids: &[String], at: Option<i64>, count: usize) -> Vec<Upcoming> {
+    let at = at.unwrap_or_else(unix_now);
+    let count = count.clamp(1, 10);
+    let c = cache().lock().unwrap();
+    ids.iter()
+        .map(|id| {
+            let resolved = if c.channels.contains_key(id) {
+                Some(id.as_str())
+            } else {
+                c.names.get(&norm(id)).map(|s| s.as_str())
+            };
+            let mut slots: Vec<Slot> = Vec::new();
+            if let Some(indexes) = resolved.and_then(|k| c.channels.get(k)) {
+                let mut list: Vec<&Programme> = indexes.iter().map(|i| &c.programmes[*i]).collect();
+                list.sort_by_key(|p| p.start);
+                for p in list {
+                    if p.stop > at && slots.len() < count {
+                        slots.push(Slot {
+                            title: p.title.clone(),
+                            description: p.description.clone(),
+                            start: p.start,
+                            stop: p.stop,
+                        });
+                    }
+                }
+            }
+            Upcoming {
+                channel: id.clone(),
+                slots,
+            }
+        })
+        .collect()
+}
+
 fn unix_now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -291,6 +341,25 @@ mod tests {
         assert_eq!(got[0].now_title.as_deref(), Some("News"));
         assert!(got[1].now_title.is_none());
         assert_eq!(norm("Sky Sports 1 HD!"), "skysports1hd");
+        clear();
+    }
+
+    #[test]
+    fn upcoming_lists_now_then_next() {
+        let _g = guard();
+        let guide = r#"<tv>
+  <programme start="20261025110000 +0000" stop="20261025120000 +0000" channel="a"><title>Morning</title></programme>
+  <programme start="20261025120000 +0000" stop="20261025130000 +0000" channel="a"><title>Noon</title></programme>
+  <programme start="20261025130000 +0000" stop="20261025140000 +0000" channel="a"><title>Afternoon</title></programme>
+  <programme start="20261025140000 +0000" stop="20261025150000 +0000" channel="a"><title>Evening</title></programme>
+</tv>"#;
+        load(guide, "local");
+        let at = xmltv::parse_time("20261025123000 +0000").unwrap();
+        let got = upcoming(&[String::from("a")], Some(at), 3);
+        let titles: Vec<&str> = got[0].slots.iter().map(|s| s.title.as_str()).collect();
+        assert_eq!(titles, vec!["Noon", "Afternoon", "Evening"]);
+        let short = upcoming(&[String::from("a")], Some(at), 1);
+        assert_eq!(short[0].slots.len(), 1);
         clear();
     }
 

@@ -65,7 +65,6 @@ jobs:
           test -f ui/index.html
           test -f ui/styles.css
           test -f ui/app.js
-          test -f ui/gif.js
           test ! -e ui/main.ts
           test ! -e ui/package.json
           echo "vanilla UI ok"
