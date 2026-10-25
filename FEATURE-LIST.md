@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.9.0** · source: `main`  
+Last updated: 2026-10-25 · release **v0.9.1** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---

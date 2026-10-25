@@ -7,6 +7,13 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 - Nothing yet.
 
+## [0.9.1] — 2026-10-25
+
+### Fixed
+
+- The eight speed presets overflowed the Speed panel and clipped **4×**; they now wrap into a
+  two-row grid.
+
 ## [0.9.0] — 2026-10-25
 
 The everyday basics: the controls a player is expected to have before it has anything clever.

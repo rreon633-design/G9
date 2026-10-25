@@ -2369,3 +2369,12 @@ input[type="range"]::-webkit-slider-thumb {
   font: inherit;
   font-size: 12px;
 }
+
+/* Eight speed presets do not fit on one line of a 380px panel. */
+#speed-presets { flex-wrap: wrap; }
+#speed-presets button {
+  flex: 1 1 22%;
+  min-width: 54px;
+  padding: 6px 4px;
+  font-size: 12px;
+}

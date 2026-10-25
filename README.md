@@ -11,14 +11,14 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.9.0)
+## Windows release (v0.9.1)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.9.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
-| `G9_0.9.0_x64_en-US.msi` | MSI for managed deployment |
+| `G9_0.9.1_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.9.1_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
 Download: **[Releases](https://github.com/rreon633-design/G9/releases)**
