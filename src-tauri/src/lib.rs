@@ -1,6 +1,7 @@
 mod commands;
 mod fetch;
 mod state;
+mod subs;
 
 use state::AppState;
 use tauri::Manager;
@@ -34,6 +35,8 @@ pub fn run() {
             commands::set_setting,
             commands::stats,
             commands::load_demo_playlist,
+            commands::find_subtitles,
+            commands::apply_best_subtitles,
         ])
         .run(tauri::generate_context!())
         .expect("G9 failed to start");

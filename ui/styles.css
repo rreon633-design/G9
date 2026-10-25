@@ -117,9 +117,34 @@ video {
 }
 .about-meta li:first-child { border-top: 0; }
 .about-meta span { color: var(--muted); }
-.about-meta b { font-weight: 500; }
+.about-meta b { font-weight: 500; text-align: right; max-width: 70%; word-break: break-all; }
 .about-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0 0 8px; }
 .about .legal { text-align: left; }
+
+video::cue {
+  font-family: Geist, sans-serif;
+  font-size: 20px;
+  line-height: 1.35;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+}
+.icon-btn.on.subs { color: var(--accent); }
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 130px;
+  transform: translateX(-50%);
+  z-index: 7;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(10, 16, 28, 0.88);
+  color: #fff;
+  font-size: 13px;
+  pointer-events: none;
+  opacity: 0;
+  transition: 180ms ease;
+}
+.toast.show { opacity: 1; }
 .poster h1 {
   margin: 0 0 8px;
   font-size: 32px;
