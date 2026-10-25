@@ -46,6 +46,7 @@ pub fn run() {
             commands::ffmpeg_available,
             commands::extract_audio,
             commands::remux_repair,
+            commands::convert_media,
             commands::translate_text,
             commands::fetch_url,
         ])

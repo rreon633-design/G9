@@ -26,7 +26,9 @@ npm run dev
 cargo test --workspace
 ```
 
-Frontend is only `ui/index.html`, `ui/styles.css`, `ui/app.js`.
+Frontend is only `ui/index.html`, `ui/styles.css`, `ui/app.js` (plus `ui/gif.js`).
+
+See [FEATURE-LIST.md](FEATURE-LIST.md) for what ships and what this WebView engine cannot do.
 
 ## License
 

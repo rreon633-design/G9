@@ -7,8 +7,14 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <a class="skip" href="#play">Skip to playback</a>
     <div id="app" class="chrome-on" role="application" aria-label="G9 media player">
       <video id="video" playsinline aria-label="Video"></video>
+      <canvas id="view360" hidden></canvas>
+      <div id="region" hidden>
+        <div id="region-box"></div>
+        <p id="region-hint">Drag a rectangle. Release to record. Esc cancels.</p>
+      </div>
 
       <div class="poster" id="poster">
         <div class="poster-inner">
@@ -53,6 +59,7 @@
               <button type="button" data-act="subs-off">Hide subtitles</button>
               <hr />
               <button type="button" data-act="translate">Translate captions</button>
+              <button type="button" data-act="livetx">Live translate current cue</button>
               <hr />
               <div class="menu-label">Audio</div>
               <button type="button" data-act="eq">Equalizer & boost</button>
@@ -61,6 +68,7 @@
               <hr />
               <div class="menu-label">Picture</div>
               <button type="button" data-act="filters">Video filters</button>
+              <button type="button" data-act="360">360° look-around</button>
               <hr />
               <div class="menu-label">View</div>
               <button type="button" data-view="watch">Player</button>
@@ -70,7 +78,8 @@
               <div class="menu-label">Tools</div>
               <button type="button" data-act="snap">Save frame</button>
               <button type="button" data-act="gif">Export GIF</button>
-              <button type="button" data-act="record">Record screen / webcam</button>
+              <button type="button" data-act="record">Record screen / webcam / region</button>
+              <button type="button" data-act="convert">Convert / Save…</button>
               <button type="button" data-act="marks">Bookmarks</button>
               <button type="button" data-act="extract">Extract audio</button>
               <button type="button" data-act="repair">Repair / remux file</button>

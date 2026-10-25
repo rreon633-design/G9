@@ -64,6 +64,36 @@ pub fn remux_repair(path: &str, dest: &str) -> Result<ToolResult, String> {
     }
 }
 
+pub fn convert(path: &str, dest: &str) -> Result<ToolResult, String> {
+    let lower = dest.to_ascii_lowercase();
+    let mut args: Vec<&str> = vec![
+        "-y",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        path,
+    ];
+    if lower.ends_with(".mp3") {
+        args.extend(["-vn", "-q:a", "2"]);
+    } else if lower.ends_with(".webm") {
+        args.extend(["-c:v", "libvpx", "-b:v", "1M", "-c:a", "libvorbis"]);
+    } else {
+        args.extend(["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac"]);
+    }
+    args.push(dest);
+    let out = run_hidden(Command::new("ffmpeg").args(&args))?;
+    if out.status.success() {
+        Ok(ToolResult {
+            ok: true,
+            output: dest.into(),
+        })
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).into_owned())
+    }
+}
+
 pub fn translate(text: &str, from: &str, to: &str) -> Result<String, String> {
     if text.trim().is_empty() {
         return Ok(String::new());

@@ -252,7 +252,22 @@
         break;
       }
     }
-    el.textContent = hit ? hit.text : "";
+    if (!hit) {
+      el.textContent = "";
+      return;
+    }
+    el.textContent = hit.tx || hit.text;
+    if (state.liveTx && !hit.tx && !hit.txBusy) {
+      hit.txBusy = true;
+      invoke("translate_text", { text: hit.text, from: "en", to: state.txLang || "es" })
+        .then(function (t) {
+          hit.tx = t || hit.text;
+          paintCue();
+        })
+        .catch(function () {
+          hit.txBusy = false;
+        });
+    }
   }
   function clearSubsKeepMeta() {
     if (state.subBlob) {
@@ -698,42 +713,247 @@
         toast(String(e && e.message ? e.message : e));
       });
   }
+  function startRecorder(stream, extraStop) {
+    var chunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = function (ev) {
+      if (ev.data && ev.data.size) chunks.push(ev.data);
+    };
+    recorder.onstop = function () {
+      stream.getTracks().forEach(function (t) {
+        t.stop();
+      });
+      if (extraStop) extraStop();
+      var blob = new Blob(chunks, { type: "video/webm" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "g9-record.webm";
+      a.click();
+      recorder = null;
+      toast("Recording saved");
+    };
+    recorder.start();
+    toast("Recording… Record again to stop");
+  }
   function toggleRecord() {
     if (recorder && recorder.state === "recording") {
       recorder.stop();
       return;
     }
-    var kind = window.prompt("Record: screen  |  webcam", "screen");
+    var kind = window.prompt("Record: screen  |  webcam  |  region", "screen");
     if (!kind) return;
+    kind = kind.toLowerCase();
+    if (kind.indexOf("region") >= 0) {
+      beginRegionRecord();
+      return;
+    }
     var job =
-      kind.toLowerCase().indexOf("cam") >= 0
+      kind.indexOf("cam") >= 0
         ? navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         : navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-    job
-      .then(function (stream) {
-        var chunks = [];
-        recorder = new MediaRecorder(stream);
-        recorder.ondataavailable = function (ev) {
-          if (ev.data && ev.data.size) chunks.push(ev.data);
-        };
-        recorder.onstop = function () {
-          stream.getTracks().forEach(function (t) {
-            t.stop();
+    job.then(function (stream) {
+      startRecorder(stream);
+    }).catch(function (e) {
+      toast(String(e && e.message ? e.message : e));
+    });
+  }
+  function beginRegionRecord() {
+    var layer = document.getElementById("region");
+    var box = document.getElementById("region-box");
+    layer.hidden = false;
+    var drag = null;
+    function pos(ev) {
+      return { x: ev.clientX, y: ev.clientY };
+    }
+    function onDown(ev) {
+      drag = pos(ev);
+      box.style.left = drag.x + "px";
+      box.style.top = drag.y + "px";
+      box.style.width = "0";
+      box.style.height = "0";
+    }
+    function onMove(ev) {
+      if (!drag) return;
+      var p = pos(ev);
+      var x = Math.min(drag.x, p.x);
+      var y = Math.min(drag.y, p.y);
+      box.style.left = x + "px";
+      box.style.top = y + "px";
+      box.style.width = Math.abs(p.x - drag.x) + "px";
+      box.style.height = Math.abs(p.y - drag.y) + "px";
+    }
+    function finish() {
+      layer.hidden = true;
+      layer.removeEventListener("mousedown", onDown);
+      layer.removeEventListener("mousemove", onMove);
+      layer.removeEventListener("mouseup", onUp);
+      var r = box.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) {
+        toast("Region too small");
+        return;
+      }
+      navigator.mediaDevices
+        .getDisplayMedia({ video: true, audio: false })
+        .then(function (stream) {
+          var src = document.createElement("video");
+          src.srcObject = stream;
+          src.muted = true;
+          src.play();
+          var c = document.createElement("canvas");
+          c.width = Math.round(r.width);
+          c.height = Math.round(r.height);
+          var ctx = c.getContext("2d");
+          var run = true;
+          function tick() {
+            if (!run) return;
+            try {
+              var vw = src.videoWidth || window.screen.width;
+              var vh = src.videoHeight || window.screen.height;
+              var sx = ((r.left + (window.screenX || 0)) / window.screen.width) * vw;
+              var sy = ((r.top + (window.screenY || 0)) / window.screen.height) * vh;
+              var sw = (r.width / window.screen.width) * vw;
+              var sh = (r.height / window.screen.height) * vh;
+              ctx.drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
+            } catch (e) {}
+            requestAnimationFrame(tick);
+          }
+          src.addEventListener("loadedmetadata", tick);
+          var mixed = c.captureStream(24);
+          startRecorder(mixed, function () {
+            run = false;
+            src.srcObject = null;
           });
-          var blob = new Blob(chunks, { type: "video/webm" });
-          var a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = "g9-record.webm";
-          a.click();
-          recorder = null;
-          toast("Recording saved");
-        };
-        recorder.start();
-        toast("Recording… use Record again to stop");
+        })
+        .catch(function (e) {
+          toast(String(e && e.message ? e.message : e));
+        });
+    }
+    function onUp() {
+      if (drag) finish();
+      drag = null;
+    }
+    layer.addEventListener("mousedown", onDown);
+    layer.addEventListener("mousemove", onMove);
+    layer.addEventListener("mouseup", onUp);
+    toast("Drag a region");
+  }
+  function convertMedia() {
+    if (state.mediaKind !== "file" || !state.mediaPath) {
+      toast("Open a local file first");
+      return;
+    }
+    var kind = window.prompt("Convert to: mp4  |  webm  |  mp3", "mp4");
+    if (!kind) return;
+    kind = kind.replace(".", "").toLowerCase();
+    if (kind !== "mp4" && kind !== "webm" && kind !== "mp3") kind = "mp4";
+    var dest = sidecarDest(kind);
+    if (!dest) return;
+    toast("Converting…");
+    invoke("convert_media", { path: state.mediaPath, dest: dest })
+      .then(function (r) {
+        toast("Saved " + (r.output || dest));
       })
       .catch(function (e) {
         toast(String(e && e.message ? e.message : e));
       });
+  }
+  var look360 = { on: false, yaw: 0, pitch: 0, drag: null, raf: 0 };
+  function toggle360() {
+    var canvas = document.getElementById("view360");
+    look360.on = !look360.on;
+    canvas.hidden = !look360.on;
+    if (!look360.on) {
+      window.cancelAnimationFrame(look360.raf);
+      toast("360 off");
+      return;
+    }
+    var gl = canvas.getContext("webgl");
+    if (!gl) {
+      look360.on = false;
+      canvas.hidden = true;
+      toast("WebGL unavailable");
+      return;
+    }
+    canvas.width = canvas.clientWidth || window.innerWidth;
+    canvas.height = canvas.clientHeight || window.innerHeight;
+    var vs = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(
+      vs,
+      "attribute vec2 a; void main(){ gl_Position=vec4(a,0.0,1.0); }"
+    );
+    gl.compileShader(vs);
+    var fs = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(
+      fs,
+      "precision mediump float; uniform sampler2D uTex; uniform vec2 uYawPitch; uniform vec2 uRes;\n" +
+        "void main(){ vec2 uv=gl_FragCoord.xy/uRes; vec2 ndc=uv*2.0-1.0; ndc.x*=uRes.x/uRes.y;\n" +
+        "float cy=cos(uYawPitch.y), sy=sin(uYawPitch.y), cx=cos(uYawPitch.x), sx=sin(uYawPitch.x);\n" +
+        "vec3 d=normalize(vec3(ndc.x, ndc.y, 1.2));\n" +
+        "d=vec3(d.x, d.y*cy-d.z*sy, d.y*sy+d.z*cy);\n" +
+        "d=vec3(d.x*cx+d.z*sx, d.y, -d.x*sx+d.z*cx);\n" +
+        "float lon=atan(d.x,d.z), lat=asin(clamp(d.y,-1.0,1.0));\n" +
+        "vec2 t=vec2(lon/6.2831853+0.5, lat/3.1415926+0.5);\n" +
+        "gl_FragColor=texture2D(uTex, t); }"
+    );
+    gl.compileShader(fs);
+    var prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    var loc = gl.getAttribLocation(prog, "a");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    var tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    var uTex = gl.getUniformLocation(prog, "uTex");
+    var uYP = gl.getUniformLocation(prog, "uYawPitch");
+    var uRes = gl.getUniformLocation(prog, "uRes");
+    function draw() {
+      if (!look360.on) return;
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      try {
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+      } catch (e) {}
+      gl.uniform1i(uTex, 0);
+      gl.uniform2f(uYP, look360.yaw, look360.pitch);
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      look360.raf = requestAnimationFrame(draw);
+    }
+    draw();
+    toast("360 on · drag to look");
+  }
+  (function bind360() {
+    var canvas = document.getElementById("view360");
+    if (!canvas) return;
+    canvas.addEventListener("mousedown", function (ev) {
+      look360.drag = { x: ev.clientX, y: ev.clientY, yaw: look360.yaw, pitch: look360.pitch };
+    });
+    window.addEventListener("mouseup", function () {
+      look360.drag = null;
+    });
+    window.addEventListener("mousemove", function (ev) {
+      if (!look360.drag || !look360.on) return;
+      look360.yaw = look360.drag.yaw + (ev.clientX - look360.drag.x) * 0.005;
+      look360.pitch = Math.max(-1.2, Math.min(1.2, look360.drag.pitch + (ev.clientY - look360.drag.y) * 0.005));
+    });
+  })();
+  function setLiveTx() {
+    state.liveTx = !state.liveTx;
+    if (state.liveTx && !state.txLang) {
+      state.txLang = window.prompt("Live translate to (es, hi, fr…)", "es") || "es";
+    }
+    toast(state.liveTx ? "Live translate → " + state.txLang : "Live translate off");
   }
   function openPodcast() {
     var url = window.prompt("Podcast RSS URL");
@@ -1674,6 +1894,9 @@
         showChrome();
       }
       if (act === "record") toggleRecord();
+      if (act === "convert") convertMedia();
+      if (act === "360") toggle360();
+      if (act === "livetx") setLiveTx();
       if (act === "ad") enableAudioDescription();
       if (act === "translate") translateCaptions();
       if (act === "extract") extractAudio();
@@ -1993,6 +2216,8 @@
       if (fxPanel) fxPanel.hidden = true;
       if (speedPanel) speedPanel.hidden = true;
       if (markPanel) markPanel.hidden = true;
+      var region = document.getElementById("region");
+      if (region) region.hidden = true;
       if (state.tv) {
         setTv(false);
         return;

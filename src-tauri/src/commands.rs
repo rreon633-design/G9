@@ -320,6 +320,13 @@ pub async fn remux_repair(path: String, dest: String) -> Result<crate::tools::To
 }
 
 #[tauri::command]
+pub async fn convert_media(path: String, dest: String) -> Result<crate::tools::ToolResult, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::tools::convert(&path, &dest))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn translate_text(
     text: String,
     from: Option<String>,
