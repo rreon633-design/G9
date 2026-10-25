@@ -1,0 +1,102 @@
+# Changelog
+
+All notable changes to G9. Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
+G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `v*` tag.
+
+## [0.2.0] — 2026-10-25
+
+The "webview can do more than you think" release. Playback is still WebView2 `<video>`;
+nothing here pretends to be mpv.
+
+### Added
+
+**Playback**
+- File playlist queue (View → Playlist); plays the next file when one ends
+- Chapters from `ffprobe` (if on PATH) with jump-to-chapter
+- Picture-in-picture, always-on-top
+- Sleep timer, pause-after-N-minutes
+- Keyboard frame step (`,` / `.`) and bookmarks (`M`)
+- Touch gestures: horizontal seek, vertical volume
+- Background audio while minimized
+
+**Picture**
+- Hover scrub preview and storyboard strip on the seek bar
+- 360° look-around for equirectangular video (WebGL, drag)
+- Export GIF (A–B range or ~2.4 s around now), save frame
+- Region screen capture and webcam recording (MediaRecorder → WebM)
+- Spectrum visualizer, scene poster (3×2 stills)
+
+**Subtitles**
+- TheSubDB and Podnapisi alongside OpenSubtitles; embedded track via `ffmpeg`
+- Subtitle browser (click a line to seek) and pause-after-each-line
+- Live translation of the current cue while playing
+
+**Library / live**
+- DLNA / UPnP MediaServer discover + browse
+- Podcast RSS subscribe and episode play
+- Live TV sheet, favourites, groups, search
+
+**Tools (ffmpeg / ffprobe on PATH)**
+- Convert / Save (MP4 / WebM / MP3), extract audio, remux / repair
+- Inspect (ffprobe JSON in Diagnostics), RTMP broadcast
+
+**Chrome**
+- Cinema chrome: Media · Settings · TV Mode · About G9 (About lives inside Settings)
+- Settings export / import (JSON)
+- JSON IPC on `127.0.0.1:18765`
+- Diagnostics with dropped-frame counter
+
+### Changed
+
+- Settings menu no longer scrolls; Playback was removed from the top bar
+- Mute moved to the transport; play/pause fills blue
+- Media info is a centred rectangle, not a vertical list
+- "Load demo clips" removed — G9 ships no sample channel pack
+- Version stamped in every package file, so installers are named `G9_0.2.0_*`
+
+### Docs
+
+- `FEATURE-LIST.md` now separates **shipped** from **requested but not implemented**
+- Added `docs/USER.md`, `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT.md`, `docs/SECURITY.md`, `CHANGELOG.md`
+
+### Not in this release
+
+Bundled Whisper / Argos models, GLSL/Anime4K, RTX HDR/SR, OpenCodec, DVB, disc menus,
+Chromecast/AirPlay **output**, cloud drives, watch sync, Plex/Jellyfin/Emby clients, skins,
+multi-window, independent pitch shift. See the gap list in `FEATURE-LIST.md`.
+
+## [0.1.2] — 2026-10-25
+
+### Added
+- Online subtitle search (OpenSubtitles: moviehash + title) with auto-apply of the best match
+- Media info dialog
+- Cinema chrome pass: menu bar, title overlay, circular transport, blue seek
+- Settings consolidation and TV Mode
+- About G9 dialog
+
+### Fixed
+- Installers are now named with the real version (`G9_0.1.2_*`, was `G9_0.1.0_*`)
+- Mute/unmute moved next to the transport; Settings scrollbar hidden
+
+## [0.1.1] — 2026-10-24
+
+### Added
+- First automated Windows release artifacts: NSIS setup, MSI, portable `G9.exe` zip
+
+### Fixed
+- Release workflow could not create a GitHub Release (`403`) until workflow permissions
+  were set to *Read and write*
+
+## [0.1.0] — 2026-10-24
+
+### Added
+- Tauri 2 shell, vanilla `ui/` (HTML/CSS/JS only)
+- `g9-core` (version, policy, DTOs), `g9-iptv` (M3U parser, injection strip),
+  `g9-store` (SQLite: sources, channels, history, settings)
+- Local files, URL / HLS, M3U / IPTV import, Live TV sheet
+- Diagnostics overlay, keyboard map
+
+[0.2.0]: https://github.com/rreon633-design/G9/releases/tag/v0.2.0
+[0.1.2]: https://github.com/rreon633-design/G9/releases/tag/v0.1.2
+[0.1.1]: https://github.com/rreon633-design/G9/releases/tag/v0.1.1
+[0.1.0]: https://github.com/rreon633-design/G9/releases/tag/v0.1.0

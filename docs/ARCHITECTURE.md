@@ -17,8 +17,10 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
 - **UI has no business logic** beyond presentation and playback.
 - **Media bytes** are loaded by the webview (`<video>`), not by reqwest.
 - **Playlist / logo / Xtream JSON** go through `fetch.rs` (rustls, size cap, no `file:` scheme).
-- **No frontend frameworks, no TypeScript, no bundler.** `ui/` is `frontendDist`.
-- Playback is **WebView2** on Windows (DXVA). G9 is not mpv/FFmpeg.
+- **No frontend frameworks, no TypeScript, no bundler.** `ui/` is `frontendDist` as-is.
+- Playback is **WebView2** on Windows (DXVA / D3D11). G9 is not mpv/FFmpeg, and does not
+  pretend to be: features that need `libplacebo`, `libdvdnav`, a cast stack or a cloud
+  account are documented as not implemented in `FEATURE-LIST.md` instead of stubbed.
 
 ## Crates
 
@@ -33,17 +35,48 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
 
 | Module | Role |
 |---|---|
-| `commands.rs` | Tauri command surface |
+| `commands.rs` | Tauri command surface (playlist import, subs, DLNA, ffmpeg, translate) |
+| `state.rs` | `AppState`: store handle, DB path, HTTP client |
 | `subs.rs` | Sidecar / TheSubDB / OpenSubtitles / Podnapisi / ffmpeg-embedded / Whisper CLI |
 | `dlna.rs` | SSDP MediaServer discover + ContentDirectory browse |
 | `ipc.rs` | JSON lines on `127.0.0.1:18765` |
 | `tools.rs` | ffmpeg convert/extract/remux/RTMP, ffprobe, MyMemory translate |
 | `fetch.rs` | HTTP(S) playlist / RSS fetch |
 
-## Playback
+## Playback path
 
-- MP4 / WebM / many others the OS decoder accepts, via `<video src>`
-- HLS: native where the webview supports it; else a small MSE MPEG-TS loader in `ui/app.js`
-- Captions: WebVTT overlay (ASS/SSA flattened to timed text)
+| Input | Path |
+|---|---|
+| MP4 / WebM / most OS-decodable files | `<video src>` / asset protocol |
+| HLS (`.m3u8`) | native webview where supported, else MSE MPEG-TS loader in `ui/app.js` |
+| IPTV (`.m3u`) | `g9-iptv` parse → `g9-store` → live sheet → `<video>` |
+| DLNA item | SSDP discover → SOAP `Browse` → resolved HTTP URL → `<video>` |
+| SMB / UNC | `Open path` → `file://` asset scope → `<video>` |
+| 360° equirectangular | WebGL texture on `<canvas id="view360">`, drag to look |
+| Subtitles | WebVTT `<track>` overlay (ASS/SSA flattened to timed text) |
+| Visualizer | Web Audio `AnalyserNode` → `<canvas id="viz">` |
 
-A later phase could add libmpv behind the same commands without changing the playlist store — that would be a different product for shaders, NVDEC, and disc menus.
+## Optional external binaries
+
+G9 never bundles FFmpeg or Whisper. When present on PATH it spawns them **hidden**
+(`CREATE_NO_WINDOW`) for:
+
+| Binary | Used by |
+|---|---|
+| `ffmpeg` | convert / extract / remux / RTMP / embedded subtitle extraction |
+| `ffprobe` | chapters, inspect (Diagnostics) |
+| `whisper` / `whisper-cli` | Generate captions (opt-in, never during normal subtitle search) |
+
+## CI / CD
+
+| Workflow | Runner | Purpose |
+|---|---|---|
+| `ci.yml` → `rust` | ubuntu-24.04 | fmt, clippy, tests for the three library crates |
+| `ci.yml` → `windows-app` | windows-latest | `cargo check -p g9` — the crate Ubuntu cannot build |
+| `ci.yml` → `frontend` | ubuntu-24.04 | vanilla-UI guard (no TS, no npm UI deps) |
+| `release.yml` | windows-latest | on `v*`: release tests, NSIS + MSI + portable zip, GitHub Release |
+
+Release artifacts come only from tags; `main` never publishes.
+
+A later phase could add libmpv behind the same commands without changing the playlist store —
+that would be a different product, and the only way to get shaders, NVDEC, and disc menus.

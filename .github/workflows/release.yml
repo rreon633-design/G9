@@ -50,7 +50,24 @@ jobs:
         run: cargo test -p g9-core -p g9-iptv -p g9-store --release
 
       - name: Build Windows installers
-        run: npx tauri build --target x86_64-pc-windows-msvc --bundles nsis,msi
+        shell: pwsh
+        run: |
+          npx tauri build --target x86_64-pc-windows-msvc --bundles nsis,msi 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Surface build errors as annotations
+        if: failure()
+        shell: pwsh
+        run: |
+          if (Test-Path build.log) {
+            $bad = Select-String -Path build.log -Pattern 'error(\[E\d+\])?:|Error:|failed to' | Select-Object -First 15
+            foreach ($m in $bad) {
+              $msg = ($m.Line.Trim() -replace '%','%25' -replace "`r",'' -replace "`n",'%0A')
+              if ($msg.Length -gt 900) { $msg = $msg.Substring(0,900) }
+              Write-Output "::error title=Windows build::$msg"
+            }
+            Get-Content build.log -Tail 60
+          }
 
       - name: Collect artifacts
         shell: pwsh

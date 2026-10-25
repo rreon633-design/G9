@@ -23,6 +23,38 @@ jobs:
       - name: Test
         run: cargo test -p g9-core -p g9-iptv -p g9-store
 
+  # The app crate needs WebKit on Linux, so Ubuntu cannot build it. Compile it
+  # on Windows for every push: a Windows-only compile error must never reach a
+  # release tag again.
+  windows-app:
+    name: Windows app compile
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: swatinem/rust-cache@v2
+      - name: cargo check (crate g9)
+        run: |
+          cargo check -p g9 --all-targets 2>&1 | Tee-Object -FilePath check.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Surface rustc errors as annotations
+        if: failure()
+        run: |
+          if (Test-Path check.log) {
+            $bad = Select-String -Path check.log -Pattern 'error(\[E\d+\])?:' | Select-Object -First 12
+            foreach ($m in $bad) {
+              $msg = ($m.Line.Trim() -replace '%','%25' -replace "`r",'' -replace "`n",'%0A')
+              if ($msg.Length -gt 900) { $msg = $msg.Substring(0,900) }
+              Write-Output "::error title=rustc::$msg"
+            }
+            Get-Content check.log -Tail 40
+          }
+
   frontend:
     name: Frontend static check
     runs-on: ubuntu-24.04
