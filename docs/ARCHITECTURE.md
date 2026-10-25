@@ -28,7 +28,7 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
 |---|---|
 | `g9-core` | Version, content policy, DTOs, errors, download format ladder |
 | `g9-iptv` | Streaming M3U parse, injection strip, dangerous URL filter, XMLTV now/next |
-| `g9-store` | SQLite WAL, sources, channels, history, settings |
+| `g9-store` | SQLite WAL, sources, channels (country/language/quality), history, settings |
 | `g9` (`src-tauri`) | Window, commands, subtitles, DLNA, IPC, optional ffmpeg |
 
 ## `src-tauri` modules
@@ -54,7 +54,7 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
 |---|---|
 | MP4 / WebM / most OS-decodable files | `<video src>` / asset protocol |
 | HLS (`.m3u8`) | native webview where supported, else MSE MPEG-TS loader in `ui/app.js` |
-| IPTV (`.m3u`) | `g9-iptv` parse → `g9-store` → live sheet (+ `epg.rs` now/next) → `<video>` |
+| IPTV (`.m3u`) | `g9-iptv` parse → `g9-store` → TV Mode grid or live sheet (+ `epg.rs` now/next) → `<video>` |
 | DLNA item | SSDP discover → SOAP `Browse` → resolved HTTP URL → `<video>` |
 | SMB / UNC | `Open path` → `file://` asset scope → `<video>` |
 | 360° equirectangular | WebGL texture on `<canvas id="view360">`, drag to look |

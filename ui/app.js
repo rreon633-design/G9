@@ -2108,6 +2108,8 @@
   function showGate() {
     var gate = document.getElementById("gate");
     if (!gate) return;
+    // While the channel wall is open the user is choosing, not watching.
+    if (tvVisible()) return;
     gate.hidden = false;
   }
   function hideGate() {
@@ -2144,6 +2146,7 @@
     app.classList.toggle("tv", state.tv);
     document.getElementById("btn-tv").classList.toggle("on", state.tv);
     document.getElementById("btn-tv").textContent = state.tv ? "Exit TV" : "TV Mode";
+    tvOpenButton();
     if (state.info) {
       var legal = document.getElementById("legal");
       if (legal) legal.textContent = state.info.content_policy;
@@ -2582,6 +2585,9 @@
 
   function tune(ch) {
     state.current = ch;
+    try {
+      localStorage.setItem("g9.tv.last", String(ch.id));
+    } catch (e) {}
     state.mediaKind = "live";
     state.mediaPath = ch.stream_url;
     showZap(ch);
@@ -2830,6 +2836,10 @@
         openSettings();
         return;
       }
+      if (target === "live" && state.tv) {
+        tvShow();
+        return;
+      }
       state.view = target;
       paint();
       renderSheet();
@@ -3049,9 +3059,19 @@
     var api = tauri();
     if (api && api.event && api.event.listen) {
       api.event.listen("ffmpeg-progress", function (ev) {
+        var pct = ev && ev.payload != null ? ev.payload : 0;
         var el = document.getElementById("ff-state");
         if (el && el.textContent.indexOf("Downloading") === 0) {
-          el.textContent = "Downloading FFmpeg… " + (ev && ev.payload != null ? ev.payload : 0) + "%";
+          el.textContent = "Downloading FFmpeg… " + pct + "%";
+        }
+        // A download that needs the engine shows the same percentage.
+        var dlEl = document.getElementById("dl-state");
+        if (dlEl && dlEl.textContent.indexOf("Setting up the media engine") === 0) {
+          dlEl.textContent = "Installing the media engine… " + pct + "%";
+        }
+        var startBtn = document.getElementById("dl-start");
+        if (startBtn && startBtn.textContent.indexOf("Preparing the media engine") === 0) {
+          startBtn.textContent = "Preparing the media engine… " + pct + "%";
         }
       });
     }
@@ -3142,9 +3162,7 @@
       document.exitFullscreen().catch(function () {});
     }
   }
-  document.getElementById("btn-tv").addEventListener("click", function () {
-    setTv(!state.tv);
-  });
+  document.getElementById("btn-tv").addEventListener("click", toggleTv);
   document.getElementById("btn-fav").addEventListener("click", function () {
     if (!state.current) {
       toast("Tune a live channel first");
@@ -3373,6 +3391,11 @@
       }
     }
     if (ev.key === "Escape") {
+      if (tvVisible()) {
+        ev.preventDefault();
+        tvHide();
+        return;
+      }
       importModal.hidden = true;
       aboutModal.hidden = true;
       infoModal.hidden = true;
@@ -3492,11 +3515,27 @@
     return Math.round(sec / 3600) + " h left";
   }
 
+  function prettyDlError(raw) {
+    var msg = String(raw || "")
+      .replace(/https?:\/\/\S+/g, " ")
+      .replace(/^ERROR:\s*/i, "")
+      .replace(/^\[[a-z0-9_.-]+\]\s*[^:]*:\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!msg) return "";
+    if (/requested format is not available/i.test(msg)) return "That video offers no downloadable format";
+    if (/sign in to confirm|not a bot|cookies/i.test(msg)) return "This site wants a sign-in for that video";
+    if (/video unavailable|private video|removed by the uploader/i.test(msg)) return "That video is not available";
+    if (/ffmpeg/i.test(msg)) return "The media engine could not be prepared";
+    if (/unsupported url|no video formats found/i.test(msg)) return "No video found on that page";
+    return msg.slice(0, 140);
+  }
+
   function dlError(e) {
-    var msg = String((e && e.message) || e || "").replace(/https?:\/\/\S+/g, " ").trim();
+    var msg = String((e && e.message) || e || "").trim();
     if (!msg) return "Could not read that link";
     if (/not installed|not found|no downloader/i.test(msg)) return "Downloader is not installed";
-    return shortError(msg, "Could not read that link").slice(0, 120);
+    return prettyDlError(msg) || shortError(msg, "Could not read that link").slice(0, 120);
   }
 
   function dlTool() {
@@ -3545,7 +3584,8 @@
   }
 
   function dlDetail(job) {
-    if (job.status === "failed") return { text: shortError(job.error || "", "Could not finish this one"), err: true };
+    if (job.status === "failed")
+      return { text: prettyDlError(job.error) || "Could not finish this one", err: true };
     if (job.status === "done") {
       var size = humanBytes(job.total || job.downloaded);
       return { text: size ? size + " saved" : "Saved", err: false };
@@ -3597,6 +3637,9 @@
       ">" +
       (job.status === "paused" ? "Resume" : "Pause") +
       "</button>" +
+      '<button type="button" data-dl-retry' +
+      (job.status === "failed" || job.status === "cancelled" ? "" : " hidden") +
+      ">Retry</button>" +
       '<button type="button" data-dl-folder' +
       (job.path ? "" : " hidden") +
       ">Folder</button>" +
@@ -3616,6 +3659,8 @@
         if (btn) btn.addEventListener("click", function () { dlPlay(id); });
         btn = row.querySelector("[data-dl-toggle]");
         if (btn) btn.addEventListener("click", function () { dlToggle(id); });
+        btn = row.querySelector("[data-dl-retry]");
+        if (btn) btn.addEventListener("click", function () { dlRetry(id); });
         btn = row.querySelector("[data-dl-folder]");
         if (btn) btn.addEventListener("click", function () { dlReveal(id); });
         btn = row.querySelector("[data-dl-del]");
@@ -3656,6 +3701,17 @@
   function dlToggle(id) {
     invoke("dl_toggle", { id: id })
       .then(function () {
+        return downloadsRefresh();
+      })
+      .catch(function (e) {
+        toast(dlError(e));
+      });
+  }
+
+  function dlRetry(id) {
+    invoke("dl_retry", { id: id })
+      .then(function () {
+        toast("Trying again");
         return downloadsRefresh();
       })
       .catch(function (e) {
@@ -3755,7 +3811,10 @@
       "</div>" +
       '<div class="dl-actions"><button type="button" class="primary" id="dl-start">Download ' +
       escapeHtml(dlPick ? dlPick.label : "") +
-      "</button></div>";
+      "</button></div>" +
+      (state.dlEngineNeeded
+        ? '<p class="dl-note dl-engine">First download also prepares the media engine (~100 MB, once).</p>'
+        : "");
     box.querySelectorAll("[data-h]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var h = Number(btn.getAttribute("data-h"));
@@ -3800,7 +3859,16 @@
           });
         return;
       }
-      return invoke("dl_probe", { url: url })
+      return invoke("ffmpeg_status")
+        .then(function (ff) {
+          state.dlEngineNeeded = !(ff && ff.available);
+        })
+        .catch(function () {
+          state.dlEngineNeeded = false;
+        })
+        .then(function () {
+          return invoke("dl_probe", { url: url });
+        })
         .then(function (info) {
           state.dlUrl = url;
           state.dlInfo = info;
@@ -3818,7 +3886,7 @@
     var btn = document.getElementById("dl-start");
     if (btn) {
       btn.disabled = true;
-      btn.textContent = "Starting…";
+      btn.textContent = state.dlEngineNeeded ? "Preparing the media engine…" : "Starting…";
     }
     invoke("dl_start", { url: url, height: Number(dlPick.height) || 0, title: (state.dlInfo || {}).title || "" })
       .then(function () {
@@ -4039,8 +4107,19 @@
         if (!p) return;
         if (typeof p === "string") {
           var el = document.getElementById("dl-state");
-          if (el && p.indexOf("setup:") === 0 && el.textContent.indexOf("Installing") === 0) {
-            el.textContent = "Installing downloader… " + humanBytes(Number(p.split(":")[1]) || 0);
+          if (p === "start:engine") {
+            if (el) el.textContent = "Setting up the media engine…";
+            var startBtn = document.getElementById("dl-start");
+            if (startBtn) startBtn.textContent = "Preparing the media engine…";
+          } else if (p === "setup:" || p.indexOf("setup:") === 0) {
+            var bytes = Number(p.split(":")[1]) || 0;
+            if (el) {
+              if (el.textContent.indexOf("Installing the media engine") === 0) {
+                el.textContent = "Installing the media engine… " + humanBytes(bytes);
+              } else {
+                el.textContent = "Installing downloader… " + humanBytes(bytes);
+              }
+            }
           }
           return;
         }
@@ -4075,6 +4154,445 @@
     downloadsRefresh();
   })();
 
+
+  /* ---------- TV mode: the channel browser ---------- */
+  var tvFilter = { country: "", language: "", quality: "", sort: "number", q: "", fav: false };
+  // Playlists carry ISO-ish codes; the wall says what they mean.
+  var TV_COUNTRY = {
+    UK: "United Kingdom", GB: "United Kingdom", US: "United States", CA: "Canada",
+    IN: "India", PK: "Pakistan", BD: "Bangladesh", LK: "Sri Lanka", NP: "Nepal",
+    DE: "Germany", AT: "Austria", CH: "Switzerland", FR: "France", BE: "Belgium",
+    NL: "Netherlands", ES: "Spain", PT: "Portugal", IT: "Italy", GR: "Greece",
+    IE: "Ireland", SE: "Sweden", NO: "Norway", DK: "Denmark", FI: "Finland",
+    PL: "Poland", CZ: "Czechia", SK: "Slovakia", HU: "Hungary", RO: "Romania",
+    BG: "Bulgaria", HR: "Croatia", RS: "Serbia", SI: "Slovenia", AL: "Albania",
+    UA: "Ukraine", RU: "Russia", TR: "Turkey", IL: "Israel", IR: "Iran", IQ: "Iraq",
+    AE: "United Arab Emirates", SA: "Saudi Arabia", QA: "Qatar", EG: "Egypt",
+    MA: "Morocco", DZ: "Algeria", TN: "Tunisia", ZA: "South Africa", NG: "Nigeria",
+    KE: "Kenya", AU: "Australia", NZ: "New Zealand", JP: "Japan", CN: "China",
+    KR: "South Korea", HK: "Hong Kong", TW: "Taiwan", SG: "Singapore", MY: "Malaysia",
+    ID: "Indonesia", TH: "Thailand", VN: "Vietnam", PH: "Philippines",
+    MX: "Mexico", BR: "Brazil", AR: "Argentina", CL: "Chile", CO: "Colombia",
+    PE: "Peru", VE: "Venezuela", LT: "Lithuania", LV: "Latvia", EE: "Estonia",
+  };
+
+  function tvCountry(code) {
+    if (!code) return "";
+    return TV_COUNTRY[String(code).toUpperCase()] || code;
+  }
+  var tvList = [];
+  var tvFacets = null;
+  var tvTimer = 0;
+
+  function tvEl(id) {
+    return document.getElementById(id);
+  }
+
+  function tvInitials(name) {
+    var words = String(name || "?")
+      .replace(/[^\p{L}\p{N} ]+/gu, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    var out = (words[0] || "?").charAt(0);
+    if (words[1]) out += words[1].charAt(0);
+    return out.toUpperCase();
+  }
+
+  function tvCardHtml(c) {
+    var playing = state.current && state.current.id === c.id ? " playing" : "";
+    var country = tvCountry(c.country);
+    var group = c.group_name || "";
+    // Plenty of playlists use the country as the group; say it once.
+    if (group && country && group.toLowerCase() === country.toLowerCase()) group = "";
+    if (group && c.country && group.toLowerCase() === String(c.country).toLowerCase()) group = "";
+    var bits = [];
+    [group, country, c.language].forEach(function (bit) {
+      if (bit && bits.indexOf(bit) < 0) bits.push(bit);
+    });
+    var logo = c.logo_url
+      ? '<img src="' + escapeHtml(c.logo_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer" />'
+      : '<span class="initials">' + escapeHtml(tvInitials(c.name)) + "</span>";
+    var badge = c.quality
+      ? '<span class="tv-badge">' + escapeHtml(c.quality) + "</span>"
+      : '<span class="tv-badge live">LIVE</span>';
+    return (
+      '<div class="tv-card' +
+      playing +
+      '" data-tv-ch="' +
+      c.id +
+      '" role="button" tabindex="0" aria-label="' +
+      escapeHtml(c.name) +
+      '">' +
+      '<div class="tv-thumb">' +
+      logo +
+      badge +
+      '<button type="button" class="tv-fav' +
+      (c.is_favourite ? " on" : "") +
+      '" data-tv-fav="' +
+      c.id +
+      '" title="Favourite">★</button>' +
+      "</div>" +
+      '<div class="tv-text"><b>' +
+      escapeHtml(c.name) +
+      "</b><span>" +
+      escapeHtml(bits.join(" · ") || "Live") +
+      '</span><span class="tv-now" data-tv-now="' +
+      c.id +
+      '"></span></div></div>'
+    );
+  }
+
+  function tvRender() {
+    var grid = tvEl("tv-grid");
+    var empty = tvEl("tv-empty");
+    if (!grid) return;
+    var count = tvEl("tv-count");
+    if (count) count.textContent = tvList.length ? tvList.length + " channels" : "";
+    if (!tvList.length) {
+      grid.innerHTML = "";
+      if (empty) {
+        empty.hidden = false;
+        empty.innerHTML = state.sources && state.sources.length
+          ? "No channel matches these filters.<br />Clear one of the chips to widen the search."
+          : "No playlists yet.<br />Media → Add playlist / IPTV, or an Xtream Codes portal.";
+      }
+      return;
+    }
+    if (empty) empty.hidden = true;
+    grid.innerHTML = tvList.map(tvCardHtml).join("");
+
+    grid.querySelectorAll("img").forEach(function (img) {
+      img.addEventListener("error", function () {
+        var card = img.closest(".tv-card");
+        var name = card ? card.getAttribute("aria-label") : "";
+        var span = document.createElement("span");
+        span.className = "initials";
+        span.textContent = tvInitials(name);
+        img.replaceWith(span);
+      });
+    });
+    grid.querySelectorAll("[data-tv-ch]").forEach(function (card) {
+      var id = Number(card.getAttribute("data-tv-ch"));
+      card.addEventListener("click", function (ev) {
+        if (ev.target.closest("[data-tv-fav]")) return;
+        tvTune(id);
+      });
+      card.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          tvTune(id);
+        }
+      });
+    });
+    grid.querySelectorAll("[data-tv-fav]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        invoke("toggle_favourite", { id: Number(btn.getAttribute("data-tv-fav")) })
+          .then(function () {
+            return tvLoad();
+          })
+          .catch(function (e) {
+            toast(shortError(e, "Could not change that"));
+          });
+      });
+    });
+    tvPaintGuide();
+  }
+
+  function tvPaintGuide() {
+    var cards = tvEl("tv-grid") ? tvEl("tv-grid").querySelectorAll("[data-tv-now]") : [];
+    if (!cards.length) return;
+    var keys = [];
+    var keyOf = {};
+    cards.forEach(function (slot) {
+      var id = Number(slot.getAttribute("data-tv-now"));
+      var ch = tvList.find(function (c) {
+        return c.id === id;
+      });
+      if (!ch) return;
+      var key = ch.tvg_id || ch.name;
+      if (!key) return;
+      keyOf[id] = key;
+      if (keys.indexOf(key) < 0) keys.push(key);
+    });
+    if (!keys.length) return;
+    invoke("epg_now", { ids: keys })
+      .then(function (list) {
+        if (!Array.isArray(list)) return;
+        var byKey = {};
+        list.forEach(function (g) {
+          if (g && g.now_title) byKey[g.channel] = g;
+        });
+        cards.forEach(function (slot) {
+          var id = Number(slot.getAttribute("data-tv-now"));
+          var g = byKey[keyOf[id]];
+          if (!g) return;
+          slot.textContent = "Now · " + g.now_title;
+          slot.classList.add("tv-now-now");
+        });
+      })
+      .catch(function () {});
+  }
+
+  function tvChips() {
+    var row = tvEl("tv-chips");
+    if (!row) return;
+    var f = tvFacets || { countries: [], languages: [], qualities: [] };
+    var html = "";
+    html +=
+      '<button type="button" class="tv-chip' + (tvFilter.fav ? " on" : "") + '" data-tv-f="fav">Favourites</button>';
+    function chip(kind, label, values) {
+      if (!values || values.length < 2) return "";
+      var active = tvFilter[kind];
+      return (
+        '<button type="button" class="tv-chip' +
+        (active ? " on" : "") +
+        '" data-tv-open="' +
+        kind +
+        '">' +
+        escapeHtml(active ? (kind === "country" ? tvCountry(active) : active) : label) +
+        ' <span class="caret">▾</span></button>'
+      );
+    }
+    html += chip("country", "Country", f.countries);
+    html += chip("language", "Language", f.languages);
+    html += chip("quality", "Quality", f.qualities);
+    var sorts = { number: "Channel order", name: "Name", country: "Country", quality: "Quality", group: "Group" };
+    html +=
+      '<button type="button" class="tv-chip sep" data-tv-open="sort">Sort: ' +
+      escapeHtml(sorts[tvFilter.sort] || "Channel order") +
+      ' <span class="caret">▾</span></button>';
+    var anyFilter = tvFilter.country || tvFilter.language || tvFilter.quality || tvFilter.fav;
+    if (anyFilter)
+      html += '<button type="button" class="tv-chip" data-tv-f="clear">Clear filters</button>';
+    row.innerHTML = html;
+
+    row.querySelectorAll("[data-tv-f]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var what = btn.getAttribute("data-tv-f");
+        if (what === "fav") {
+          tvFilter.fav = !tvFilter.fav;
+        } else {
+          tvFilter = { country: "", language: "", quality: "", sort: tvFilter.sort, q: tvFilter.q, fav: false };
+        }
+        tvLoad();
+      });
+    });
+    row.querySelectorAll("[data-tv-open]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        tvOpenPop(btn.getAttribute("data-tv-open"), btn);
+      });
+    });
+  }
+
+  function tvOpenPop(kind, anchor) {
+    var pop = tvEl("tv-pop");
+    var list = tvEl("tv-pop-list");
+    var head = tvEl("tv-pop-head");
+    if (!pop || !list) return;
+    var f = tvFacets || { countries: [], languages: [], qualities: [] };
+    var items;
+    if (kind === "sort") {
+      head.textContent = "Sort by";
+      items = [
+        { value: "number", label: "Channel order" },
+        { value: "name", label: "Name" },
+        { value: "country", label: "Country" },
+        { value: "quality", label: "Quality (best first)" },
+        { value: "group", label: "Group" },
+      ];
+    } else {
+      head.textContent = kind.charAt(0).toUpperCase() + kind.slice(1);
+      items = [{ value: "", label: "All" }].concat(
+        (kind === "country" ? f.countries : kind === "language" ? f.languages : f.qualities).map(function (x) {
+          return {
+            value: x.value,
+            label: kind === "country" ? tvCountry(x.value) : x.value,
+            count: x.count,
+          };
+        })
+      );
+    }
+    var current = kind === "sort" ? tvFilter.sort : tvFilter[kind];
+    list.innerHTML = items
+      .map(function (it) {
+        return (
+          '<button type="button" class="' +
+          (it.value === current ? "on" : "") +
+          '" data-tv-pick="' +
+          escapeHtml(it.value) +
+          '">' +
+          (it.value === current ? '<span class="tick">✓</span>' : "") +
+          escapeHtml(it.label) +
+          (it.count ? "<em>" + it.count + "</em>" : "") +
+          "</button>"
+        );
+      })
+      .join("");
+    list.querySelectorAll("[data-tv-pick]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var value = btn.getAttribute("data-tv-pick");
+        if (kind === "sort") tvFilter.sort = value || "number";
+        else tvFilter[kind] = value;
+        tvClosePop();
+        tvLoad();
+      });
+    });
+    var rect = anchor.getBoundingClientRect();
+    pop.hidden = false;
+    pop.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - 340)) + "px";
+    pop.style.top = rect.bottom + 8 + "px";
+  }
+
+  function tvClosePop() {
+    var pop = tvEl("tv-pop");
+    if (pop) pop.hidden = true;
+  }
+
+  function tvLoad() {
+    tvChips();
+    if (state.sources && !state.sources.length) {
+      tvList = [];
+      tvRender();
+      return Promise.resolve([]);
+    }
+    return invoke("list_channels", {
+      group: null,
+      query: tvFilter.q || null,
+      favouritesOnly: !!tvFilter.fav,
+      country: tvFilter.country || null,
+      language: tvFilter.language || null,
+      quality: tvFilter.quality || null,
+      sort: tvFilter.sort,
+      limit: 2000,
+      offset: 0,
+    })
+      .then(function (list) {
+        tvList = Array.isArray(list) ? list : [];
+        state.channels = tvList.length ? tvList : state.channels;
+        tvRender();
+        return tvList;
+      })
+      .catch(function () {
+        tvList = [];
+        tvRender();
+        return [];
+      });
+  }
+
+  function tvFacetsLoad() {
+    return invoke("channel_facets")
+      .then(function (f) {
+        tvFacets = f || null;
+        tvChips();
+        return f;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function tvTune(id) {
+    var ch = tvList.find(function (c) {
+      return c.id === id;
+    });
+    if (!ch) return;
+    tvHide();
+    tune(ch);
+  }
+
+  function tvAutoTune() {
+    if (state.current || !tvList.length) return;
+    var last = 0;
+    try {
+      last = Number(localStorage.getItem("g9.tv.last") || 0);
+    } catch (e) {
+      last = 0;
+    }
+    var pick =
+      tvList.find(function (c) {
+        return c.id === last;
+      }) || tvList[0];
+    if (!pick) return;
+    state.current = pick;
+    state.mediaKind = "live";
+    state.mediaPath = pick.stream_url;
+    playUrl(pick.name, pick.stream_url);
+    invoke("add_history", { title: pick.name, url: pick.stream_url, kind: "live", position: 0, duration: 0 }).catch(function () {});
+    if (tvVisible()) tvRender();
+    toast("Tuned " + pick.name);
+  }
+
+  function tvShow() {
+    var el = tvEl("tv");
+    if (!el) return;
+    el.hidden = false;
+    hideGate();
+    tvOpenButton();
+    showChrome();
+    tvFacetsLoad();
+    tvLoad().then(function () {
+      tvAutoTune();
+    });
+  }
+
+  function tvHide() {
+    var el = tvEl("tv");
+    if (el) el.hidden = true;
+    tvClosePop();
+    tvOpenButton();
+  }
+
+  function tvVisible() {
+    var el = tvEl("tv");
+    return !!(el && !el.hidden);
+  }
+
+  function enterTv() {
+    // The browser replaces the windowed channel sheet.
+    state.view = "watch";
+    setTv(true);
+    paint();
+    tvShow();
+  }
+
+  function exitTv() {
+    tvHide();
+    setTv(false);
+  }
+
+  function toggleTv() {
+    if (state.tv) exitTv();
+    else enterTv();
+  }
+
+  function tvOpenButton() {
+    var btn = tvEl("tv-open");
+    if (btn) btn.hidden = !state.tv || tvVisible();
+  }
+
+  (function tvWire() {
+    var close = tvEl("tv-close");
+    if (close) close.addEventListener("click", tvHide);
+    var open = tvEl("tv-open");
+    if (open) open.addEventListener("click", tvShow);
+    var q = tvEl("tv-q");
+    if (q)
+      q.addEventListener("input", function () {
+        tvFilter.q = String(q.value || "").trim();
+        window.clearTimeout(tvTimer);
+        tvTimer = window.setTimeout(tvLoad, 220);
+      });
+    document.addEventListener("click", function (ev) {
+      var pop = tvEl("tv-pop");
+      if (!pop || pop.hidden) return;
+      if (!ev.target.closest("#tv-pop") && !ev.target.closest("[data-tv-open]")) tvClosePop();
+    });
+  })();
+
   initPicsDir();
   (function openStartupFile() {
     invoke("startup_file")
@@ -4087,5 +4605,10 @@
       })
       .catch(function () {});
   })();
-  refresh();
+  refresh()
+    .then(function () {
+      // Left in TV mode last time: come back to a playing channel.
+      if (state.tv) tvShow();
+    })
+    .catch(function () {});
 })();

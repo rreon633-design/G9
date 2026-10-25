@@ -58,5 +58,30 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         "INSERT OR IGNORE INTO schema_migrations (version) VALUES (1)",
         [],
     )?;
+
+    // v2: country / language / quality, so TV mode can filter and sort.
+    let have: Vec<String> = conn
+        .prepare("PRAGMA table_info(channels)")?
+        .query_map([], |r| r.get::<_, String>(1))?
+        .flatten()
+        .collect();
+    for (name, ddl) in [
+        ("country", "ALTER TABLE channels ADD COLUMN country TEXT"),
+        ("language", "ALTER TABLE channels ADD COLUMN language TEXT"),
+        ("quality", "ALTER TABLE channels ADD COLUMN quality TEXT"),
+    ] {
+        if !have.iter().any(|c| c == name) {
+            conn.execute(ddl, [])?;
+        }
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO schema_migrations (version) VALUES (2)",
+        [],
+    )?;
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_channels_country ON channels(country);
+         CREATE INDEX IF NOT EXISTS idx_channels_language ON channels(language);
+         CREATE INDEX IF NOT EXISTS idx_channels_quality ON channels(quality);",
+    )?;
     Ok(())
 }

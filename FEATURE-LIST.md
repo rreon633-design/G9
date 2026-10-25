@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.5.0** · source: `main`  
+Last updated: 2026-10-25 · release **v0.6.0** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -14,6 +14,7 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - Paste a link from the welcome screen — YouTube, Instagram, Facebook and any site `yt-dlp` knows
 - Quality and size ladder from the page itself (4K → 360p, plus audio-only), with estimated sizes
 - Background jobs: progress, speed, ETA, Windows notification on completion
+- FFmpeg engine installed on first use (merging is mandatory for modern sites); retry a failed job
 - Pause / resume, resume across restarts, play, reveal in Explorer, delete (with or without the file)
 - Managed `yt-dlp` install (app data), `PATH` copy honoured, managed FFmpeg used for merging
 
@@ -21,6 +22,10 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - Local files (Open file, Open path / SMB UNC)
 - Direct HTTP(S) URL / stream
 - IPTV: user-supplied M3U / M3U8 playlists
+- **TV Mode channel browser** (YouTube-shaped): logo grid, search, Country / Language / Quality
+  chips with counts, sort by order / name / country / quality / group, now/next per card
+- TV Mode tunes the last watched channel on entry and keeps a **Channels** pill while watching
+- Channel metadata: `tvg-country`, `tvg-language`, `4K / FHD / HD / SD`, stored and indexed in SQLite
 - IPTV guide: XMLTV now/next per channel, `url-tvg` discovery or a pasted address, gzip, kept on disk
 - Xtream Codes portal import (server, user, password)
 - HLS: native WebView or a small MSE fallback

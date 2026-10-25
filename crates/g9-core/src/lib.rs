@@ -39,6 +39,12 @@ pub struct ParsedChannel {
     pub tvg_id: Option<String>,
     pub tvg_name: Option<String>,
     pub tvg_logo: Option<String>,
+    /// `tvg-country`, or the region suffix of the tvg-id (`bbc1.uk` -> `UK`).
+    pub country: Option<String>,
+    /// `tvg-language`.
+    pub language: Option<String>,
+    /// `4K` / `FHD` / `HD` / `SD`, read from the channel name.
+    pub quality: Option<String>,
     pub duration: Option<i64>,
     pub stream_type: StreamType,
 }

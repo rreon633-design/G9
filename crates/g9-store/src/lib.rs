@@ -27,6 +27,34 @@ pub struct SourceRow {
     pub channel_count: i64,
 }
 
+/// Filters for [`Store::list_channels`]; every field is optional.
+#[derive(Debug, Clone, Default)]
+pub struct ChannelQuery<'a> {
+    pub group: Option<&'a str>,
+    pub query: Option<&'a str>,
+    pub favourites_only: bool,
+    pub country: Option<&'a str>,
+    pub language: Option<&'a str>,
+    pub quality: Option<&'a str>,
+    /// `number` (default), `name`, `country`, `quality`, `group`.
+    pub sort: &'a str,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Facet {
+    pub value: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Facets {
+    pub countries: Vec<Facet>,
+    pub languages: Vec<Facet>,
+    pub qualities: Vec<Facet>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelRow {
     pub id: i64,
@@ -37,6 +65,9 @@ pub struct ChannelRow {
     pub logo_url: Option<String>,
     pub stream_url: String,
     pub tvg_id: Option<String>,
+    pub country: Option<String>,
+    pub language: Option<String>,
+    pub quality: Option<String>,
     pub is_favourite: bool,
     pub is_hidden: bool,
 }
@@ -171,81 +202,119 @@ impl Store {
         Ok(rows.flatten().collect())
     }
 
-    pub fn list_channels(
-        &self,
-        group: Option<&str>,
-        query: Option<&str>,
-        favourites_only: bool,
-        limit: i64,
-        offset: i64,
-    ) -> Result<Vec<ChannelRow>> {
-        let limit = limit.clamp(1, 500);
-        let offset = offset.max(0);
+    /// Everything TV mode can ask the channel table for.
+    pub fn list_channels(&self, q: &ChannelQuery<'_>) -> Result<Vec<ChannelRow>> {
+        let limit = q.limit.clamp(1, 5000);
+        let offset = q.offset.max(0);
         let mut sql = String::from(
-            "SELECT id, source_id, number, name, group_name, logo_url, stream_url, tvg_id, is_favourite, is_hidden
+            "SELECT id, source_id, number, name, group_name, logo_url, stream_url, tvg_id,
+                    country, language, quality, is_favourite, is_hidden
              FROM channels WHERE is_hidden = 0",
         );
-        if favourites_only {
+        let mut args: Vec<rusqlite::types::Value> = Vec::new();
+        if q.favourites_only {
             sql.push_str(" AND is_favourite = 1");
         }
-        if group.is_some() {
-            sql.push_str(" AND COALESCE(group_name, 'Ungrouped') = ?");
+        for (col, value) in [
+            ("COALESCE(group_name, 'Ungrouped')", q.group),
+            ("COALESCE(country, '')", q.country),
+            ("COALESCE(language, '')", q.language),
+            ("COALESCE(quality, '')", q.quality),
+        ] {
+            if let Some(v) = value {
+                sql.push_str(&format!(" AND {col} = ?"));
+                args.push(v.to_string().into());
+            }
         }
-        if query.is_some() {
+        if let Some(query) = q.query {
             sql.push_str(
-                " AND (name LIKE ? OR IFNULL(group_name,'') LIKE ? OR IFNULL(tvg_id,'') LIKE ?)",
+                " AND (name LIKE ? OR IFNULL(group_name,'') LIKE ? OR IFNULL(tvg_id,'') LIKE ?
+                   OR IFNULL(country,'') LIKE ? OR IFNULL(language,'') LIKE ?)",
             );
+            let like = format!("%{}%", query.replace(['%', '_'], ""));
+            for _ in 0..5 {
+                args.push(like.clone().into());
+            }
         }
-        sql.push_str(" ORDER BY number, name LIMIT ? OFFSET ?");
+        // Sorting: quality high-to-low, then the number the playlist gave.
+        let order = match q.sort {
+            "name" => "name COLLATE NOCASE",
+            "country" => "COALESCE(country,'') , name COLLATE NOCASE",
+            "quality" => {
+                "CASE COALESCE(quality,'') WHEN '4K' THEN 0 WHEN 'FHD' THEN 1 WHEN 'HD' THEN 2 \
+                 WHEN 'SD' THEN 3 ELSE 4 END, name COLLATE NOCASE"
+            }
+            "group" => "COALESCE(group_name,''), number",
+            _ => "number, name COLLATE NOCASE",
+        };
+        sql.push_str(&format!(" ORDER BY {order} LIMIT ? OFFSET ?"));
+        args.push(limit.into());
+        args.push(offset.into());
 
         let mut stmt = self.conn.prepare(&sql)?;
-        let map_row = |row: &rusqlite::Row| -> rusqlite::Result<ChannelRow> {
-            Ok(ChannelRow {
-                id: row.get(0)?,
-                source_id: row.get(1)?,
-                number: row.get(2)?,
-                name: row.get(3)?,
-                group_name: row.get(4)?,
-                logo_url: row.get(5)?,
-                stream_url: row.get(6)?,
-                tvg_id: row.get(7)?,
-                is_favourite: row.get::<_, i64>(8)? != 0,
-                is_hidden: row.get::<_, i64>(9)? != 0,
-            })
-        };
-
-        let like = query.map(|q| format!("%{}%", q.replace(['%', '_'], "")));
-
-        let rows = match (group, like) {
-            (Some(g), Some(l)) => {
-                let l2 = l.clone();
-                let l3 = l.clone();
-                stmt.query_map(params![g, l, l2, l3, limit, offset], map_row)?
-                    .flatten()
-                    .collect()
-            }
-            (Some(g), None) => stmt
-                .query_map(params![g, limit, offset], map_row)?
-                .flatten()
-                .collect(),
-            (None, Some(l)) => {
-                let l2 = l.clone();
-                let l3 = l.clone();
-                stmt.query_map(params![l, l2, l3, limit, offset], map_row)?
-                    .flatten()
-                    .collect()
-            }
-            (None, None) => stmt
-                .query_map(params![limit, offset], map_row)?
-                .flatten()
-                .collect(),
-        };
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(args), |row| {
+                Ok(ChannelRow {
+                    id: row.get(0)?,
+                    source_id: row.get(1)?,
+                    number: row.get(2)?,
+                    name: row.get(3)?,
+                    group_name: row.get(4)?,
+                    logo_url: row.get(5)?,
+                    stream_url: row.get(6)?,
+                    tvg_id: row.get(7)?,
+                    country: row.get(8)?,
+                    language: row.get(9)?,
+                    quality: row.get(10)?,
+                    is_favourite: row.get::<_, i64>(11)? != 0,
+                    is_hidden: row.get::<_, i64>(12)? != 0,
+                })
+            })?
+            .flatten()
+            .collect();
         Ok(rows)
+    }
+
+    /// Distinct values (with counts) that the TV filter chips offer.
+    pub fn channel_facets(&self) -> Result<Facets> {
+        let mut facets = Facets::default();
+        for (sql, bucket) in [
+            (
+                "SELECT COALESCE(country,''), COUNT(*) FROM channels WHERE is_hidden = 0
+                 AND IFNULL(country,'') <> '' GROUP BY 1 ORDER BY 2 DESC, 1",
+                &mut facets.countries,
+            ),
+            (
+                "SELECT COALESCE(language,''), COUNT(*) FROM channels WHERE is_hidden = 0
+                 AND IFNULL(language,'') <> '' GROUP BY 1 ORDER BY 2 DESC, 1",
+                &mut facets.languages,
+            ),
+            (
+                "SELECT COALESCE(quality,''), COUNT(*) FROM channels WHERE is_hidden = 0
+                 AND IFNULL(quality,'') <> '' GROUP BY 1
+                 ORDER BY CASE quality WHEN '4K' THEN 0 WHEN 'FHD' THEN 1 WHEN 'HD' THEN 2
+                 WHEN 'SD' THEN 3 ELSE 4 END",
+                &mut facets.qualities,
+            ),
+        ] {
+            let mut stmt = self.conn.prepare(sql)?;
+            *bucket = stmt
+                .query_map([], |r| {
+                    Ok(Facet {
+                        value: r.get(0)?,
+                        count: r.get::<_, i64>(1)?,
+                    })
+                })?
+                .flatten()
+                .collect();
+        }
+        Ok(facets)
     }
 
     pub fn get_channel(&self, id: i64) -> Result<Option<ChannelRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, source_id, number, name, group_name, logo_url, stream_url, tvg_id, is_favourite, is_hidden
+            "SELECT id, source_id, number, name, group_name, logo_url, stream_url, tvg_id,
+                    country, language, quality, is_favourite, is_hidden
              FROM channels WHERE id = ?1",
         )?;
         let row = stmt
@@ -259,8 +328,11 @@ impl Store {
                     logo_url: row.get(5)?,
                     stream_url: row.get(6)?,
                     tvg_id: row.get(7)?,
-                    is_favourite: row.get::<_, i64>(8)? != 0,
-                    is_hidden: row.get::<_, i64>(9)? != 0,
+                    country: row.get(8)?,
+                    language: row.get(9)?,
+                    quality: row.get(10)?,
+                    is_favourite: row.get::<_, i64>(11)? != 0,
+                    is_hidden: row.get::<_, i64>(12)? != 0,
                 })
             })
             .optional()?;
@@ -412,8 +484,8 @@ fn insert_channels(
     channels: &[ParsedChannel],
 ) -> Result<()> {
     let mut stmt = tx.prepare(
-        "INSERT INTO channels (source_id, number, name, group_name, logo_url, stream_url, tvg_id, tvg_name)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO channels (source_id, number, name, group_name, logo_url, stream_url, tvg_id, tvg_name, country, language, quality)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
     )?;
     for (i, ch) in channels.iter().enumerate() {
         stmt.execute(params![
@@ -425,6 +497,9 @@ fn insert_channels(
             ch.url,
             ch.tvg_id,
             ch.tvg_name,
+            ch.country,
+            ch.language,
+            ch.quality,
         ])?;
     }
     Ok(())
@@ -445,6 +520,9 @@ mod tests {
                 tvg_id: Some("one".into()),
                 tvg_name: None,
                 tvg_logo: None,
+                country: Some("UK".into()),
+                language: Some("English".into()),
+                quality: Some("HD".into()),
                 duration: None,
                 stream_type: StreamType::Live,
             },
@@ -455,6 +533,9 @@ mod tests {
                 tvg_id: None,
                 tvg_name: None,
                 tvg_logo: None,
+                country: Some("US".into()),
+                language: None,
+                quality: Some("4K".into()),
                 duration: None,
                 stream_type: StreamType::Live,
             },
@@ -476,13 +557,48 @@ mod tests {
         let groups = store.list_groups().unwrap();
         assert_eq!(groups.len(), 2);
         let found = store
-            .list_channels(None, Some("two"), false, 50, 0)
+            .list_channels(&ChannelQuery {
+                query: Some("two"),
+                limit: 50,
+                ..ChannelQuery::default()
+            })
             .unwrap();
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].name, "Two");
         let fav = store.toggle_favourite(found[0].id).unwrap();
         assert!(fav);
-        let favs = store.list_channels(None, None, true, 50, 0).unwrap();
+        let favs = store
+            .list_channels(&ChannelQuery {
+                favourites_only: true,
+                limit: 50,
+                ..ChannelQuery::default()
+            })
+            .unwrap();
         assert_eq!(favs.len(), 1);
+
+        // country / quality filters and the facet counts behind the TV chips
+        let uk = store
+            .list_channels(&ChannelQuery {
+                country: Some("UK"),
+                limit: 50,
+                ..ChannelQuery::default()
+            })
+            .unwrap();
+        assert_eq!(uk.len(), 1);
+        assert_eq!(uk[0].name, "One");
+        let best = store
+            .list_channels(&ChannelQuery {
+                sort: "quality",
+                limit: 50,
+                ..ChannelQuery::default()
+            })
+            .unwrap();
+        assert_eq!(best[0].quality.as_deref(), Some("4K"));
+
+        let facets = store.channel_facets().unwrap();
+        assert_eq!(facets.countries.len(), 2);
+        assert_eq!(facets.qualities.len(), 2);
+        assert_eq!(facets.languages.len(), 1);
+        assert!(facets.countries.iter().all(|f| f.count == 1));
     }
 }

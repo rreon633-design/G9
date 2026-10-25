@@ -1217,7 +1217,7 @@ dependencies = [
 
 [[package]]
 name = "g9"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "flate2",
  "g9-core",
@@ -1239,7 +1239,7 @@ dependencies = [
 
 [[package]]
 name = "g9-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1248,7 +1248,7 @@ dependencies = [
 
 [[package]]
 name = "g9-iptv"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "g9-core",
  "serde",
@@ -1258,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "g9-store"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "g9-core",
  "g9-iptv",

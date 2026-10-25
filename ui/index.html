@@ -165,6 +165,30 @@
       <div class="zap" id="zap"></div>
       <pre class="diag" id="diag"></pre>
 
+      <section class="tv" id="tv" hidden aria-label="Live TV">
+        <header class="tv-top">
+          <div class="tv-brand">
+            <span class="tv-live"><i></i>LIVE</span>
+            <b>Live TV</b>
+            <span class="tv-count" id="tv-count"></span>
+          </div>
+          <div class="tv-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+            <input id="tv-q" type="search" placeholder="Search channels, groups, countries" autocomplete="off" />
+          </div>
+          <button type="button" class="tv-icon" id="tv-close" title="Close (Esc)">
+            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </header>
+        <div class="tv-chips" id="tv-chips"></div>
+        <div class="tv-grid" id="tv-grid"></div>
+        <div class="tv-empty" id="tv-empty" hidden></div>
+        <div class="tv-pop" id="tv-pop" hidden>
+          <div class="tv-pop-head" id="tv-pop-head"></div>
+          <div class="tv-pop-list" id="tv-pop-list"></div>
+        </div>
+      </section>
+
       <section class="sheet" id="sheet" hidden>
         <div class="sheet-head">
           <h2 id="sheet-title">Channels</h2>
@@ -213,6 +237,10 @@
           </div>
         </div>
       </div>
+      <button type="button" class="tv-open" id="tv-open" hidden title="Channel browser">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5" /><rect x="14" y="4" width="7" height="7" rx="1.5" /><rect x="3" y="15" width="7" height="5" rx="1.5" /><rect x="14" y="15" width="7" height="5" rx="1.5" /></svg>
+        <span>Channels</span>
+      </button>
       <div class="toast" id="toast"></div>
       <div class="panel" id="eq-panel" hidden>
         <div class="panel-head">

@@ -10,6 +10,46 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 - Dismissing a Save dialog no longer falls back to a browser download (save results are now
   `path` / `cancelled` / `unsupported`).
 
+## [0.6.0] — 2026-10-25
+
+A download that downloads, and a TV mode you can browse.
+
+### Fixed
+
+- **Downloads failed on every video.** YouTube (and most sites now) publish video and audio as
+  separate streams, and G9's no-FFmpeg fallback asked for a single muxed file that no longer
+  exists — `Requested format is not available`. G9 now **installs its managed FFmpeg on first
+  use** (the same one Settings → FFmpeg manages) and always merges, with the progress shown in the
+  Downloads panel. Verified end to end against YouTube: 360p/720p mp4 with both streams, plus
+  audio-only.
+- **The reason was hidden.** A failed job showed only “download stopped”, because the child exits
+  before its stderr is drained. The last line is now kept with the job and shown, shortened and
+  freed of extractor noise (`That video offers no downloadable format`, `This site wants a sign-in
+  for that video`, …).
+- **No way to try again.** Failed and stopped jobs get a **Retry** button that resumes from the
+  partial file instead of starting over.
+- Four-way DASH connections (`-N 4`) so long videos do not crawl.
+
+### Added
+
+- **TV Mode is a channel browser.** Full-screen, YouTube-shaped: logo cards, a search box,
+  **Favourites / Country / Language / Quality** chips with counts, and sorting by channel order,
+  name, country, quality or group. Every card shows now/next from the guide. Cards that are
+  playing are outlined; the star on a card toggles favourites.
+- **It tunes itself.** Entering TV Mode (or starting G9 in it) starts the last channel you watched,
+  or the first one in the list. A **Channels** pill stays on screen while watching to bring the
+  browser back; `Esc` closes it.
+- **Channels carry the metadata the filters need.** The M3U parser keeps `tvg-country`,
+  `tvg-language` and derives `4K / FHD / HD / SD` from the name; the SQLite schema migrates to
+  v2 with `country`, `language` and `quality`, indexed for filtering.
+- Filtering lives in SQL (`list_channels` takes country/language/quality/sort), with a
+  `channel_facets` command for the chip counts, so a 5,000-channel playlist stays responsive.
+
+### Changed
+
+- Media → Live opens the channel browser while TV Mode is on, and the old list sheet still serves
+  windowed mode.
+
 ## [0.5.0] — 2026-10-25
 
 Downloads and live guides.
@@ -257,6 +297,7 @@ multi-window, independent pitch shift. See the gap list in `FEATURE-LIST.md`.
 - Local files, URL / HLS, M3U / IPTV import, Live TV sheet
 - Diagnostics overlay, keyboard map
 
+[0.6.0]: https://github.com/rreon633-design/G9/releases/tag/v0.6.0
 [0.5.0]: https://github.com/rreon633-design/G9/releases/tag/v0.5.0
 [0.4.0]: https://github.com/rreon633-design/G9/releases/tag/v0.4.0
 [0.3.1]: https://github.com/rreon633-design/G9/releases/tag/v0.3.1

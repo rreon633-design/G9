@@ -37,7 +37,8 @@ Top bar: **Media · Settings · TV Mode**. About G9 lives inside Settings, not o
 The chrome fades while you watch; move the mouse to bring it back. There are no sidebars —
 everything opens as an overlay card over the picture.
 
-**TV Mode** enlarges the type and spacing for a living-room screen. `Esc` leaves it.
+**TV Mode** opens the channel browser (see [Live TV](#live-tv)), enlarges the type and spacing
+for a living-room screen. `Esc` closes the browser; the button turns into **Exit TV**.
 
 ## Playback
 
@@ -58,13 +59,29 @@ everything opens as an overlay card over the picture.
 - **Shader effect** applies a WebGL look (Sharpen / Vivid / Mono / Night, or your own `.frag` files).
 - **Open in new window** runs a second, independent player window — handy for a second screen.
 
-## Live TV and the guide
+## Live TV
 
-- The live sheet groups channels, searches them, and keeps favourites on top.
+Press **TV Mode** and G9 opens the channel browser: a wall of channel cards with logos, the group
+and country, and **now / next** from the guide. It tunes the last channel you watched straight
+away — that is what you hear behind the wall — and a **Channels** pill stays on the screen while you
+watch, so you can come back at any time. `Esc` closes the browser.
+
+- **Search** the box at the top for a channel, group, country or language.
+- **Chips** filter: Favourites, **Country**, **Language**, **Quality** (4K / FHD / HD / SD), and
+  **Sort** by channel order, name, country, quality or group. Each value shows how many channels
+  have it; **Clear filters** resets everything.
+- Click a card (or press Enter on it) to watch. The star on a card toggles a favourite.
+- Filters and sorting run in the database, so playlists with thousands of channels stay quick.
+
+Windowed mode keeps the older list: **Live** in the top bar. It groups channels, searches them and
+keeps favourites on top.
+
+### The guide
+
 - If your playlist points at an XMLTV guide (`url-tvg`), press **Load guide** once and every
-  channel gets **now / next** underneath it. No guide address in the playlist? G9 asks for one —
-  paste an `.xml` or a gzipped `.xml.gz`.
-- The parsed guide is kept between launches and now/next refreshes itself while the list is open.
+  channel gets **now / next**. No guide address in the playlist? G9 asks for one — paste an `.xml`
+  or a gzipped `.xml.gz`.
+- The parsed guide is kept between launches and now/next refreshes itself while a list is open.
 
 ## Keys
 
@@ -104,7 +121,12 @@ each. Pick one and press **Download**.
 
 The downloader itself (`yt-dlp`) is not bundled. The first time you try, G9 offers **Install
 downloader**: one click, about 30 MB, into G9's own app data folder. A `yt-dlp` already on PATH is
-used instead if you have one, and a managed FFmpeg lets G9 merge high-quality video and audio.
+used instead if you have one.
+
+The first download also prepares the **FFmpeg engine** (~100 MB, once), because modern sites send
+video and audio separately and something has to join them — the panel says *Installing the media
+engine…* while it does. If a job fails, the row says why and offers **Retry**, which continues from
+what was already downloaded.
 
 Only download material you have the rights to. G9 does not host, ship, or point at any video.
 

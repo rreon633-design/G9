@@ -99,8 +99,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.5.0' }}
-          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.5.0' }} — Windows
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.6.0' }}
+          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.6.0' }} — Windows
           draft: false
           prerelease: false
           generate_release_notes: false
@@ -114,13 +114,12 @@ jobs:
             | `*.msi` | MSI |
             | `G9-windows-x64-portable.zip` | Portable `G9.exe` |
 
-            **v0.5.0**
-            - Download videos from YouTube, Instagram, Facebook and other sites straight from the welcome screen, with a quality and size picker
-            - Downloads run in the background, notify on completion, pause/resume, auto-resume partial files, play, reveal in Explorer or delete
-            - One-click managed yt-dlp install (Settings → Video downloads); only download what you have the rights to
-            - IPTV guide: XMLTV now/next under every channel, gzip guides supported, kept between launches
-            - Xtream Codes portals import straight into the channel list
-            - Everything from 0.4: Open with, split screen, responsive UI, working GIF
+            **v0.6.0**
+            - Downloads work again: G9 now installs its FFmpeg engine on first use, because YouTube only publishes separate video and audio streams. Failed downloads also say why, and can be retried
+            - TV Mode is a channel browser: logo grid, search, Country / Language / Quality chips and sorting, with now/next on every card
+            - TV Mode tunes a channel by itself (the last one you watched), and a Channels pill brings the browser back while you watch
+            - Channel lists keep tvg-country, tvg-language and 4K/FHD/HD/SD, so the filters are real
+            - Everything from 0.5: yt-dlp downloads, pause/resume, notifications, XMLTV guides, Xtream Codes
 
             Full list: [FEATURE-LIST.md](https://github.com/rreon633-design/G9/blob/main/FEATURE-LIST.md)
 

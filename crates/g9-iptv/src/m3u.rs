@@ -40,7 +40,40 @@ struct ExtInf {
     tvg_id: Option<String>,
     tvg_name: Option<String>,
     tvg_logo: Option<String>,
+    country: Option<String>,
+    language: Option<String>,
     duration: Option<i64>,
+}
+
+/// Regions that show up as a tvg-id suffix.
+fn looks_like_region(code: &str) -> bool {
+    (2..=3).contains(&code.len()) && code.chars().all(|c| c.is_ascii_alphabetic())
+}
+
+/// `BBC One HD` -> `HD`, `Sky Sports 4K` -> `4K`. Blank when nothing is stated.
+fn quality_of(name: &str) -> Option<String> {
+    let up = name.to_ascii_uppercase();
+    let has = |needle: &str| {
+        up.split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|w| w == needle)
+    };
+    if has("4K") || has("UHD") || up.contains("2160") {
+        Some("4K".into())
+    } else if has("FHD") || up.contains("1080") {
+        Some("FHD".into())
+    } else if has("HD") || up.contains("720") {
+        Some("HD".into())
+    } else if has("SD") {
+        Some("SD".into())
+    } else {
+        None
+    }
+}
+
+/// `tvg-id="bbcone.uk"` -> `UK`
+fn region_of(tvg_id: &str) -> Option<String> {
+    let code = tvg_id.rsplit('.').next()?.trim();
+    (looks_like_region(code) && tvg_id.contains('.')).then(|| code.to_ascii_uppercase())
 }
 
 /// Read `key="value"` out of the `#EXTM3U` header line.
@@ -147,11 +180,18 @@ pub fn parse_m3u(
         if let Some(g) = &meta.group {
             groups.insert(g.clone());
         }
+        let quality = quality_of(&name).or_else(|| meta.tvg_name.as_deref().and_then(quality_of));
+        let country = meta
+            .country
+            .or_else(|| meta.tvg_id.as_deref().and_then(region_of));
         channels.push(ParsedChannel {
             name,
             url,
             group: meta.group,
             tvg_id: meta.tvg_id,
+            country,
+            language: meta.language,
+            quality,
             tvg_name: meta.tvg_name,
             tvg_logo: meta.tvg_logo,
             duration: meta.duration,
@@ -203,6 +243,11 @@ fn parse_extinf(line: &str) -> ExtInf {
 
     info.group = attr(head, "group-title");
     info.tvg_id = attr(head, "tvg-id");
+    info.country = attr(head, "tvg-country")
+        .or_else(|| attr(head, "tvg-region"))
+        .map(|c| c.trim().to_ascii_uppercase())
+        .filter(|c| !c.is_empty());
+    info.language = attr(head, "tvg-language").map(|l| l.trim().to_string());
     info.tvg_name = attr(head, "tvg-name");
     info.tvg_logo = attr(head, "tvg-logo").and_then(|u| sanitize_logo_url(&u));
     info
@@ -265,6 +310,31 @@ file:///etc/passwd
 #EXTINF:-1 group-title="UK",BBC Two
 https://cdn.example/bbc2.m3u8
 "#;
+
+    #[test]
+    fn reads_country_language_and_quality() {
+        let text = r#"#EXTM3U
+#EXTINF:-1 tvg-id="bbcone.uk" tvg-country="UK" tvg-language="English" group-title="UK",BBC One HD
+https://cdn.example/1.m3u8
+#EXTINF:-1 tvg-id="sky.de" group-title="DE",Sky Sport 4K
+https://cdn.example/2.m3u8
+#EXTINF:-1 tvg-language="Hindi" group-title="IN",Star Plus
+https://cdn.example/3.m3u8
+#EXTINF:-1 group-title="US",CNN FHD
+https://cdn.example/4.m3u8
+"#;
+        let (chs, _) = parse_m3u(text, ParseOptions::default()).unwrap();
+        assert_eq!(chs[0].country.as_deref(), Some("UK"));
+        assert_eq!(chs[0].language.as_deref(), Some("English"));
+        assert_eq!(chs[0].quality.as_deref(), Some("HD"));
+        // tvg-id suffix when tvg-country is missing
+        assert_eq!(chs[1].country.as_deref(), Some("DE"));
+        assert_eq!(chs[1].quality.as_deref(), Some("4K"));
+        assert_eq!(chs[2].language.as_deref(), Some("Hindi"));
+        assert!(chs[2].country.is_none());
+        assert!(chs[2].quality.is_none());
+        assert_eq!(chs[3].quality.as_deref(), Some("FHD"));
+    }
 
     #[test]
     fn parses_channels_and_strips_injection() {

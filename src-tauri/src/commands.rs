@@ -1,6 +1,6 @@
 use g9_core::{ParsedChannel, SourceKind, APP_NAME, APP_VERSION, CONTENT_POLICY};
 use g9_iptv::{parse_m3u, ParseOptions};
-use g9_store::{ChannelRow, GroupRow, HistoryRow, SourceRow, StoreStats};
+use g9_store::{ChannelQuery, ChannelRow, Facets, GroupRow, HistoryRow, SourceRow, StoreStats};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -149,26 +149,53 @@ pub fn list_groups(state: State<AppState>) -> Result<Vec<GroupRow>, String> {
         .map_err(|e| e.to_string())
 }
 
+// Flat optional arguments keep the JS call readable; this is the command boundary.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn list_channels(
     state: State<AppState>,
     group: Option<String>,
     query: Option<String>,
     favourites_only: Option<bool>,
+    country: Option<String>,
+    language: Option<String>,
+    quality: Option<String>,
+    sort: Option<String>,
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<Vec<ChannelRow>, String> {
+    let clean = |v: Option<String>| v.filter(|x| !x.is_empty() && x != "All");
+    let group = clean(group);
+    let query_text = clean(query);
+    let country = clean(country);
+    let language = clean(language);
+    let quality = clean(quality);
+    let sort = sort.unwrap_or_else(|| "number".into());
     state
         .store
         .lock()
         .map_err(|e| e.to_string())?
-        .list_channels(
-            group.as_deref().filter(|g| !g.is_empty() && *g != "All"),
-            query.as_deref().filter(|q| !q.is_empty()),
-            favourites_only.unwrap_or(false),
-            limit.unwrap_or(200),
-            offset.unwrap_or(0),
-        )
+        .list_channels(&ChannelQuery {
+            group: group.as_deref(),
+            query: query_text.as_deref(),
+            favourites_only: favourites_only.unwrap_or(false),
+            country: country.as_deref(),
+            language: language.as_deref(),
+            quality: quality.as_deref(),
+            sort: sort.as_str(),
+            limit: limit.unwrap_or(200),
+            offset: offset.unwrap_or(0),
+        })
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn channel_facets(state: State<AppState>) -> Result<Facets, String> {
+    state
+        .store
+        .lock()
+        .map_err(|e| e.to_string())?
+        .channel_facets()
         .map_err(|e| e.to_string())
 }
 
@@ -424,6 +451,11 @@ pub fn dl_list() -> Vec<crate::dl::Job> {
 #[tauri::command]
 pub fn dl_toggle(app: AppHandle, id: String) -> Result<crate::dl::Job, String> {
     crate::dl::toggle(&app, &id)
+}
+
+#[tauri::command]
+pub fn dl_retry(app: AppHandle, id: String) -> Result<crate::dl::Job, String> {
+    crate::dl::retry(&app, &id)
 }
 
 #[tauri::command]

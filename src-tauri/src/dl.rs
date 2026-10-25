@@ -60,6 +60,9 @@ pub struct Job {
 struct Runtime {
     jobs: Vec<Job>,
     children: HashMap<String, Child>,
+    /// Last non-empty stderr line per job: the child exits before the reader
+    /// thread is drained, so the reason has to be kept here.
+    tails: HashMap<String, String>,
     seq: u64,
 }
 
@@ -303,13 +306,25 @@ fn emit(app: &AppHandle, id: &str) {
     }
 }
 
+/// Both binaries the download needs, installing the engine on first use.
+fn ensure_tools(app: &AppHandle) -> Result<(), String> {
+    if !tool_status(app).available {
+        return Err("Downloader not installed".into());
+    }
+    if !crate::ffmpeg::status().available {
+        let _ = app.emit(PROGRESS_EVENT, "start:engine".to_string());
+        crate::ffmpeg::install(app).map_err(|e| {
+            format!("G9 needs FFmpeg to join video and audio, and it could not be installed: {e}")
+        })?;
+    }
+    Ok(())
+}
+
 pub fn start(app: &AppHandle, url: &str, height: u32, title: Option<&str>) -> Result<Job, String> {
     if !is_supported_url(url) {
         return Err("Paste a link to a video page".into());
     }
-    if !tool_status(app).available {
-        return Err("Downloader not installed".into());
-    }
+    ensure_tools(app)?;
     let dir = download_dir(app)?;
     let id = {
         let mut rt = state().lock().unwrap();
@@ -353,14 +368,9 @@ fn spawn(app: &AppHandle, id: &str, dir: &std::path::Path) -> Result<(), String>
         let job = rt.jobs.iter().find(|j| j.id == id).ok_or("unknown job")?;
         (job.url.clone(), job.height)
     };
-    // Without FFmpeg there is nothing to merge separate streams with, so ask
-    // for a single progressive file instead.
-    let has_ffmpeg = crate::ffmpeg::status().available;
-    let fmt = if height > 0 && !has_ffmpeg {
-        format!("best[height<={height}][ext=mp4]/best[height<={height}]/best")
-    } else {
-        format_selector(height)
-    };
+    // Modern YouTube (and most sites) only publish separate video and audio
+    // streams, so FFmpeg is required to merge them. `start` installs it first.
+    let fmt = format_selector(height);
 
     let mut cmd = Command::new(binary(app));
     cmd.args([
@@ -386,10 +396,13 @@ fn spawn(app: &AppHandle, id: &str, dir: &std::path::Path) -> Result<(), String>
         "post_process:g9target:%(filepath)s",
         "--print",
         "after_move:g9file:%(filepath)s",
+        // Fragmented DASH downloads are far faster with a few connections.
+        "-N",
+        "4",
         "-f",
         &fmt,
     ]);
-    if height > 0 && has_ffmpeg {
+    if height > 0 {
         cmd.args(["--merge-output-format", "mp4"]);
     }
     if let Some(ff) = crate::ffmpeg::dir() {
@@ -422,26 +435,22 @@ fn spawn(app: &AppHandle, id: &str, dir: &std::path::Path) -> Result<(), String>
     if let Some(stderr) = child.stderr.take() {
         let job_id = id.to_string();
         std::thread::spawn(move || {
-            let mut tail = String::new();
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                tail.push_str(&line);
-                tail.push('\n');
-                if tail.len() > 4000 {
-                    let cut = tail.len() - 3000;
-                    tail = tail[cut..].to_string();
+                let line = line.trim().to_string();
+                if line.is_empty() {
+                    continue;
                 }
+                let mut rt = state().lock().unwrap();
+                rt.tails
+                    .insert(job_id.clone(), line.chars().take(200).collect::<String>());
             }
-            let mut rt = state().lock().unwrap();
-            if let Some(job) = rt.jobs.iter_mut().find(|j| j.id == job_id) {
-                if job.status == Status::Failed && job.error.is_none() {
-                    job.error = Some(
-                        tail.lines()
-                            .last()
-                            .unwrap_or("download failed")
-                            .chars()
-                            .take(160)
-                            .collect::<String>(),
-                    );
+            let reason = state().lock().unwrap().tails.get(&job_id).cloned();
+            if let Some(reason) = reason {
+                let mut rt = state().lock().unwrap();
+                if let Some(job) = rt.jobs.iter_mut().find(|j| j.id == job_id) {
+                    if job.status != Status::Paused && job.status != Status::Done {
+                        job.error = Some(reason);
+                    }
                 }
             }
         });
@@ -519,6 +528,7 @@ fn finish(app: &AppHandle, id: &str, code: Option<i32>) {
     let job = {
         let mut rt = state().lock().unwrap();
         rt.children.remove(id);
+        let tail = rt.tails.remove(id);
         let Some(job) = rt.jobs.iter_mut().find(|j| j.id == id) else {
             return;
         };
@@ -530,9 +540,8 @@ fn finish(app: &AppHandle, id: &str, code: Option<i32>) {
                 job.eta = 0;
             } else {
                 job.status = Status::Failed;
-                if job.error.is_none() {
-                    job.error = Some("download stopped".into());
-                }
+                job.error =
+                    Some(tail.unwrap_or_else(|| "the download stopped before it finished".into()));
             }
         }
         job.clone()
@@ -557,6 +566,34 @@ fn notify_done(app: &AppHandle, job: &Job) {
         .title("Download finished")
         .body(format!("{name} is ready in G9"))
         .show();
+}
+
+/// Run a failed or stopped job again from its partial files.
+pub fn retry(app: &AppHandle, id: &str) -> Result<Job, String> {
+    ensure_tools(app)?;
+    let job = {
+        let mut rt = state().lock().unwrap();
+        let Some(job) = rt.jobs.iter_mut().find(|j| j.id == id) else {
+            return Err("unknown download".into());
+        };
+        if !matches!(
+            job.status,
+            Status::Failed | Status::Cancelled | Status::Paused
+        ) {
+            return Err("that download is still running".into());
+        }
+        job.status = Status::Queued;
+        job.percent = 0.0;
+        job.downloaded = 0;
+        job.speed = 0;
+        job.eta = -1;
+        job.error = None;
+        job.clone()
+    };
+    let dir = download_dir(app)?;
+    spawn(app, id, &dir)?;
+    persist(app);
+    Ok(job)
 }
 
 pub fn toggle(app: &AppHandle, id: &str) -> Result<Job, String> {
