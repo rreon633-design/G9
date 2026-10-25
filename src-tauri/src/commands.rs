@@ -271,11 +271,31 @@ pub async fn apply_best_subtitles(
     query: String,
     language: Option<String>,
     path: Option<String>,
+    generate: Option<bool>,
 ) -> Result<crate::subs::SubResult, String> {
     let lang = language.unwrap_or_else(|| "en".into());
+    let generate = generate.unwrap_or(false);
     tauri::async_runtime::spawn_blocking(move || {
-        crate::subs::fetch_best(&query, &lang, path.as_deref())
+        crate::subs::fetch_best(&query, &lang, path.as_deref(), generate)
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn dlna_discover() -> Result<Vec<crate::dlna::DlnaServer>, String> {
+    tauri::async_runtime::spawn_blocking(crate::dlna::discover)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn dlna_browse(
+    control_url: String,
+    object_id: Option<String>,
+) -> Result<Vec<crate::dlna::DlnaItem>, String> {
+    let id = object_id.unwrap_or_else(|| "0".into());
+    tauri::async_runtime::spawn_blocking(move || crate::dlna::browse(&control_url, &id))
+        .await
+        .map_err(|e| e.to_string())?
 }

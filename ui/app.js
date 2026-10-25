@@ -33,6 +33,9 @@
     tv: false,
     title: "Ready",
     lastQuery: "",
+    dlnaServers: [],
+    dlnaControl: "",
+    dlnaParent: "0",
     mediaUrl: "",
     mediaPath: "",
     mediaKind: "",
@@ -43,6 +46,10 @@
     subRaw: "",
     subDelay: 0,
     subSize: 20,
+    cuePos: 14,
+    cueColor: "#ffffff",
+    cues: [],
+    storyBusy: false,
     boost: 100,
     eq: [0, 0, 0, 0, 0, 0],
     abA: null,
@@ -143,13 +150,16 @@
     state.subsOn = false;
     state.subMeta = null;
     state.subRaw = "";
+    state.cues = [];
+    paintCue();
     var cc = document.getElementById("btn-cc");
     if (cc) cc.classList.remove("on");
   }
 
   function showCueTrack() {
     if (!video.textTracks) return;
-    for (var i = 0; i < video.textTracks.length; i++) video.textTracks[i].mode = "showing";
+    for (var i = 0; i < video.textTracks.length; i++) video.textTracks[i].mode = "hidden";
+    paintCue();
   }
 
   function applyVtt(result) {
@@ -203,8 +213,42 @@
     track.addEventListener("load", showCueTrack);
     window.setTimeout(showCueTrack, 80);
     state.subsOn = true;
+    state.cues = parseCues(vtt);
     var cc = document.getElementById("btn-cc");
     if (cc) cc.classList.add("on");
+  }
+  function parseCues(vtt) {
+    var cues = [];
+    String(vtt)
+      .replace(/\r/g, "")
+      .split(/\n\n+/)
+      .forEach(function (block) {
+        var lines = block.split("\n").filter(Boolean);
+        if (!lines.length || lines[0] === "WEBVTT") return;
+        var time = lines[0].indexOf("-->") >= 0 ? lines[0] : lines[1];
+        if (!time || time.indexOf("-->") < 0) return;
+        var parts = time.split("-->");
+        var text = lines.slice(time === lines[0] ? 1 : 2).join("\n");
+        cues.push({
+          start: parseVttTime(parts[0].replace(",", ".").trim()),
+          end: parseVttTime(parts[1].replace(",", ".").trim().split(" ")[0]),
+          text: text,
+        });
+      });
+    return cues;
+  }
+  function paintCue() {
+    var el = document.getElementById("cue-text");
+    if (!el) return;
+    var t = video.currentTime + (state.subDelay || 0);
+    var hit = null;
+    for (var i = 0; i < state.cues.length; i++) {
+      if (t >= state.cues[i].start && t < state.cues[i].end) {
+        hit = state.cues[i];
+        break;
+      }
+    }
+    el.textContent = hit ? hit.text : "";
   }
   function clearSubsKeepMeta() {
     if (state.subBlob) {
@@ -233,6 +277,16 @@
     try {
       localStorage.setItem("g9-cue", String(n));
     } catch (e) {}
+  }
+  function setCuePos(n) {
+    state.cuePos = n;
+    document.documentElement.style.setProperty("--cue-bottom", n + "%");
+    var el = document.getElementById("sub-pos-val");
+    if (el) el.textContent = n + "%";
+  }
+  function setCueColor(c) {
+    state.cueColor = c;
+    document.documentElement.style.setProperty("--cue-color", c);
   }
   function mediaKey() {
     return state.mediaPath || state.mediaUrl || "";
@@ -378,6 +432,119 @@
       toast("Saved frame");
     }, "image/jpeg", 0.92);
   }
+  function buildStoryboard() {
+    var canvas = document.getElementById("story");
+    if (!canvas || !video.duration || !isFinite(video.duration) || state.mediaKind === "live") {
+      if (canvas) canvas.classList.remove("has-thumbs");
+      return;
+    }
+    if (state.storyBusy) return;
+    state.storyBusy = true;
+    var n = 12;
+    var w = Math.max(640, canvas.clientWidth || 640);
+    canvas.width = w;
+    canvas.height = 48;
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, 48);
+    if (!preview.src && video.src) preview.src = video.currentSrc || video.src;
+    var i = 0;
+    var tw = w / n;
+    function step() {
+      if (i >= n) {
+        state.storyBusy = false;
+        canvas.classList.add("has-thumbs");
+        return;
+      }
+      try {
+        preview.currentTime = ((i + 0.5) / n) * video.duration;
+      } catch (e) {
+        state.storyBusy = false;
+        return;
+      }
+      preview.onseeked = function () {
+        preview.onseeked = null;
+        try {
+          ctx.drawImage(preview, i * tw, 0, tw - 1, 48);
+        } catch (e2) {}
+        i++;
+        window.setTimeout(step, 30);
+      };
+    }
+    window.setTimeout(step, 200);
+  }
+  function exportGif() {
+    if (!video.videoWidth || typeof encodeGif !== "function") {
+      toast("Nothing to export");
+      return;
+    }
+    var start = state.abA != null ? state.abA : Math.max(0, video.currentTime - 1.2);
+    var end = state.abB != null ? state.abB : Math.min(video.duration || start + 2.4, start + 2.4);
+    if (end <= start) end = start + 1.5;
+    toast("Encoding GIF…");
+    var w = 160;
+    var h = Math.max(90, Math.round((video.videoHeight / video.videoWidth) * w));
+    var fps = 8;
+    var frames = [];
+    var t = start;
+    var wasPaused = video.paused;
+    var origin = video.currentTime;
+    function grab() {
+      if (t > end || frames.length >= 24) {
+        video.currentTime = origin;
+        if (!wasPaused) video.play();
+        var bytes = encodeGif(frames, w, h, Math.round(100 / fps));
+        var blob = new Blob([bytes], { type: "image/gif" });
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = (state.title || "g9") + ".gif";
+        a.click();
+        toast("Saved GIF · " + frames.length + " frames");
+        return;
+      }
+      video.pause();
+      video.currentTime = t;
+      video.onseeked = function () {
+        video.onseeked = null;
+        var c = document.createElement("canvas");
+        c.width = w;
+        c.height = h;
+        try {
+          c.getContext("2d").drawImage(video, 0, 0, w, h);
+          frames.push(c.getContext("2d").getImageData(0, 0, w, h).data);
+        } catch (e) {}
+        t += 1 / fps;
+        window.setTimeout(grab, 20);
+      };
+    }
+    grab();
+  }
+  function openPath() {
+    var p = window.prompt("File path or SMB share (\\\\server\\share\\video.mp4)");
+    if (!p) return;
+    p = p.trim();
+    state.mediaKind = p.indexOf("http") === 0 ? "url" : "file";
+    state.mediaPath = p;
+    var title = p.split(/[/\\]/).pop() || p;
+    var src = p.indexOf("http") === 0 ? p : convertFileSrc(p);
+    playUrl(title, src);
+    maybeAutoSubs();
+  }
+  function openDlna() {
+    toast("Searching DLNA…");
+    invoke("dlna_discover")
+      .then(function (list) {
+        state.dlnaServers = list || [];
+        state.view = "dlna";
+        paint();
+        renderSheet();
+        showChrome();
+        toast(state.dlnaServers.length ? state.dlnaServers.length + " server(s)" : "No DLNA servers");
+      })
+      .catch(function (e) {
+        toast(String(e && e.message ? e.message : e));
+      });
+  }
   function paintAb() {
     var btn = document.getElementById("btn-ab");
     if (!btn) return;
@@ -436,6 +603,7 @@
   }
   var scrubTimer = 0;
   function showScrub(ev) {
+    if (state.storyBusy) return;
     if (!video.duration || !isFinite(video.duration)) return;
     var t = seekTimeFromEvent(ev);
     var rect = seekEl.getBoundingClientRect();
@@ -473,7 +641,14 @@
     }
     toast("Searching subtitles…");
     var path = state.mediaKind === "file" && state.mediaPath ? state.mediaPath : null;
-    return invoke("apply_best_subtitles", { query: q, language: "en", path: path })
+    return invoke("apply_best_subtitles", {
+      query: q,
+      language: "en",
+      path: path,
+      generate: !!state.wantGenerate,
+    }).finally(function () {
+      state.wantGenerate = false;
+    })
       .then(applyVtt)
       .catch(function (e) {
         toast(e && e.message ? e.message : String(e));
@@ -534,6 +709,7 @@
     }
     if (state.info) add("G9", "v" + state.info.version);
     add("Platform", navigator.platform || "WebView");
+    add("Decoder", "WebView2 hardware (DXVA / D3D11)");
     var list = document.getElementById("info-list");
     list.innerHTML = rows
       .map(function (r) {
@@ -619,6 +795,87 @@
   function renderSheet() {
     var title = document.getElementById("sheet-title");
     var count = document.getElementById("sheet-count");
+    if (state.view === "dlna") {
+      title.textContent = "DLNA";
+      chipsEl.innerHTML = "";
+      count.textContent = String((state.dlnaItems || state.dlnaServers || []).length);
+      var rows = "";
+      if (state.dlnaItems) {
+        rows += '<div class="row" data-dlna-back="1"><div class="n">..</div><div class="meta"><b>Back</b><span>Servers</span></div></div>';
+        state.dlnaItems.forEach(function (it) {
+          rows +=
+            '<div class="row" data-dlna-id="' +
+            escapeHtml(it.id) +
+            '" data-folder="' +
+            (it.is_container ? "1" : "0") +
+            '" data-url="' +
+            escapeHtml(it.url || "") +
+            '"><div class="n">' +
+            (it.is_container ? "▣" : "▶") +
+            '</div><div class="meta"><b>' +
+            escapeHtml(it.title) +
+            "</b><span>" +
+            (it.is_container ? "Folder" : "Play") +
+            "</span></div></div>";
+        });
+      } else {
+        if (!state.dlnaServers.length) rows = '<div class="empty">No DLNA/UPnP servers on the LAN.</div>';
+        state.dlnaServers.forEach(function (s, i) {
+          rows +=
+            '<div class="row" data-dlna-srv="' +
+            i +
+            '"><div class="n">TV</div><div class="meta"><b>' +
+            escapeHtml(s.name) +
+            "</b><span>" +
+            escapeHtml(s.location) +
+            "</span></div></div>";
+        });
+      }
+      listEl.innerHTML = rows;
+      listEl.querySelectorAll("[data-dlna-srv]").forEach(function (row) {
+        row.addEventListener("click", function () {
+          var s = state.dlnaServers[Number(row.getAttribute("data-dlna-srv"))];
+          if (!s) return;
+          state.dlnaControl = s.control_url;
+          toast("Browsing " + s.name);
+          invoke("dlna_browse", { controlUrl: s.control_url, objectId: "0" })
+            .then(function (items) {
+              state.dlnaItems = items;
+              renderSheet();
+            })
+            .catch(fail);
+        });
+      });
+      listEl.querySelectorAll("[data-dlna-back]").forEach(function (row) {
+        row.addEventListener("click", function () {
+          state.dlnaItems = null;
+          renderSheet();
+        });
+      });
+      listEl.querySelectorAll("[data-dlna-id]").forEach(function (row) {
+        row.addEventListener("click", function () {
+          if (row.getAttribute("data-folder") === "1") {
+            invoke("dlna_browse", {
+              controlUrl: state.dlnaControl,
+              objectId: row.getAttribute("data-dlna-id"),
+            })
+              .then(function (items) {
+                state.dlnaItems = items;
+                renderSheet();
+              })
+              .catch(fail);
+            return;
+          }
+          var url = row.getAttribute("data-url");
+          if (url) {
+            state.mediaKind = "url";
+            state.mediaPath = url;
+            playUrl(row.querySelector("b").textContent, url);
+          }
+        });
+      });
+      return;
+    }
     if (state.view === "settings") {
       title.textContent = "Settings";
       chipsEl.innerHTML = "";
@@ -1051,6 +1308,8 @@
       invoke("add_history", { title: title, url: path, kind: "file", position: 0, duration: 0 }).catch(function () {});
     }).catch(fail);
   });
+  document.getElementById("btn-path").addEventListener("click", openPath);
+  document.getElementById("btn-dlna").addEventListener("click", openDlna);
   document.getElementById("btn-url").addEventListener("click", function () {
     var url = window.prompt("Stream or file URL");
     if (url) {
@@ -1107,6 +1366,12 @@
         showChrome();
       }
       if (act === "snap") snapshot();
+      if (act === "gif") exportGif();
+      if (act === "gen") {
+        state.wantGenerate = true;
+        toast("Generating captions…");
+        fetchBestSubs();
+      }
       if (act === "subs") fetchBestSubs();
       if (act === "subs-off") {
         state.autoSubs = false;
@@ -1173,6 +1438,20 @@
   });
   document.getElementById("btn-ab").addEventListener("click", cycleAb);
   document.getElementById("btn-snap").addEventListener("click", snapshot);
+  document.getElementById("btn-gif").addEventListener("click", exportGif);
+  document.getElementById("sub-pos").addEventListener("input", function (ev) {
+    setCuePos(Number(ev.target.value));
+  });
+  document.querySelectorAll("[data-cue-color]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      setCueColor(btn.getAttribute("data-cue-color"));
+    });
+  });
+  document.getElementById("story").addEventListener("click", function (ev) {
+    if (!video.duration) return;
+    var r = ev.currentTarget.getBoundingClientRect();
+    video.currentTime = ((ev.clientX - r.left) / r.width) * video.duration;
+  });
   document.getElementById("eq-close").addEventListener("click", function () {
     eqPanel.hidden = true;
   });
@@ -1304,6 +1583,7 @@
     var p = video.duration ? (video.currentTime / video.duration) * 100 : 0;
     seekEl.value = String(Math.floor(p * 10));
     seekEl.style.setProperty("--p", p + "%");
+    paintCue();
     if (state.abA != null && state.abB != null && video.currentTime >= state.abB) {
       video.currentTime = state.abA;
     }
@@ -1327,6 +1607,7 @@
     updateMeta();
     if (state.subsOn) showCueTrack();
     restoreResume();
+    window.setTimeout(buildStoryboard, 400);
   });
   video.addEventListener("play", function () {
     setPlaying(true);

@@ -389,7 +389,12 @@ fn download_hit(hit: &SubHit, query: &str) -> Result<SubResult, String> {
     })
 }
 
-pub fn fetch_best(query: &str, language: &str, path: Option<&str>) -> Result<SubResult, String> {
+pub fn fetch_best(
+    query: &str,
+    language: &str,
+    path: Option<&str>,
+    generate: bool,
+) -> Result<SubResult, String> {
     let q = clean_query(query);
     let mut errors: Vec<String> = Vec::new();
 
@@ -397,6 +402,10 @@ pub fn fetch_best(query: &str, language: &str, path: Option<&str>) -> Result<Sub
         match sidecar(file, language) {
             Ok(r) => return Ok(r),
             Err(e) => errors.push(format!("Local: {e}")),
+        }
+        match extract_embedded(file) {
+            Ok(r) => return Ok(r),
+            Err(e) => errors.push(format!("Embedded: {e}")),
         }
         match fetch_thesubdb(file, language) {
             Ok(r) => return Ok(r),
@@ -447,10 +456,104 @@ pub fn fetch_best(query: &str, language: &str, path: Option<&str>) -> Result<Sub
         }
     }
 
+    if generate {
+        if let Some(file) = local_file(path) {
+            match transcribe_whisper(file) {
+                Ok(r) => return Ok(r),
+                Err(e) => errors.push(format!("Whisper: {e}")),
+            }
+        }
+    }
+
     Err(if errors.is_empty() {
         format!("no subtitles for “{q}”")
     } else {
         format!("no subtitles for “{q}” ({})", errors.join(" · "))
+    })
+}
+
+fn run_hidden(cmd: &mut std::process::Command) -> Result<std::process::Output, String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    cmd.output().map_err(|e| e.to_string())
+}
+
+fn extract_embedded(path: &str) -> Result<SubResult, String> {
+    let mut cmd = std::process::Command::new("ffmpeg");
+    cmd.args([
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        path,
+        "-map",
+        "0:s:0",
+        "-f",
+        "srt",
+        "pipe:1",
+    ]);
+    let out = run_hidden(&mut cmd)?;
+    if !out.status.success() || out.stdout.is_empty() {
+        return Err("no embedded subtitle track".into());
+    }
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    if !looks_like_srt(text.as_bytes()) && !looks_like_vtt(text.as_bytes()) {
+        return Err("ffmpeg returned no captions".into());
+    }
+    Ok(SubResult {
+        vtt: srt_to_vtt(&text),
+        language: "und".into(),
+        movie: clean_query(path),
+        release: "track 0".into(),
+        query: clean_query(path),
+        provider: "Embedded".into(),
+    })
+}
+
+fn transcribe_whisper(path: &str) -> Result<SubResult, String> {
+    let tmp = std::env::temp_dir().join("g9-whisper.srt");
+    let _ = std::fs::remove_file(&tmp);
+    let mut tried = Vec::new();
+    for bin in ["whisper-cli", "whisper", "whisper.cpp"] {
+        let mut cmd = std::process::Command::new(bin);
+        cmd.args([
+            "-m",
+            "ggml-tiny.en.bin",
+            "-f",
+            path,
+            "-otxt",
+            "-osrt",
+            "-of",
+            tmp.with_extension("").to_str().unwrap_or("g9-whisper"),
+        ]);
+        match run_hidden(&mut cmd) {
+            Ok(out) if out.status.success() && tmp.is_file() => {
+                let text = std::fs::read_to_string(&tmp).map_err(|e| e.to_string())?;
+                let _ = std::fs::remove_file(&tmp);
+                return Ok(SubResult {
+                    vtt: srt_to_vtt(&text),
+                    language: "en".into(),
+                    movie: clean_query(path),
+                    release: bin.into(),
+                    query: clean_query(path),
+                    provider: "Whisper".into(),
+                });
+            }
+            Ok(out) => tried.push(format!(
+                "{bin}: {}",
+                String::from_utf8_lossy(&out.stderr).chars().take(80).collect::<String>()
+            )),
+            Err(e) => tried.push(format!("{bin}: {e}")),
+        }
+    }
+    Err(if tried.is_empty() {
+        "whisper-cli not installed".into()
+    } else {
+        tried.join(" · ")
     })
 }
 

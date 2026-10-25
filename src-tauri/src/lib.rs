@@ -1,4 +1,5 @@
 mod commands;
+mod dlna;
 mod fetch;
 mod state;
 mod subs;
@@ -37,6 +38,8 @@ pub fn run() {
             commands::load_demo_playlist,
             commands::find_subtitles,
             commands::apply_best_subtitles,
+            commands::dlna_discover,
+            commands::dlna_browse,
         ])
         .run(tauri::generate_context!())
         .expect("G9 failed to start");
