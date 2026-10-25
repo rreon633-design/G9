@@ -7,6 +7,57 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 - Nothing yet.
 
+## [0.10.0] — 2026-10-25
+
+Fun Mode becomes something you can run a series in: it remembers what you watch, what you
+keep, what you never want to see again, and it can find things across every source at once.
+
+### Added
+
+- **My List, in the database** — the `+` on any title (or the right-click menu) writes to SQLite,
+  and a **My List** tab keeps it, sorted by when you added it, A–Z, or newest.
+- **A Watching tab that actually resumes** — position is written every 8 s while Fun Mode plays,
+  so *Continue watching* opens the episode you were on and seeks to the second you stopped.
+  Titles past 90 % are marked watched on their own.
+- **Watched, Following and Not interested** — three flags per title, drawn on the card
+  (✓ watched, • following) and reversible; hidden titles leave a one-click **Undo** note
+  under the wall.
+- **Following rail** — everything you followed, with new episodes surfaced as a shelf.
+- **Merged search** — the same film from three addons becomes one card that says *3 sources*;
+  results fall back to what you added when a source is quiet, and forgive a typo.
+- **Search that remembers** — recent searches, and a **What I added** scope that never leaves
+  your library.
+- **Filters on See all** — genre, year and quality, with a live *“n of m titles”* count.
+- **More like this** — genre and cast overlap, from your own sources.
+- **Cast row + person page** — the Stremio `cast` field is now parsed, and tapping a name shows
+  everything else they are in.
+- **Genre chips** on the title page open a genre browse.
+- **Keyboard on the wall** — arrow keys walk the cards, `Enter` opens one.
+- **Right-click a card** — open, play, My List, watched, follow, more like this, copy link,
+  not interested.
+- **Autoplay next episode** — a 10 s *Up next* card, cancellable, and a *Still watching?*
+  check after three in a row.
+- **Quality cap (data saver)** — the playback setting now really chooses the stream, and an
+  audio-language preference picks the matching labelled source first.
+- **Sleep timer** — 30/60/90 min from Playback, with a countdown chip in the nav that pauses
+  the player when it runs out.
+- **Mini player bar** — the stream stays visible as a LIVE/PLAYING chip with pause, resume,
+  stop and a jump back to the player.
+- **Fun Mode settings hub** — Playback, My List & history, Sources and Data in one sheet.
+- **Backup and restore** — sources, progress and every flag as JSON (copy out, paste back;
+  restore merges, never deletes).
+- **`g9://` title links** — *Copy link* on any title, and an opener in Data; the same string
+  works from the address bar or a script.
+- **First-run wizard** — three steps: what G9 does, add your first source, pick a data cap.
+- **Refresh chip**, **episode thumbnails** when a source supplies them, and a **cache-clear**
+  button that empties the in-memory source cache.
+
+### Changed
+
+- The avatar button now opens the settings hub rather than a lone prefs list.
+- `g9-sources` parses `cast` from Stremio meta (12 names, string or `{name}` entries).
+- The library lives in schema **v4** (`fun_lib`); the migration is additive.
+
 ## [0.9.1] — 2026-10-25
 
 ### Fixed

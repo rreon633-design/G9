@@ -191,11 +191,17 @@
             <button type="button" data-tab="anime" aria-selected="false">Anime</button>
             <button type="button" data-tab="drama" aria-selected="false">Drama</button>
             <button type="button" data-tab="manga" aria-selected="false">Manga</button>
+            <button type="button" data-tab="list" aria-selected="false">My List</button>
+            <button type="button" data-tab="watching" aria-selected="false">Watching</button>
           </nav>
           <label class="fun-search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.6-3.6" /></svg>
             <input id="fun-q" type="search" placeholder="Search titles, genres…" autocomplete="off" aria-label="Search Fun Mode" />
           </label>
+          <span class="fun-timer-chip" id="fun-timer" hidden></span>
+          <button type="button" class="fun-ghost is-icon" id="fun-refresh" title="Refresh the wall" aria-label="Refresh the wall">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v4h-4" /></svg>
+          </button>
           <button type="button" class="fun-ghost" id="fun-sources">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
             Sources
@@ -227,11 +233,19 @@
               <button type="button" data-sort="score" aria-pressed="false">Top rated</button>
             </div>
           </div>
+          <div class="fun-filters" id="fun-filters" hidden></div>
           <div class="fun-grid" id="fun-browse-grid"></div>
         </section>
 
         <section class="fun-searchview" id="fun-searchview" hidden>
-          <h2 id="fun-search-head">Results</h2>
+          <div class="fun-search-top">
+            <h2 id="fun-search-head">Results</h2>
+            <div class="fun-scope" id="fun-scope" role="tablist" aria-label="Search in">
+              <button type="button" data-scope="all" aria-pressed="true" role="tab">All sources</button>
+              <button type="button" data-scope="local" aria-pressed="false" role="tab">What I added</button>
+            </div>
+          </div>
+          <div class="fun-recents" id="fun-recents"></div>
           <div class="fun-grid" id="fun-search-grid"></div>
         </section>
 
@@ -240,6 +254,11 @@
         </div>
 
         <div class="fun-reader" id="fun-reader" hidden></div>
+
+        <div class="fun-mini" id="fun-mini" hidden></div>
+        <div class="fun-menu" id="fun-menu" hidden></div>
+        <div class="fun-wizard" id="fun-wizard" hidden></div>
+        <div class="fun-still" id="fun-still" hidden></div>
       </section>
 
       <section class="tv" id="tv" hidden aria-label="Live TV">

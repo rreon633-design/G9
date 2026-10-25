@@ -123,5 +123,31 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         "INSERT OR IGNORE INTO schema_migrations (version) VALUES (3)",
         [],
     )?;
+
+    // v4: Fun Mode library. One table for everything the viewer decided about a
+    // title: `list` (My List), `follow` (tell me when there is more), `watched`
+    // and `hidden` (not interested). `meta` carries a JSON blob so new flags do
+    // not need another migration.
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS fun_lib (
+            kind TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            source_id INTEGER NOT NULL DEFAULT 0,
+            title TEXT NOT NULL,
+            item_kind TEXT,
+            poster TEXT,
+            meta TEXT,
+            added_at TEXT NOT NULL,
+            PRIMARY KEY (kind, item_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_fun_lib_kind ON fun_lib(kind, added_at DESC);
+        "#,
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO schema_migrations (version) VALUES (4)",
+        [],
+    )?;
     Ok(())
 }

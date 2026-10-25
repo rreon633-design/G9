@@ -4,7 +4,10 @@
 > live TV it already plays.
 > Status: **v0.8.0 shipped** (2026-10-25) — §8 phase 1 is done: the `g9-sources` crate,
 > the Fun Mode wall/details/sources UI, search, browse, playback into the existing player and the
-> MangaDex reader. Torrents (v0.10.0) and the opt-in community scrapers (v0.12.0) are still ahead;
+> MangaDex reader. **v0.10.0 shipped the library and discovery half** (My List, Watching, watched /
+> following / hidden flags, merged search, filters, more-like-this, cast pages, autoplay-next, sleep
+> timer, mini player, backup and the first-run wizard). Torrents move to v0.11.0 and the opt-in
+> community scrapers to v0.13.0;
 > §13's open questions are unchanged for those phases.
 
 ---
@@ -274,21 +277,33 @@ new ones.
 - Download button in the details sheet → existing `dl_*` jobs (yt-dlp where possible, proxy stream as
   fallback).
 
-### v0.10.0 — Torrents
+### v0.10.0 — Library & discovery  ⟵ shipped 2026-10-25
+- `fun_lib` (schema v4) behind My List / Following / Watched / Hidden, and a Watching tab that
+  resumes the exact episode.
+- Real progress (8 s tick, 90 % marks watched), merged search with recents/scope/typo tolerance,
+  filters on See all, more-like-this, cast + person pages, right-click menu, keyboard nav.
+- Autoplay next episode with a 10 s card and a *Still watching?* check; sleep timer; quality cap
+  that actually picks the stream; mini player bar; settings hub; backup/restore JSON; `g9://`
+  title links; first-run wizard.
+- **Acceptance:** mark two titles, watch one past 90 %, close the app; on reopen My List and
+  Watching are intact and the episode resumes. Search merges duplicate titles from two sources
+  into one card with a source count.
+
+### v0.11.0 — Torrents
 - `g9-torrent` with librqbit embedded, buffer bar, file picker, peer stats, privacy dialog, caps.
 - Magnet results from tier-A sources become playable, with the same UI as any other stream.
 - MKV text-subtitle extraction through managed FFmpeg.
 - **Acceptance:** local seed→stream test in CI; a magnet plays after the buffer gate; seeking inside
   the buffered window is instant.
 
-### v0.11.0 — Reader
+### v0.12.0 — Reader
 - `#reader` with vertical / paged / spread modes, zoom & pan, preload budgets, chapter navigation.
 - MangaDex provider (search, tags, chapter list, pages, honouring their rate limits) + local CBZ.
 - Reading progress, “Continue reading”, mark-as-read, per-series zoom memory.
 - **Acceptance:** read a 3-chapter run end to end, restart the app and land on the same page; a
   200-page chapter never exceeds the bitmap budget.
 
-### v0.12.0 — Community providers (opt-in, tier C)
+### v0.13.0 — Community providers (opt-in, tier C)
 - New crate `g9-sources-community`: AnimePahe (+ Kwik unpacker), TokyoInsider, AnimeHeaven.
 - Gated by **Settings → Fun Mode → Community providers** (off by default, first-run notice, per-site
   toggles). Each provider has a **health check** row (“reachable / blocked / changed”) so a broken
@@ -296,7 +311,7 @@ new ones.
 - Per-host rate limits and a shared circuit breaker: 3 failures in 10 min disables that provider for
   the session.
 
-### v0.13.0 — Discovery polish
+### v0.14.0 — Discovery polish
 - Cross-provider search results merged into one list with per-source badges.
 - Genre / year / quality / language filters, sort, and “more like this” from tags.
 - Addon health page, cache controls (“clear Fun Mode cache”), export/import of the Fun Mode config.

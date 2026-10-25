@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.9.1** · source: `main`  
+Last updated: 2026-10-25 · release **v0.10.0** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -258,7 +258,7 @@ libplacebo-grade Anime4K/FSRCNNX chain does not. The rest are engine-level or ac
 
 **“23 long-tail”** — playlist, chapters (ffprobe), visualizer, PiP, background audio, cue browser, line-repeat, inspect, poster, sleep, settings JSON, gestures, RTMP: shipped. **v0.3.0** adds multi-window, a downloaded FFmpeg, a transcript pane, WebGL shader effects and a PC shutdown timer. Disc menus, cast-out, cloud, Plex/Jellyfin/Emby, skins, album art/TMDB library: **not implemented**.
 
-## Fun Mode (v0.8.0)
+## Fun Mode (v0.10.0)
 
 | Feature | State |
 |---|---|
@@ -273,5 +273,22 @@ libplacebo-grade Anime4K/FSRCNNX chain does not. The rest are engine-level or ac
 | yt-dlp resolver (`-J` → streams + required headers) | shipped |
 | MangaDex reader (search, chapters, pages, reading progress) | shipped |
 | Playback preferences (quality, subtitles, autoplay, fallback) | shipped |
-| Torrent streaming for magnet results | planned, v0.10.0 |
-| Community site scrapers (AnimePahe, AnimeHeaven, TokyoInsider) | opt-in, v0.12.0 |
+| My List in SQLite + a My List tab (sort by added / A–Z / newest) | shipped |
+| Watching tab that resumes the exact episode and second | shipped |
+| Real position tracking (8 s), auto *watched* at 90 % | shipped |
+| Watched ✓ / Following • marks on cards, Following rail | shipped |
+| Not interested (hidden) with a one-click Undo under the wall | shipped |
+| Merged search across sources, deduped, per-card source count | shipped |
+| Search recents, "What I added" scope, typo tolerance | shipped |
+| Filters on See all (genre / year / quality) with live counts | shipped |
+| More like this, cast row and person pages | shipped |
+| Keyboard navigation on the wall, right-click card menu | shipped |
+| Autoplay next episode (10 s card) + "Still watching?" | shipped |
+| Quality cap (data saver) and audio-language preference | shipped |
+| Sleep timer with a nav countdown chip | shipped |
+| Mini player bar (LIVE/PLAYING, pause, resume, stop) | shipped |
+| Settings hub, backup/restore JSON, cache clear, `g9://` links | shipped |
+| First-run wizard | shipped |
+| Torrent streaming for magnet results | planned, v0.11.0 |
+| Offline cache, profiles + PIN/Kids, collections, rail pinning | planned, v0.12.0 |
+| Community site scrapers (AnimePahe, AnimeHeaven, TokyoInsider) | opt-in, v0.13.0 |

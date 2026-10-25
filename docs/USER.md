@@ -25,8 +25,42 @@ It starts empty on purpose: G9 ships no catalogue. Open **Sources** (top right) 
 - **MangaDex** — flip it on for manga, manhwa and manhua, with a built-in reader.
 
 Click any card for episodes or chapters, source chips and **Play** (or **Read**). **See all** opens
-a grid you can sort; the box at the top searches every enabled source. Magnet results are labelled
-`Magnet` and start playing when the torrent engine lands in v0.10.0.
+a grid you can sort and filter by genre, year and quality; the box at the top searches every enabled
+source at once and merges the same title from several addons into one card that says how many
+carry it. Magnet results are labelled `Magnet` and start playing when the torrent engine lands in
+v0.11.0.
+
+### Keeping track
+
+- **My List** — the **+** on a title (or right-click → *Add to My List*). The **My List** tab keeps
+  them, sorted by *Added*, *A–Z* or *Newest*.
+- **Watching** — position is saved every 8 seconds, so *Continue watching* reopens the episode you
+  were on and seeks to the second you stopped. Past 90 % a title is marked watched by itself.
+- **Watched ✓ · Following •** — flags you set from the title page or the right-click menu; the
+  **Following** rail collects what you follow.
+- **Not interested** — hides a title and leaves an **Undo** line under the wall.
+- **Right-click a card** for open, play, My List, watched, follow, more like this, copy link and
+  not interested. Arrow keys walk the wall, `Enter` opens the focused card.
+
+### While it plays
+
+- **Autoplay next** — after an episode ends a 10-second *Up next* card starts the next one; after
+  three in a row G9 asks **Still watching?**.
+- **Quality cap** — *Playback → Preferred quality* limits the stream G9 picks (data saver);
+  *Audio language* prefers the matching labelled source.
+- **Sleep timer** — 30, 60 or 90 minutes from *Playback*; the countdown sits in the nav and pauses
+  playback when it runs out.
+- **Mini player** — a compact bar with a LIVE/PLAYING chip, pause, resume, stop and a jump back to
+  the player.
+
+### Your data
+
+The **P** button opens a small hub: *Playback*, *My List & history*, *Sources* and *Data*. Data
+backs up sources, progress and every flag to JSON (copy out, paste back — a restore merges), clears
+the in-memory source cache, and opens `g9://title/…` links. *Copy link* on any title produces one.
+
+The first time you open Fun Mode a three-step wizard explains all of this and lets you add a source
+and pick a data cap. It never shows again after you finish or skip it.
 
 ## Everyday controls
 

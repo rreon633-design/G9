@@ -11,14 +11,14 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.9.1)
+## Windows release (v0.10.0)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.9.1_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
-| `G9_0.9.1_x64_en-US.msi` | MSI for managed deployment |
+| `G9_0.10.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.10.0_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
 Download: **[Releases](https://github.com/rreon633-design/G9/releases)**
@@ -32,7 +32,10 @@ download small.
 - **Fun Mode** — movies, web series, anime, drama, manga / manhwa / manhua on one Netflix-shaped
   wall. It reads **sources you add**: any Stremio addon, any RSS feed of magnet links, the managed
   yt-dlp resolver, and MangaDex for the reader. Nothing is bundled, and the wall says so until you
-  add something. Magnet playback lands in v0.10.0
+  add something. It keeps **My List**, a **Watching** tab that resumes the exact episode, watched /
+  following / not-interested flags, merged search across every source, genre-year-quality filters,
+  more-like-this and cast pages, autoplay-next, a sleep timer and a mini player. Magnet playback
+  lands in v0.11.0
 - **Video downloader** — paste a link to a video page (YouTube, Instagram, Facebook and other
   sites), pick a quality and size, and let it run in the background; pause, resume, play, reveal
   or delete from the Downloads panel. Needs a managed `yt-dlp`, installed with one click

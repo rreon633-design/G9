@@ -2378,3 +2378,128 @@ input[type="range"]::-webkit-slider-thumb {
   padding: 6px 4px;
   font-size: 12px;
 }
+
+/* ---------------------------------------------------------------- Fun Mode v0.10 */
+
+/* Filter chips, scope switch, recents — the browse + search upgrade. */
+.fun-filters{display:flex;flex-direction:column;gap:10px;margin:14px 0 6px}
+.fun-fgroup{display:flex;align-items:center;gap:10px}
+.fun-fgroup>span{min-width:56px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.fun-fchips{display:flex;flex-wrap:wrap;gap:6px;flex:1}
+.fun-fchips button{border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.03);color:#cfd6e4;
+  font:500 12px/1 inherit;padding:7px 11px;border-radius:999px;cursor:pointer}
+.fun-fchips button:hover{border-color:rgba(76,157,255,.45);color:#fff}
+.fun-fchips button[aria-pressed="true"]{background:rgba(76,157,255,.18);border-color:rgba(76,157,255,.55);color:#fff}
+.fun-search-top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.fun-scope{display:flex;gap:4px;padding:3px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+.fun-scope button{border:0;background:0;color:var(--muted);font:600 11px/1 inherit;padding:7px 12px;border-radius:999px;cursor:pointer}
+.fun-scope button[aria-pressed="true"]{background:rgba(76,157,255,.2);color:#fff}
+.fun-recents{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0 14px}
+.fun-recents .lbl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.fun .fun-tag{border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.03);color:#dfe5f0;
+  font:500 12px/1 inherit;padding:7px 11px;border-radius:999px;cursor:pointer}
+.fun .fun-tag:hover{border-color:rgba(76,157,255,.45);color:#fff}
+.fun .fun-tag.is-quiet{color:var(--muted)}
+.fun-genrerow{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 2px}
+.c-srcs{font-style:normal;color:var(--muted);opacity:.85}
+
+/* Card marks: watched tick + following dot + resume bar (the bar already existed). */
+.fun-watched,.fun-following{position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;
+  display:grid;place-items:center;font-size:11px;font-weight:700;color:#04120b;background:var(--ok);z-index:2}
+.fun-following{top:auto;bottom:8px;right:8px;background:var(--accent2);color:#fff;font-size:14px;line-height:1}
+.fun-card .fun-prog{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.12);z-index:2}
+.fun-card .fun-prog i{display:block;height:100%;background:var(--accent)}
+
+/* Library grid (My List + Watching tabs). */
+.fun-libhead{display:flex;align-items:baseline;gap:12px;margin:8px 0 14px;flex-wrap:wrap}
+.fun-libhead h2{font:700 22px/1.1 inherit;margin:0}
+.fun-libhead .sub{color:var(--muted);font-size:12px}
+.fun-libsort{margin-left:auto;display:flex;gap:4px}
+.fun-libsort button{border:1px solid rgba(255,255,255,.09);background:0;color:var(--muted);
+  font:600 11px/1 inherit;padding:6px 10px;border-radius:999px;cursor:pointer}
+.fun-libsort button[aria-pressed="true"]{border-color:rgba(76,157,255,.5);color:#fff;background:rgba(76,157,255,.15)}
+.fun-libgrid{margin-top:4px;padding:0 30px}
+
+/* Cast row. */
+.fun-castbox{margin:16px 0 4px}
+.fun-cast-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.fun .fun-person{display:flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.03);color:#e6ebf5;font:500 12px/1 inherit;padding:6px 12px 6px 6px;
+  border-radius:999px;cursor:pointer;white-space:nowrap}
+.fun .fun-person .av{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:10px;font-weight:700}
+.fun .fun-person:hover{border-color:rgba(76,157,255,.5);color:#fff}
+
+/* Settings hub + data rows. */
+.hub-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin:14px 0}
+.fun .hub-tile{text-align:left;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);
+  border-radius:14px;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:6px;color:#e8edf7}
+.fun .hub-tile b{font-size:14px}
+.fun .hub-tile span{font-size:11px;color:var(--muted);line-height:1.45}
+.fun .hub-tile:hover{border-color:rgba(76,157,255,.45);background:rgba(76,157,255,.08)}
+.data-row{display:flex;align-items:center;gap:10px;margin:10px 0;flex-wrap:wrap}
+.data-row input{flex:1;min-width:180px}
+#data-paste{width:100%;margin:10px 0;background:rgba(255,255,255,.04);color:#e8edf7;
+  border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px;font:12px/1.5 ui-monospace,monospace;resize:vertical}
+
+/* Mini player: a thin bar while a Fun Mode stream is running. */
+.fun-mini{position:absolute;left:18px;right:18px;bottom:18px;z-index:34;display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:14px;background:rgba(12,15,22,.94);border:1px solid rgba(255,255,255,.09);
+  box-shadow:0 18px 40px rgba(0,0,0,.5);backdrop-filter:blur(14px)}
+.mini-live{font:700 10px/1 inherit;letter-spacing:.12em;padding:5px 8px;border-radius:6px;
+  background:rgba(61,220,151,.16);color:var(--ok)}
+.mini-live.is-quiet{background:rgba(76,157,255,.16);color:var(--accent)}
+.mini-title{flex:1;font:600 13px/1.2 inherit;color:#eef2fa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini-btn{font-size:11px;padding:7px 11px}
+
+/* Sleep timer chip in the nav. */
+.fun-timer-chip{font:700 10px/1 inherit;letter-spacing:.1em;padding:7px 9px;border-radius:8px;
+  background:rgba(139,92,246,.18);color:#cbb7ff;border:1px solid rgba(139,92,246,.4)}
+
+/* Right-click menu on a card. */
+.fun-menu{position:fixed;inset:0;z-index:60}
+.fun-menu-card{position:fixed;min-width:210px;max-width:260px;padding:6px;border-radius:14px;
+  background:rgba(14,16,22,.98);border:1px solid rgba(255,255,255,.1);box-shadow:0 22px 50px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;outline:none}
+.fun-menu-card .mm-head{padding:8px 10px 6px;font:600 12px/1.3 inherit;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:4px}
+.fun-menu-card button{text-align:left;border:0;background:0;color:#e8edf7;font:500 12px/1 inherit;
+  padding:9px 10px;border-radius:8px;cursor:pointer}
+.fun-menu-card button:hover{background:rgba(76,157,255,.14);color:#fff}
+
+/* First-run wizard + still-watching prompt. */
+.fun-wizard,.fun-still{position:absolute;inset:0;z-index:56;display:grid;place-items:center;
+  background:rgba(4,6,10,.72);backdrop-filter:blur(6px)}
+.wiz-card,.still-card{width:min(520px,90vw);padding:26px;border-radius:20px;background:#0d1017;
+  border:1px solid rgba(255,255,255,.1);box-shadow:0 30px 70px rgba(0,0,0,.65)}
+.wiz-card h2,.still-card b{font:700 20px/1.2 inherit;margin:0 0 10px;display:block;color:#fff}
+.wiz-card p,.still-card span{color:#aeb8c8;font-size:13px;line-height:1.6;margin:0 0 16px;display:block}
+.wiz-dots{display:flex;gap:6px;margin-bottom:16px}
+.wiz-dots i{width:22px;height:3px;border-radius:2px;background:rgba(255,255,255,.14)}
+.wiz-dots i.on{background:var(--accent)}
+.wiz-row{display:flex;align-items:center;gap:8px;margin:10px 0}
+.wiz-row input{flex:1}
+.wiz-row.end{justify-content:flex-end;margin-top:18px}
+.wiz-row select{background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.12);
+  border-radius:10px;padding:9px 10px;font:500 13px/1 inherit}
+.wiz-row span{color:#cfd6e4;font-size:12px}
+.wiz-skip{background:0;border:0;color:var(--muted);font:500 11px/1 inherit;cursor:pointer;margin-top:10px}
+.wiz-skip:hover{color:#fff}
+.still-row{display:flex;gap:8px;justify-content:flex-end}
+
+/* Refresh chip spin. */
+#fun-refresh.is-spin svg{animation:fun-spin .9s linear infinite}
+@keyframes fun-spin{to{transform:rotate(360deg)}}
+
+/* Info buttons that are on (My List, watched, follow) read as pressed. */
+.fun-icon-btn.is-on,.fun-icon-btn.on{border-color:rgba(76,157,255,.6);background:rgba(76,157,255,.18);color:#fff}
+.fun-icon-btn.is-quiet{opacity:.7}
+@media (max-width:720px){
+  .fun-mini{left:10px;right:10px;bottom:10px}
+  .fun-libhead h2{font-size:18px}
+  .fun .hub-grid{grid-template-columns:1fr 1fr}
+}
+
+/* Overlays set display:grid/flex, which would beat the UA rule for [hidden] —
+   a hidden overlay must never eat a click. */
+.fun-wizard[hidden],.fun-still[hidden],.fun-mini[hidden],.fun-menu[hidden],.fun-filters[hidden]{display:none}

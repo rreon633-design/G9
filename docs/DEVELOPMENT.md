@@ -19,6 +19,7 @@
 | `cargo test -p g9-core -p g9-iptv -p g9-store -p g9-sources` | the crates GitHub CI runs |
 | `node domtest/smoke6.js` | Fun Mode: wall → sheet → play, sources, search, browse, reader |
 | `node domtest/smoke7.js` | v0.9.0 basics: picture, speed, drop, playlists, picker, update, reconnect |
+| `node domtest/smoke8.js` | v0.10.0 library: My List, Watching, flags, filters, merged search, menu, keys, timer, mini player, hub, wizard, `g9://` |
 | `cargo fmt --all` | format |
 | `cargo clippy -p g9-core -p g9-iptv -p g9-store -p g9-sources --all-targets -- -D warnings` | lint (CI) |
 | `cargo check -p g9` | fast compile check of the app crate (needs WebKit on Linux, works on Windows) |

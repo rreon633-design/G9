@@ -182,6 +182,24 @@ pub fn parse_manifest(body: &str) -> Result<Manifest, String> {
     Ok(m)
 }
 
+/// Read a list of people (`cast`) out of a meta object. Entries may be bare
+/// strings or objects with a `name`.
+fn names_in(m: &Value, key: &str) -> Vec<String> {
+    m.get(key)
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|p| {
+                    p.as_str()
+                        .map(str::to_string)
+                        .or_else(|| p.get("name").and_then(Value::as_str).map(str::to_string))
+                })
+                .take(12)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn poster_of(meta: &Value) -> Option<String> {
     meta.get("poster")
         .or_else(|| meta.get("background"))
@@ -247,6 +265,7 @@ pub fn parse_catalogs(body: &str, kind_hint: &str, source_id: i64) -> Result<Vec
                     .collect()
             })
             .unwrap_or_default();
+        item.cast = names_in(m, "cast");
         if let Some(s) = m.get("runtime").and_then(Value::as_str) {
             item.subtitle = Some(s.to_string());
         }
@@ -297,6 +316,7 @@ pub fn parse_meta(body: &str, source_id: i64, want_season: Option<i32>) -> Resul
                 .collect()
         })
         .unwrap_or_default();
+    item.cast = names_in(m, "cast");
 
     let mut episodes: Vec<Episode> = m
         .get("videos")
@@ -553,7 +573,7 @@ mod tests {
     #[test]
     fn catalogs_become_cards() {
         let body = r#"{"metas":[
-            {"id":"tt1","type":"movie","name":"First","poster":"https://p/1.jpg","year":"2024","imdbRating":"8.1","genres":["Sci-Fi"]},
+            {"id":"tt1","type":"movie","name":"First","poster":"https://p/1.jpg","year":"2024","imdbRating":"8.1","genres":["Sci-Fi"],"cast":["Ada One",{"name":"Bo Two"}]},
             {"id":"tt2","name":"Second","releaseInfo":"2021-2022","description":"<b>Two</b> lines"}
         ]}"#;
         let items = parse_catalogs(body, "series", 7).unwrap();
@@ -565,6 +585,10 @@ mod tests {
         assert_eq!(items[1].kind, Kind::Series); // falls back to the catalog type
         assert_eq!(items[1].year, Some(2021));
         assert_eq!(items[1].synopsis.as_deref(), Some("Two lines"));
+        assert_eq!(
+            items[0].cast,
+            vec!["Ada One".to_string(), "Bo Two".to_string()]
+        );
     }
 
     #[test]

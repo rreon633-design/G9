@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use g9_sources::model::{Details, Episode, Item, Kind, Shelf, Stream};
 use g9_sources::{mangadex, rss, stremio, ytdlp};
-use g9_store::{FunProgressRow, FunSourceRow};
+use g9_store::{FunLibRow, FunProgressRow, FunSourceRow};
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
@@ -779,6 +779,59 @@ pub async fn fun_pages(id: String, chapter: String) -> Result<Vec<String>, Strin
 #[tauri::command]
 pub fn fun_progress_save(state: State<AppState>, row: FunProgressRow) -> Result<(), String> {
     store_of(&state)?.fun_progress_save(&row).map_err(store_err)
+}
+
+// ---------------------------------------------------------------- library
+
+/// Rows of one library flag: `list`, `follow`, `watched` or `hidden`.
+#[tauri::command]
+pub fn fun_lib_list(state: State<AppState>, kind: String) -> Result<Vec<FunLibRow>, String> {
+    store_of(&state)?
+        .fun_lib_list(&clean_kind(&kind))
+        .map_err(store_err)
+}
+
+fn clean_kind(kind: &str) -> String {
+    match kind {
+        "list" | "follow" | "watched" | "hidden" => kind.to_string(),
+        _ => "list".to_string(),
+    }
+}
+
+#[tauri::command]
+pub fn fun_lib_set(state: State<AppState>, row: FunLibRow) -> Result<(), String> {
+    let mut row = row;
+    row.kind = clean_kind(&row.kind);
+    if row.item_id.trim().is_empty() || row.title.trim().is_empty() {
+        return Err("Nothing to keep".into());
+    }
+    store_of(&state)?.fun_lib_set(&row).map_err(store_err)
+}
+
+#[tauri::command]
+pub fn fun_lib_remove(state: State<AppState>, kind: String, item_id: String) -> Result<(), String> {
+    store_of(&state)?
+        .fun_lib_remove(&clean_kind(&kind), &item_id)
+        .map_err(store_err)
+}
+
+/// Everything the viewer flagged on one title, so the sheet can paint its buttons.
+#[tauri::command]
+pub fn fun_lib_flags(state: State<AppState>, item_id: String) -> Result<Vec<String>, String> {
+    store_of(&state)?.fun_lib_flags(&item_id).map_err(store_err)
+}
+
+/// Drop the in-memory HTTP cache so the next visit asks every source again.
+#[tauri::command]
+pub fn fun_cache_clear() -> usize {
+    let map = cache();
+    let mut guard = match map.lock() {
+        Ok(g) => g,
+        Err(e) => e.into_inner(),
+    };
+    let n = guard.len();
+    guard.clear();
+    n
 }
 
 #[tauri::command]

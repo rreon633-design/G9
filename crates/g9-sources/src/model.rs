@@ -132,6 +132,9 @@ pub struct Item {
     /// Rows this belongs to (`Continue watching`, `New episodes`, …).
     #[serde(default)]
     pub badge: Option<String>,
+    /// Top-billed people, when the source lists them. Powers the cast row.
+    #[serde(default)]
+    pub cast: Vec<String>,
 }
 
 impl Item {
@@ -149,6 +152,7 @@ impl Item {
             subtitle: None,
             quality: Quality::Unknown,
             badge: None,
+            cast: Vec::new(),
         }
     }
 }

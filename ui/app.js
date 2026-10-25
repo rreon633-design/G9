@@ -3293,6 +3293,8 @@
     saveResume();
   });
   video.addEventListener("ended", function () {
+    // Fun Mode may take over to offer the next episode.
+    if (window.G9Fun && typeof window.G9Fun.onEnded === "function" && window.G9Fun.onEnded()) return;
     if (state.repeat) {
       video.currentTime = 0;
       video.play();
@@ -5854,6 +5856,26 @@
     play: function (title, url) { playUrl(title, url); },
     hideGate: hideGate,
     toast: toast,
+    // Transport hooks for Fun Mode's mini bar (v0.9.0).
+    pause: function () { if (!video.paused) video.pause(); },
+    resume: function () { if (video.paused && state.mediaUrl) video.play().catch(function () {}); },
+    stop: function () { if (state.mediaUrl) stop(); },
+    nowPlaying: function () {
+      if (!state.mediaUrl) return null;
+      return {
+        title: state.playTitle || state.title || "",
+        url: state.mediaUrl,
+        paused: video.paused,
+        live: state.mediaKind === "live" || !isFinite(video.duration),
+        time: video.currentTime || 0,
+        duration: isFinite(video.duration) ? video.duration : 0
+      };
+    },
+    // Jump to a position (Fun Mode resume, "skip to next").
+    seek: function (seconds) {
+      if (!state.mediaUrl || !isFinite(seconds)) return;
+      try { video.currentTime = Number(seconds) || 0; } catch (e) {}
+    },
     showChrome: showChrome,
     hideTv: function () { if (state.tv) { tvHide(); setTv(false); } },
     isTv: function () { return !!state.tv; },

@@ -49,6 +49,22 @@ pub struct FunProgressRow {
     pub updated_at: String,
 }
 
+/// A row in the Fun Mode library: My List, Following, Watched or Hidden.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FunLibRow {
+    /// `list` | `follow` | `watched` | `hidden`.
+    pub kind: String,
+    pub item_id: String,
+    pub source_id: i64,
+    pub title: String,
+    pub item_kind: Option<String>,
+    pub poster: Option<String>,
+    /// Free-form JSON (progress at watch time, badge, season…) — keeps new
+    /// viewer flags out of the schema.
+    pub meta: Option<String>,
+    pub added_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceRow {
     pub id: i64,
@@ -564,6 +580,72 @@ impl Store {
     /// Upsert one progress row. A finished title (`position/duration > .95`) is
     /// kept so it still shows in recents, just without a resume point.
     #[allow(clippy::too_many_arguments)]
+    /// One library flag (My List, Following, Watched, Hidden) for a title.
+    pub fn fun_lib_set(&self, row: &FunLibRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO fun_lib (kind, item_id, source_id, title, item_kind, poster, meta, added_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
+             ON CONFLICT(kind, item_id) DO UPDATE SET
+               source_id = excluded.source_id,
+               title = excluded.title,
+               item_kind = excluded.item_kind,
+               poster = excluded.poster,
+               meta = excluded.meta",
+            params![
+                row.kind,
+                row.item_id,
+                row.source_id,
+                row.title,
+                row.item_kind,
+                row.poster,
+                row.meta
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn fun_lib_remove(&self, kind: &str, item_id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM fun_lib WHERE kind = ?1 AND item_id = ?2",
+            params![kind, item_id],
+        )?;
+        Ok(())
+    }
+
+    /// Every row of one flag, newest first.
+    pub fn fun_lib_list(&self, kind: &str) -> Result<Vec<FunLibRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT kind, item_id, source_id, title, item_kind, poster, meta, added_at
+             FROM fun_lib WHERE kind = ?1 ORDER BY added_at DESC, item_id LIMIT 2000",
+        )?;
+        let rows = stmt
+            .query_map(params![kind], |r| {
+                Ok(FunLibRow {
+                    kind: r.get(0)?,
+                    item_id: r.get(1)?,
+                    source_id: r.get(2)?,
+                    title: r.get(3)?,
+                    item_kind: r.get(4)?,
+                    poster: r.get(5)?,
+                    meta: r.get(6)?,
+                    added_at: r.get(7)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Every flag on one title, so the sheet can render its buttons in one call.
+    pub fn fun_lib_flags(&self, item_id: &str) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT kind FROM fun_lib WHERE item_id = ?1")?;
+        let rows = stmt
+            .query_map(params![item_id], |r| r.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     pub fn fun_progress_save(&self, row: &FunProgressRow) -> Result<()> {
         self.conn.execute(
             "INSERT INTO fun_progress (source_id, item_id, kind, title, poster, episode_id,
@@ -888,5 +970,53 @@ mod tests {
         store.fun_source_remove(a).unwrap();
         assert!(store.fun_progress_for(a, "tt1").unwrap().is_none());
         assert_eq!(store.fun_sources().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn fun_lib_flags_round_trip() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path().join("g9.db")).unwrap();
+
+        let row = FunLibRow {
+            kind: "list".into(),
+            item_id: "1:tt7".into(),
+            source_id: 1,
+            title: "A Film".into(),
+            item_kind: Some("movie".into()),
+            poster: Some("https://img/p.jpg".into()),
+            meta: Some("{\"year\":2024}".into()),
+            added_at: String::new(),
+        };
+        store.fun_lib_set(&row).unwrap();
+        // Setting the same flag twice updates instead of duplicating.
+        store.fun_lib_set(&row).unwrap();
+        let list = store.fun_lib_list("list").unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].title, "A Film");
+        assert_eq!(list[0].meta.as_deref(), Some("{\"year\":2024}"));
+        assert!(!list[0].added_at.is_empty());
+
+        // A second flag on the same title is a separate row.
+        let mut follow = row.clone();
+        follow.kind = "follow".into();
+        store.fun_lib_set(&follow).unwrap();
+        assert_eq!(store.fun_lib_list("follow").unwrap().len(), 1);
+        let mut flags = store.fun_lib_flags("1:tt7").unwrap();
+        flags.sort();
+        assert_eq!(flags, vec!["follow".to_string(), "list".to_string()]);
+
+        // Watched and hidden are independent of each other.
+        let mut watched = row.clone();
+        watched.kind = "watched".into();
+        store.fun_lib_set(&watched).unwrap();
+        let mut hidden = row.clone();
+        hidden.kind = "hidden".into();
+        store.fun_lib_set(&hidden).unwrap();
+        assert_eq!(store.fun_lib_list("hidden").unwrap().len(), 1);
+
+        store.fun_lib_remove("list", "1:tt7").unwrap();
+        assert!(store.fun_lib_list("list").unwrap().is_empty());
+        assert_eq!(store.fun_lib_list("follow").unwrap().len(), 1);
+        assert_eq!(store.fun_lib_flags("1:tt7").unwrap().len(), 3);
     }
 }

@@ -120,6 +120,11 @@ pub fn run() {
             fun::fun_resolve,
             fun::fun_pages,
             fun::fun_progress_save,
+            fun::fun_lib_list,
+            fun::fun_lib_set,
+            fun::fun_lib_remove,
+            fun::fun_lib_flags,
+            fun::fun_cache_clear,
             fun::fun_progress_list,
             fun::fun_progress_remove,
         ])
