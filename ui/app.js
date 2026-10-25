@@ -2168,6 +2168,8 @@
       '<div class="settings-group"><p class="settings-label">Engine</p>' +
       '<div class="settings-row"><div class="txt"><b>FFmpeg</b><span id="set-ff">Checking…</span></div>' +
       '<button type="button" data-set="ffmpeg">Manage</button></div>' +
+      '<div class="settings-row"><div class="txt"><b>Video downloads</b><span id="set-dl">YouTube, Instagram, Facebook and other sites</span></div>' +
+      '<button type="button" data-set="dl">Open</button></div>' +
       '<div class="settings-row"><div class="txt"><b>About G9</b><span id="set-ver">Version, license, content policy</span></div>' +
       '<button type="button" data-set="about">Open</button></div></div>';
 
@@ -2208,6 +2210,10 @@
         if (what === "ffmpeg") {
           modal.hidden = true;
           openFfmpeg();
+        }
+        if (what === "dl") {
+          modal.hidden = true;
+          openDownloads();
         }
       });
     });
@@ -2440,6 +2446,7 @@
 
     title.textContent = "Live TV";
     count.textContent = String(state.channels.length);
+    refreshGuide();
     var chips = [
       '<button type="button" class="chip' +
         (!state.favOnly && state.group === "All" ? " on" : "") +
@@ -2490,7 +2497,7 @@
           escapeHtml(c.name) +
           "</b><span>" +
           escapeHtml(c.group_name || "") +
-          '</span></div><button type="button" class="star' +
+          '</span><span class="epg" data-epg></span></div><button type="button" class="star' +
           (c.is_favourite ? " on" : "") +
           '" data-star="' +
           c.id +
@@ -2514,6 +2521,7 @@
         invoke("toggle_favourite", { id: Number(btn.getAttribute("data-star")) }).then(loadChannels).catch(fail);
       });
     });
+    paintGuide();
   }
 
   function refresh() {
@@ -3459,6 +3467,614 @@
     playUrl(decodeURIComponent((src.split("/").pop() || "G9").split("?")[0]), src);
     video.play().catch(function () {});
   })();
+
+  /* ---------- web video downloads ---------- */
+  var dlPick = null;
+  var dlPaintAt = 0;
+
+  function humanBytes(n) {
+    n = Number(n) || 0;
+    if (n <= 0) return "";
+    var units = ["B", "KB", "MB", "GB", "TB"];
+    var i = 0;
+    while (n >= 1024 && i < units.length - 1) {
+      n = n / 1024;
+      i++;
+    }
+    return (n >= 10 || i === 0 ? Math.round(n) : n.toFixed(1)) + " " + units[i];
+  }
+
+  function humanEta(sec) {
+    sec = Number(sec);
+    if (!isFinite(sec) || sec <= 0) return "";
+    if (sec < 60) return Math.round(sec) + "s left";
+    if (sec < 3600) return Math.round(sec / 60) + " min left";
+    return Math.round(sec / 3600) + " h left";
+  }
+
+  function dlError(e) {
+    var msg = String((e && e.message) || e || "").replace(/https?:\/\/\S+/g, " ").trim();
+    if (!msg) return "Could not read that link";
+    if (/not installed|not found|no downloader/i.test(msg)) return "Downloader is not installed";
+    return shortError(msg, "Could not read that link").slice(0, 120);
+  }
+
+  function dlTool() {
+    return invoke("dl_tool")
+      .then(function (st) {
+        var el = document.getElementById("dl-state");
+        var inst = document.getElementById("dl-install");
+        var folder = document.getElementById("dl-folder");
+        if (el) {
+          if (!st) el.textContent = "Unavailable";
+          else if (st.available)
+            el.textContent =
+              "Downloader ready" + (st.version ? " · " + st.version : "") + (st.managed ? " · managed copy" : "");
+          else el.textContent = "Downloader not installed";
+        }
+        if (inst) {
+          inst.hidden = !!(st && st.available);
+          inst.textContent = "Install downloader";
+        }
+        if (folder) folder.hidden = !(st && st.download_dir);
+        state.dlTool = st || null;
+        return st;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function dlStatusWord(job) {
+    switch (job.status) {
+      case "running":
+        return job.percent > 0 ? Math.round(job.percent) + "%" : "Starting";
+      case "queued":
+        return "Queued";
+      case "paused":
+        return job.percent > 0 ? "Paused · " + Math.round(job.percent) + "%" : "Paused";
+      case "done":
+        return "Done";
+      case "failed":
+        return "Failed";
+      case "cancelled":
+        return "Stopped";
+      default:
+        return String(job.status || "");
+    }
+  }
+
+  function dlDetail(job) {
+    if (job.status === "failed") return { text: shortError(job.error || "", "Could not finish this one"), err: true };
+    if (job.status === "done") {
+      var size = humanBytes(job.total || job.downloaded);
+      return { text: size ? size + " saved" : "Saved", err: false };
+    }
+    if (job.status === "paused" || job.status === "cancelled")
+      return { text: humanBytes(job.downloaded) + (job.total ? " of " + humanBytes(job.total) : ""), err: false };
+    var bits = [];
+    if (job.downloaded || job.total)
+      bits.push(humanBytes(job.downloaded) + (job.total ? " of " + humanBytes(job.total) : ""));
+    if (job.speed) bits.push(humanBytes(job.speed) + "/s");
+    var eta = humanEta(job.eta);
+    if (eta) bits.push(eta);
+    return { text: bits.join(" · ") || "Working…", err: false };
+  }
+
+  function dlJobHtml(job) {
+    var pct = Math.max(0, Math.min(100, Number(job.percent) || 0));
+    if (job.status === "done") pct = 100;
+    var detail = dlDetail(job);
+    var canToggle = job.status === "running" || job.status === "queued" || job.status === "paused";
+    var done = job.status === "done" && job.path;
+    return (
+      '<div class="dl-job ' +
+      escapeHtml(job.status) +
+      '" data-job="' +
+      escapeHtml(job.id) +
+      '">' +
+      '<div class="dl-job-top"><b title="' +
+      escapeHtml(job.title || job.url) +
+      '">' +
+      escapeHtml(job.title || job.url) +
+      "</b><span>" +
+      escapeHtml(job.site || "web") +
+      "</span></div>" +
+      '<div class="dl-bar"><i style="width:' +
+      pct +
+      '%"></i></div>' +
+      '<div class="dl-job-info' +
+      (detail.err ? " err" : "") +
+      '">' +
+      escapeHtml(dlStatusWord(job) + (detail.text ? " · " + detail.text : "")) +
+      "</div>" +
+      '<div class="dl-job-btns">' +
+      '<button type="button" data-dl-play' +
+      (done ? "" : " hidden") +
+      ">Play</button>" +
+      '<button type="button" data-dl-toggle' +
+      (canToggle ? "" : " hidden") +
+      ">" +
+      (job.status === "paused" ? "Resume" : "Pause") +
+      "</button>" +
+      '<button type="button" data-dl-folder' +
+      (job.path ? "" : " hidden") +
+      ">Folder</button>" +
+      '<button type="button" data-dl-del>Delete</button>' +
+      "</div></div>"
+    );
+  }
+
+  function dlPaint() {
+    var list = document.getElementById("dl-list");
+    if (list) {
+      list.innerHTML = (state.downloads || []).map(dlJobHtml).join("");
+      list.querySelectorAll("[data-job]").forEach(function (row) {
+        var id = row.getAttribute("data-job");
+        var btn;
+        btn = row.querySelector("[data-dl-play]");
+        if (btn) btn.addEventListener("click", function () { dlPlay(id); });
+        btn = row.querySelector("[data-dl-toggle]");
+        if (btn) btn.addEventListener("click", function () { dlToggle(id); });
+        btn = row.querySelector("[data-dl-folder]");
+        if (btn) btn.addEventListener("click", function () { dlReveal(id); });
+        btn = row.querySelector("[data-dl-del]");
+        if (btn) btn.addEventListener("click", function () { dlDelete(id); });
+      });
+    }
+    var badge = document.getElementById("dl-count");
+    if (badge) {
+      var live = (state.downloads || []).filter(function (j) {
+        return j.status === "running" || j.status === "queued" || j.status === "paused";
+      }).length;
+      badge.hidden = !live;
+      badge.textContent = String(live);
+    }
+  }
+
+  function downloadsRefresh() {
+    return invoke("dl_list")
+      .then(function (jobs) {
+        state.downloads = Array.isArray(jobs) ? jobs : [];
+        dlPaint();
+        return state.downloads;
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function openDownloads() {
+    var panel = document.getElementById("dl-panel");
+    if (!panel) return;
+    panel.hidden = false;
+    showChrome();
+    downloadsRefresh();
+    dlTool();
+  }
+
+  function dlToggle(id) {
+    invoke("dl_toggle", { id: id })
+      .then(function () {
+        return downloadsRefresh();
+      })
+      .catch(function (e) {
+        toast(dlError(e));
+      });
+  }
+
+  function dlPlay(id) {
+    invoke("dl_play", { id: id })
+      .then(function (path) {
+        var panel = document.getElementById("dl-panel");
+        if (panel) panel.hidden = true;
+        state.mediaKind = "file";
+        state.mediaPath = path;
+        var name = String(path).split(/[\\/]/).pop();
+        playUrl(name, convertFileSrc(path));
+        maybeAutoSubs();
+      })
+      .catch(function (e) {
+        toast(dlError(e));
+      });
+  }
+
+  function dlReveal(id) {
+    invoke("dl_reveal", { id: id }).catch(function (e) {
+      toast(dlError(e));
+    });
+  }
+
+  function dlDelete(id) {
+    var job = (state.downloads || []).find(function (j) {
+      return j.id === id;
+    });
+    ask({
+      title: "Delete this download?",
+      hint: job ? job.title || job.url : "",
+      warn: true,
+      choices: ["Delete the file too", "Keep the file"],
+      okText: "Delete",
+    }).then(function (pick) {
+      if (!pick) return;
+      var file = pick === "Delete the file too";
+      invoke("dl_remove", { id: id, deleteFile: file })
+        .then(function () {
+          return downloadsRefresh();
+        })
+        .then(function () {
+          toast(file ? "Download deleted" : "Removed from the list");
+        })
+        .catch(function (e) {
+          toast(dlError(e));
+        });
+    });
+  }
+
+  function dlPickPaint(info) {
+    var box = document.getElementById("dl-result");
+    if (!box) return;
+    var picks = (info && info.choices) || [];
+    if (!picks.length) {
+      box.hidden = false;
+      box.innerHTML = '<p class="dl-fail">No downloadable formats on that page</p>';
+      return;
+    }
+    if (!dlPick || !picks.some(function (c) { return c.height === dlPick.height; })) {
+      dlPick = picks.filter(function (c) { return c.height === 1080; })[0] || picks[0];
+    }
+    var mins = info.duration ? Math.round(info.duration / 60) : 0;
+    var sub = [info.site || "Web", mins ? mins + " min" : "", info.uploader || ""]
+      .filter(function (x) { return !!x; })
+      .join(" · ");
+    box.hidden = false;
+    box.innerHTML =
+      '<div class="dl-title">' +
+      escapeHtml(info.title || "Untitled") +
+      "</div>" +
+      '<div class="dl-sub">' +
+      escapeHtml(sub) +
+      "</div>" +
+      '<div class="dl-picks">' +
+      picks
+        .map(function (c) {
+          var size = humanBytes(c.size);
+          return (
+            '<button type="button" class="dl-pick' +
+            (dlPick && dlPick.height === c.height ? " on" : "") +
+            '" data-h="' +
+            c.height +
+            '"><span>' +
+            escapeHtml(c.label) +
+            "</span>" +
+            (size ? "<small>~" + size + "</small>" : c.audio_only ? "<small>audio</small>" : "") +
+            "</button>"
+          );
+        })
+        .join("") +
+      "</div>" +
+      '<div class="dl-actions"><button type="button" class="primary" id="dl-start">Download ' +
+      escapeHtml(dlPick ? dlPick.label : "") +
+      "</button></div>";
+    box.querySelectorAll("[data-h]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var h = Number(btn.getAttribute("data-h"));
+        dlPick = picks.find(function (c) {
+          return c.height === h;
+        });
+        dlPickPaint(info);
+      });
+    });
+    var start = box.querySelector("#dl-start");
+    if (start) start.addEventListener("click", function () { dlStart(info); });
+  }
+
+  function dlProbe() {
+    var input = document.getElementById("dl-url");
+    var box = document.getElementById("dl-result");
+    var url = input ? String(input.value || "").trim() : "";
+    if (!url) {
+      toast("Paste a video link first");
+      return;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      toast("Links start with http:// or https://");
+      return;
+    }
+    if (box) {
+      box.hidden = false;
+      box.innerHTML = '<p class="dl-sub">Checking the link…</p>';
+    }
+    dlTool().then(function (st) {
+      if (!st || !st.available) {
+        if (box)
+          box.innerHTML =
+            '<p class="dl-fail">The downloader is not installed yet</p>' +
+            '<div class="dl-actions"><button type="button" class="primary" id="dl-install-inline">Install downloader</button></div>';
+        var again = document.getElementById("dl-install-inline");
+        if (again)
+          again.addEventListener("click", function () {
+            again.disabled = true;
+            again.textContent = "Installing…";
+            dlInstall();
+          });
+        return;
+      }
+      return invoke("dl_probe", { url: url })
+        .then(function (info) {
+          state.dlUrl = url;
+          state.dlInfo = info;
+          dlPickPaint(info);
+        })
+        .catch(function (e) {
+          if (box) box.innerHTML = '<p class="dl-fail">' + escapeHtml(dlError(e)) + "</p>";
+        });
+    });
+  }
+
+  function dlStart() {
+    var url = state.dlUrl || "";
+    if (!url || !dlPick) return;
+    var btn = document.getElementById("dl-start");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Starting…";
+    }
+    invoke("dl_start", { url: url, height: Number(dlPick.height) || 0, title: (state.dlInfo || {}).title || "" })
+      .then(function () {
+        var input = document.getElementById("dl-url");
+        if (input) input.value = "";
+        var box = document.getElementById("dl-result");
+        if (box) box.hidden = true;
+        toast("Downloading in the background");
+        return downloadsRefresh();
+      })
+      .then(openDownloads)
+      .catch(function (e) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Download " + dlPick.label;
+        }
+        toast(dlError(e));
+      });
+  }
+
+  function dlInstall() {
+    var el = document.getElementById("dl-state");
+    if (el) el.textContent = "Installing downloader… 0%";
+    invoke("dl_install")
+      .then(function (st) {
+        var stateEl = document.getElementById("dl-state");
+        if (stateEl) stateEl.textContent = st && st.available ? "Downloader ready" : "Not installed";
+        toast(st && st.available ? "Downloader ready" : "Downloader did not start");
+        return dlTool();
+      })
+      .then(function () {
+        return downloadsRefresh();
+      })
+      .catch(function (e) {
+        if (el) el.textContent = dlError(e);
+        toast(dlError(e));
+      });
+  }
+
+  /* ---------- IPTV guide ---------- */
+  function guidePaint(st) {
+    var bar = document.getElementById("guide-bar");
+    var txt = document.getElementById("guide-state");
+    if (!bar || !txt) return;
+    bar.hidden = false;
+    var btn = document.getElementById("guide-load");
+    if (!st || !st.loaded) {
+      txt.textContent = "No guide loaded";
+      if (btn) btn.textContent = "Load guide";
+      return;
+    }
+    var chans = st.channels || 0;
+    txt.textContent = "Guide · " + chans + " channels · " + (st.programmes || 0) + " programmes";
+    if (btn) btn.textContent = "Refresh";
+  }
+
+  function refreshGuide() {
+    var bar = document.getElementById("guide-bar");
+    if (bar) bar.hidden = state.view !== "live";
+    if (state.view !== "live") return;
+    invoke("epg_status").then(guidePaint).catch(function () {});
+  }
+
+  function paintGuide() {
+    if (!listEl) return;
+    var rows = listEl.querySelectorAll("[data-ch]");
+    if (!rows.length) return;
+    var keys = [];
+    var keyOf = {};
+    rows.forEach(function (row) {
+      var id = row.getAttribute("data-ch");
+      var ch = (state.channels || []).find(function (c) {
+        return String(c.id) === id;
+      });
+      if (!ch) return;
+      var key = ch.tvg_id || ch.name;
+      if (!key) return;
+      keyOf[id] = key;
+      if (keys.indexOf(key) < 0) keys.push(key);
+    });
+    if (!keys.length) return;
+    invoke("epg_now", { ids: keys })
+      .then(function (list) {
+        if (!Array.isArray(list)) return;
+        var byKey = {};
+        list.forEach(function (g) {
+          if (g && g.now_title) byKey[g.channel] = g;
+        });
+        rows.forEach(function (row) {
+          var slot = row.querySelector("[data-epg]");
+          var g = byKey[keyOf[row.getAttribute("data-ch")]];
+          if (!slot || !g) return;
+          slot.innerHTML =
+            '<span class="epg-now">' +
+            escapeHtml(g.now_title) +
+            "</span>" +
+            (g.next_title ? '<span class="epg-next">Next · ' + escapeHtml(g.next_title) + "</span>" : "");
+        });
+      })
+      .catch(function () {});
+  }
+
+  function loadGuideNow() {
+    var btn = document.getElementById("guide-load");
+    if (btn) btn.disabled = true;
+    var src = (state.sources || []).filter(function (s) {
+      return s.kind === "url" && s.channel_count >= 0;
+    })[0];
+    var fromSource = src
+      ? invoke("epg_load_source", { id: src.id })
+      : Promise.reject(new Error("no source"));
+    fromSource
+      .then(function (st) {
+        guidePaint(st);
+        paintGuide();
+        toast("Guide loaded");
+      })
+      .catch(function () {
+        return ask({
+          title: "Guide address",
+          hint: "Paste an XMLTV guide (.xml) address",
+          input: true,
+          value: "",
+          okText: "Load",
+        }).then(function (url) {
+          if (!url) return null;
+          return invoke("epg_load", { url: url }).then(function (st) {
+            guidePaint(st);
+            paintGuide();
+            toast("Guide loaded");
+          });
+        });
+      })
+      .catch(function (e) {
+        toast(dlError(e));
+      })
+      .then(function () {
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  /* ---------- Xtream portal ---------- */
+  function xtreamImport() {
+    var server = String((document.getElementById("xt-server") || {}).value || "").trim();
+    var user = String((document.getElementById("xt-user") || {}).value || "").trim();
+    var pass = String((document.getElementById("xt-pass") || {}).value || "").trim();
+    if (!server || !user || !pass) {
+      toast("Server, username and password are needed");
+      return;
+    }
+    var btn = document.getElementById("xt-go");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Connecting…";
+    }
+    invoke("xtream_import", { server: server, user: user, pass: pass, name: null })
+      .then(function (r) {
+        importModal.hidden = true;
+        state.view = "live";
+        toast("Added " + (r && r.channel_count ? r.channel_count : 0) + " channels");
+        return refresh();
+      })
+      .catch(function (e) {
+        toast(dlError(e));
+      })
+      .then(function () {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Import portal";
+        }
+      });
+  }
+
+  (function dlWire() {
+    var fetchBtn = document.getElementById("dl-fetch");
+    if (fetchBtn) fetchBtn.addEventListener("click", dlProbe);
+    var input = document.getElementById("dl-url");
+    if (input)
+      input.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          dlProbe();
+        }
+      });
+    var openBtn = document.getElementById("dl-open");
+    if (openBtn) openBtn.addEventListener("click", openDownloads);
+    var menuBtn = document.getElementById("btn-downloads");
+    if (menuBtn) menuBtn.addEventListener("click", openDownloads);
+    var close = document.getElementById("dl-close");
+    if (close)
+      close.addEventListener("click", function () {
+        document.getElementById("dl-panel").hidden = true;
+      });
+    var inst = document.getElementById("dl-install");
+    if (inst) inst.addEventListener("click", dlInstall);
+    var folder = document.getElementById("dl-folder");
+    if (folder)
+      folder.addEventListener("click", function () {
+        var st = state.dlTool;
+        if (st && st.download_dir) invoke("reveal_in_folder", { path: st.download_dir }).catch(function (e) {
+          toast(dlError(e));
+        });
+      });
+    var gl = document.getElementById("guide-load");
+    if (gl) gl.addEventListener("click", loadGuideNow);
+    // Now/next goes stale while the list sits open.
+    window.setInterval(function () {
+      var sheet = document.getElementById("sheet");
+      if (state.view === "live" && sheet && !sheet.hidden) paintGuide();
+    }, 60000);
+    var xt = document.getElementById("xt-go");
+    if (xt) xt.addEventListener("click", xtreamImport);
+
+    var api = tauri();
+    if (api && api.event && api.event.listen) {
+      api.event.listen("dl-progress", function (ev) {
+        var p = (ev && ev.payload) || null;
+        if (!p) return;
+        if (typeof p === "string") {
+          var el = document.getElementById("dl-state");
+          if (el && p.indexOf("setup:") === 0 && el.textContent.indexOf("Installing") === 0) {
+            el.textContent = "Installing downloader… " + humanBytes(Number(p.split(":")[1]) || 0);
+          }
+          return;
+        }
+        if (!p.id || !p.job) return;
+        var jobs = state.downloads || [];
+        var at = -1;
+        for (var i = 0; i < jobs.length; i++) if (jobs[i].id === p.id) at = i;
+        if (at >= 0) jobs[at] = p.job;
+        else jobs.unshift(p.job);
+        state.downloads = jobs;
+        var now = Date.now();
+        var panel = document.getElementById("dl-panel");
+        if (panel && !panel.hidden && now - dlPaintAt > 350) {
+          dlPaintAt = now;
+          dlPaint();
+        } else {
+          var badge = document.getElementById("dl-count");
+          if (badge) {
+            var live = jobs.filter(function (j) {
+              return j.status === "running" || j.status === "queued" || j.status === "paused";
+            }).length;
+            badge.hidden = !live;
+            badge.textContent = String(live);
+          }
+        }
+        if (p.job.status === "done" && !p.job.seen) {
+          p.job.seen = true;
+          downloadsRefresh();
+        }
+      });
+    }
+    downloadsRefresh();
+  })();
+
   initPicsDir();
   (function openStartupFile() {
     invoke("startup_file")

@@ -1,6 +1,8 @@
 mod args;
 mod commands;
+mod dl;
 mod dlna;
+mod epg;
 mod fetch;
 mod ffmpeg;
 mod files;
@@ -9,6 +11,7 @@ mod state;
 mod subs;
 mod tools;
 mod windows;
+mod xtream;
 
 use state::AppState;
 use tauri::Manager;
@@ -17,12 +20,18 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             let handle = app.handle().clone();
             let state = AppState::init(&handle)?;
             app.manage(state);
             crate::ffmpeg::init(&handle);
+            crate::dl::restore(&handle);
+            crate::dl::spawn_reaper(handle.clone());
+            if let Ok(dir) = handle.path().app_data_dir() {
+                crate::epg::restore(&dir);
+            }
             crate::ipc::spawn(handle);
             Ok(())
         })
@@ -71,6 +80,22 @@ pub fn run() {
             files::pictures_dir,
             args::startup_file,
             args::reveal_in_folder,
+            commands::dl_tool,
+            commands::dl_install,
+            commands::dl_probe,
+            commands::dl_start,
+            commands::dl_list,
+            commands::dl_toggle,
+            commands::dl_cancel,
+            commands::dl_remove,
+            commands::dl_play,
+            commands::epg_status,
+            commands::epg_load,
+            commands::epg_load_source,
+            commands::dl_reveal,
+            commands::epg_clear,
+            commands::epg_now,
+            commands::xtream_import,
         ])
         .run(tauri::generate_context!())
         .expect("G9 failed to start");

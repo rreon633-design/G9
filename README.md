@@ -11,14 +11,14 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.4.0)
+## Windows release (v0.5.0)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.4.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
-| `G9_0.4.0_x64_en-US.msi` | MSI for managed deployment |
+| `G9_0.5.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.5.0_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
 Download: **[Releases](https://github.com/rreon633-design/G9/releases)**
@@ -29,6 +29,10 @@ download small.
 
 ## What it does
 
+- **Video downloader** — paste a link to a video page (YouTube, Instagram, Facebook and other
+  sites), pick a quality and size, and let it run in the background; pause, resume, play, reveal
+  or delete from the Downloads panel. Needs a managed `yt-dlp`, installed with one click
+- **IPTV guide** — XMLTV now/next under each channel, Xtream Codes portals, gzip guides
 - **Windows "Open with"** for video, audio and playlist files — double-click plays in G9
 - **Split screen**: snap left/right or `Ctrl+Alt+←/→`, responsive down to small windows
 - Local files, HTTP(S) streams, HLS, UNC / SMB paths

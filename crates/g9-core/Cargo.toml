@@ -7,4 +7,5 @@ description = "Shared types, errors, and version info for G9"
 
 [dependencies]
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }

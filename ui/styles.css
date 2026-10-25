@@ -1106,3 +1106,200 @@ input[type="range"]::-webkit-slider-thumb {
 /* TV mode keeps its own, larger scale */
 .tv .osd { padding: 14px 44px 26px; }
 .tv .seek-row .time { font-size: 15px; }
+
+/* ---------- web video downloads ---------- */
+.dl-card {
+  margin: 22px auto 0;
+  width: min(560px, 84vw);
+  padding: 14px 16px 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(10, 16, 26, 0.72);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+}
+.dl-card-head b { display: block; font-size: 13px; font-weight: 600; }
+.dl-card-head span { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.dl-input { display: flex; gap: 8px; margin-top: 12px; }
+.dl-input input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+.dl-input input:focus { outline: none; border-color: rgba(78, 163, 255, 0.6); }
+.dl-input button { height: 34px; padding: 0 14px; }
+.dl-result { margin-top: 12px; }
+.dl-result[hidden] { display: none !important; }
+.dl-title { font-size: 13px; font-weight: 500; line-height: 1.35; }
+.dl-sub { margin-top: 2px; font-size: 12px; color: var(--muted); }
+.dl-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.dl-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+}
+.dl-pick small { font-size: 10px; color: var(--muted); }
+.dl-pick:hover { background: rgba(255, 255, 255, 0.09); }
+.dl-pick.on {
+  background: rgba(78, 163, 255, 0.16);
+  border-color: rgba(78, 163, 255, 0.55);
+}
+.dl-pick.on small { color: #bcd8ff; }
+.dl-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.dl-actions button { height: 32px; padding: 0 14px; }
+.dl-fail { margin: 0; font-size: 12px; color: var(--danger); }
+.dl-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.dl-foot button { height: 28px; padding: 0 10px; font-size: 12px; }
+.dl-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 16px;
+  color: #cfe4ff;
+  background: rgba(78, 163, 255, 0.24);
+  border-radius: 8px;
+}
+.dl-count[hidden] { display: none !important; }
+.dl-note { font-size: 11px; color: var(--muted); }
+
+.dl-panel { width: min(420px, 94vw); }
+.dl-list { max-height: min(46vh, 360px); overflow: auto; margin: 4px -4px 6px; }
+.dl-list:empty::before {
+  content: "No downloads yet. Paste a link on the welcome screen.";
+  display: block;
+  padding: 10px 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.dl-job { padding: 9px 10px; border-radius: 9px; }
+.dl-job + .dl-job { margin-top: 4px; }
+.dl-job:hover { background: rgba(255, 255, 255, 0.04); }
+.dl-job-top { display: flex; align-items: baseline; gap: 8px; }
+.dl-job-top b {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dl-job-top span { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.dl-bar {
+  height: 4px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+.dl-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+.dl-job.done .dl-bar i { background: #4ade80; }
+.dl-job.failed .dl-bar i { background: var(--danger); }
+.dl-job-info { margin-top: 5px; font-size: 11px; color: var(--muted); }
+.dl-job-info.err { color: var(--danger); }
+.dl-job-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.dl-job-btns button {
+  height: 24px;
+  padding: 0 9px;
+  font-size: 11px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.dl-job-btns button:hover { background: rgba(255, 255, 255, 0.11); }
+.dl-job-btns button[hidden] { display: none !important; }
+
+/* ---------- IPTV guide row ---------- */
+.guide-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.guide-bar[hidden] { display: none !important; }
+.guide-state { flex: 1; min-width: 0; }
+.guide-bar button {
+  height: 22px;
+  padding: 0 9px;
+  font-size: 11px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.guide-bar button:hover { background: rgba(255, 255, 255, 0.12); }
+.row .meta .epg { display: block; margin-top: 2px; line-height: 1.35; }
+.row .epg-now {
+  display: block;
+  font-size: 11px;
+  color: #bcd8ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row .epg-next {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imp-xtream { margin-top: 12px; }
+.imp-xtream summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 0;
+}
+.imp-xtream summary:hover { color: var(--ink); }
+.imp-xtream .xt-grid { display: flex; gap: 8px; }
+.imp-xtream .xt-grid > div { flex: 1; min-width: 0; }
+
+@media (max-width: 720px) {
+  .dl-card { width: auto; margin: 16px 12px 0; }
+  .dl-card-head span { display: none; }
+  .dl-note { display: none; }
+  .dl-input button { padding: 0 10px; }
+}

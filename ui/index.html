@@ -21,6 +21,21 @@
           </div>
           <h1>G9</h1>
           <p>Open a file from Media, or add a playlist you are allowed to use.</p>
+          <div class="dl-card" id="dl-card">
+            <div class="dl-card-head">
+              <b>Download a video</b>
+              <span>YouTube, Instagram, Facebook and other sites — pick quality and size</span>
+            </div>
+            <div class="dl-input">
+              <input id="dl-url" type="text" placeholder="Paste a video link…" autocomplete="off" spellcheck="false" aria-label="Video link" />
+              <button type="button" class="primary" id="dl-fetch">Check</button>
+            </div>
+            <div class="dl-result" id="dl-result" hidden></div>
+            <div class="dl-foot">
+              <button type="button" class="ghost" id="dl-open">Downloads<span class="dl-count" id="dl-count" hidden>0</span></button>
+              <span class="dl-note">Keep only what you have the rights to.</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -59,6 +74,7 @@
               <button type="button" id="btn-import" role="menuitem">Add playlist / IPTV…</button>
               <button type="button" id="btn-podcast" role="menuitem">Subscribe to podcast…</button>
               <button type="button" id="btn-dlna" role="menuitem">Find DLNA servers…</button>
+              <button type="button" id="btn-downloads" role="menuitem">Downloads…</button>
             </div>
           </div>
           <div class="menu">
@@ -161,6 +177,10 @@
           </button>
         </div>
         <div class="chips" id="chips"></div>
+        <div class="guide-bar" id="guide-bar" hidden>
+          <span class="guide-state" id="guide-state">No guide loaded</span>
+          <button type="button" id="guide-load">Load guide</button>
+        </div>
         <div class="list" id="list"></div>
       </section>
 
@@ -279,6 +299,20 @@
         </div>
         <p class="empty" id="ff-hint">Convert, repair, chapters, inspect, RTMP and embedded subtitles use this copy first, then PATH. About 100 MB, downloaded once.</p>
       </div>
+      <div class="panel dl-panel" id="dl-panel" hidden>
+        <div class="panel-head">
+          <h3>Downloads</h3>
+          <button type="button" class="icon-btn" id="dl-close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        </div>
+        <p class="meta" id="dl-state">Checking…</p>
+        <div class="dl-list" id="dl-list"></div>
+        <div class="row-btns">
+          <button type="button" id="dl-install" hidden>Install downloader</button>
+          <button type="button" id="dl-folder">Open folder</button>
+        </div>
+        <p class="empty" id="dl-hint">Downloads keep running in the background. Pause and resume any time; unfinished files carry on from where they stopped.</p>
+      </div>
+
       <div class="panel" id="transcript-panel" hidden>
         <div class="panel-head">
           <h3>Transcript</h3>
@@ -390,6 +424,16 @@
         <input id="imp-url" type="text" placeholder="https://…/playlist.m3u" />
         <label for="imp-text">Or paste M3U</label>
         <textarea id="imp-text" placeholder="#EXTM3U"></textarea>
+        <details class="imp-xtream" id="imp-xtream">
+          <summary>Xtream Codes portal</summary>
+          <label for="xt-server">Server</label>
+          <input id="xt-server" type="text" placeholder="http://host:8080" autocomplete="off" />
+          <div class="xt-grid">
+            <div><label for="xt-user">Username</label><input id="xt-user" type="text" autocomplete="off" /></div>
+            <div><label for="xt-pass">Password</label><input id="xt-pass" type="password" autocomplete="off" /></div>
+          </div>
+          <div class="row-btns"><button type="button" id="xt-go">Import portal</button></div>
+        </details>
         <div class="modal-actions">
           <button type="button" id="imp-file">From file</button>
           <span class="spacer"></span>

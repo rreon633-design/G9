@@ -43,6 +43,23 @@ struct ExtInf {
     duration: Option<i64>,
 }
 
+/// Read `key="value"` out of the `#EXTM3U` header line.
+fn header_attr(line: &str, key: &str) -> Option<String> {
+    let lower = line.to_ascii_lowercase();
+    let at = lower.find(&format!("{key}="))?;
+    let rest = &line[at + key.len() + 1..];
+    let rest = rest.trim_start();
+    let quote = rest.chars().next()?;
+    if quote == '"' || quote == '\'' {
+        let end = rest[1..].find(quote)?;
+        let value = rest[1..1 + end].trim();
+        return (!value.is_empty()).then(|| value.to_string());
+    }
+    let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    let value = rest[..end].trim();
+    (!value.is_empty()).then(|| value.to_string())
+}
+
 /// Parse an M3U / M3U8 playlist into channels.
 ///
 /// `#EXTVLCOPT` and unknown option directives are counted and discarded.
@@ -82,6 +99,11 @@ pub fn parse_m3u(
                 continue;
             }
             if upper.starts_with("#EXTM3U") || upper.starts_with("#PLAYLIST") {
+                if report.epg_url.is_none() {
+                    report.epg_url = header_attr(line, "url-tvg")
+                        .or_else(|| header_attr(line, "x-tvg-url"))
+                        .or_else(|| header_attr(line, "tvg-url"));
+                }
                 continue;
             }
             if upper.starts_with("#EXTINF:") {
@@ -216,6 +238,20 @@ fn attr(src: &str, key: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_guide_url_from_the_header() {
+        let text = "#EXTM3U url-tvg=\"https://guide.example/epg.xml.gz\" x-tvg-url=\"https://other/epg.xml\"\n#EXTINF:-1,One\nhttps://cdn.example/1.m3u8\n";
+        let (_, report) = parse_m3u(text, ParseOptions::default()).unwrap();
+        assert_eq!(
+            report.epg_url.as_deref(),
+            Some("https://guide.example/epg.xml.gz")
+        );
+
+        let plain = "#EXTM3U\n#EXTINF:-1,One\nhttps://cdn.example/1.m3u8\n";
+        let (_, report) = parse_m3u(plain, ParseOptions::default()).unwrap();
+        assert!(report.epg_url.is_none());
+    }
 
     const SAMPLE: &str = r#"#EXTM3U
 #EXTINF:-1 tvg-id="bbc1.uk" tvg-name="BBC One" tvg-logo="https://img.example/bbc.png" group-title="UK",BBC One

@@ -115,7 +115,7 @@ pub fn discover() -> Result<Vec<DlnaServer>, String> {
                 let loc = text.lines().find_map(|l| {
                     let l = l.trim();
                     if l.to_ascii_lowercase().starts_with("location:") {
-                        Some(l.splitn(2, ':').nth(1)?.trim().to_string())
+                        Some(l.split_once(':')?.1.trim().to_string())
                     } else {
                         None
                     }

@@ -50,6 +50,9 @@ pub struct ParseReport {
     pub stripped_extvlcopt: usize,
     pub skipped_dangerous: usize,
     pub skipped_blank: usize,
+    /// `url-tvg` / `x-tvg-url` from the playlist header, when present.
+    #[serde(default)]
+    pub epg_url: Option<String>,
 }
 
 #[derive(Debug, Error)]
@@ -108,3 +111,5 @@ mod tests {
         assert!(CONTENT_POLICY.contains("does not provide channels"));
     }
 }
+
+pub mod download;

@@ -10,6 +10,42 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 - Dismissing a Save dialog no longer falls back to a browser download (save results are now
   `path` / `cancelled` / `unsupported`).
 
+## [0.5.0] — 2026-10-25
+
+Downloads and live guides.
+
+### Added
+
+- **Download videos from the web** — the welcome screen now takes a link to a video page.
+  G9 asks the page what it has, lists each quality with an estimated size (4K down to 360p, plus
+  audio-only), and downloads the one you pick into `Videos\G9`. YouTube, Instagram, Facebook and
+  the other sites `yt-dlp` understands are all fair game; only download what you have the rights to.
+- **Downloads panel** — runs in the background while you watch something else, shows percent,
+  transferred size, speed and time left, and gives each job **Play**, **Pause/Resume**,
+  **Folder** and **Delete**. Deleting can take the file with it. Finished jobs raise a Windows
+  notification. Unfinished jobs resume from their `.part` files, and a job that was running when
+  G9 closed comes back paused instead of silently restarting.
+- **Managed downloader** — Settings → Video downloads (or the prompt on the welcome card) installs
+  `yt-dlp.exe` into the app data folder with one click; a copy on `PATH` is used if present, and
+  a managed FFmpeg (0.3.0) is preferred for merging high-quality video and audio.
+- **IPTV guide (XMLTV)** — the live sheet loads the guide a playlist points at (`url-tvg`) or one
+  you paste, then shows **now / next** under every channel. Guides are gzipped in place, so a
+  `.xml.gz` works, and the parsed guide is kept between launches. Now/next refreshes every minute
+  while the list is open. Channels match on `tvg-id` and fall back to the display name, so
+  playlists without ids still work.
+- **Xtream Codes** — a portal URL, username and password import the same way an M3U does; G9
+  builds the playlist from the portal, so groups, logos and channel numbers all come through.
+
+### Changed
+
+- The welcome screen is a launcher now: link box, downloads, and the note that G9 ships nothing.
+
+### Fixed
+
+- Settings gained a **Video downloads** row so the downloader is reachable while something plays.
+- `--print` in the downloader would have implied `--simulate`; the job now downloads, reports
+  progress against the real total, and cleans up its `.part` files on delete.
+
 ## [0.4.0] — 2026-10-25
 
 Desktop-integration and layout pass.
@@ -221,6 +257,7 @@ multi-window, independent pitch shift. See the gap list in `FEATURE-LIST.md`.
 - Local files, URL / HLS, M3U / IPTV import, Live TV sheet
 - Diagnostics overlay, keyboard map
 
+[0.5.0]: https://github.com/rreon633-design/G9/releases/tag/v0.5.0
 [0.4.0]: https://github.com/rreon633-design/G9/releases/tag/v0.4.0
 [0.3.1]: https://github.com/rreon633-design/G9/releases/tag/v0.3.1
 [0.3.0]: https://github.com/rreon633-design/G9/releases/tag/v0.3.0

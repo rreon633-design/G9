@@ -26,8 +26,8 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
 
 | Crate | Role |
 |---|---|
-| `g9-core` | Version, content policy, DTOs, errors |
-| `g9-iptv` | Streaming M3U parse, injection strip, dangerous URL filter |
+| `g9-core` | Version, content policy, DTOs, errors, download format ladder |
+| `g9-iptv` | Streaming M3U parse, injection strip, dangerous URL filter, XMLTV now/next |
 | `g9-store` | SQLite WAL, sources, channels, history, settings |
 | `g9` (`src-tauri`) | Window, commands, subtitles, DLNA, IPC, optional ffmpeg |
 
@@ -41,9 +41,12 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
 | `dlna.rs` | SSDP MediaServer discover + ContentDirectory browse |
 | `ipc.rs` | JSON lines on `127.0.0.1:18765` |
 | `tools.rs` | ffmpeg convert/extract/remux/RTMP, ffprobe, MyMemory translate |
-| `fetch.rs` | HTTP(S) playlist / RSS fetch |
+| `fetch.rs` | HTTP(S) playlist / RSS / guide fetch (gzip-aware) |
 | `ffmpeg.rs` | Managed FFmpeg: download + unpack into app data, resolve `ffmpeg` / `ffprobe` before PATH |
 | `windows.rs` | Extra player windows (`player-*`), Windows shutdown timer, user shader files |
+| `dl.rs` | Web-video jobs: managed yt-dlp, child processes, progress, pause/resume, persisted state, notifications |
+| `epg.rs` | XMLTV guide cache: id + display-name matching, now/next, gzipped copy on disk |
+| `xtream.rs` | Xtream Codes portal → M3U, then the normal import path |
 
 ## Playback path
 
@@ -51,7 +54,7 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
 |---|---|
 | MP4 / WebM / most OS-decodable files | `<video src>` / asset protocol |
 | HLS (`.m3u8`) | native webview where supported, else MSE MPEG-TS loader in `ui/app.js` |
-| IPTV (`.m3u`) | `g9-iptv` parse → `g9-store` → live sheet → `<video>` |
+| IPTV (`.m3u`) | `g9-iptv` parse → `g9-store` → live sheet (+ `epg.rs` now/next) → `<video>` |
 | DLNA item | SSDP discover → SOAP `Browse` → resolved HTTP URL → `<video>` |
 | SMB / UNC | `Open path` → `file://` asset scope → `<video>` |
 | 360° equirectangular | WebGL texture on `<canvas id="view360">`, drag to look |
@@ -69,6 +72,7 @@ G9 never bundles FFmpeg or Whisper. `ffmpeg.rs` can **download** a static FFmpeg
 | `ffmpeg` (managed or PATH) | convert / extract / remux / RTMP / embedded subtitle extraction |
 | `ffprobe` (managed or PATH) | chapters, inspect (Diagnostics) |
 | `whisper` / `whisper-cli` | Generate captions (opt-in, never during normal subtitle search) |
+| `yt-dlp` (managed or PATH) | welcome-screen downloads; spawned hidden, `--newline` progress on stdout |
 
 ## CI / CD
 

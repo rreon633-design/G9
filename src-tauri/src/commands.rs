@@ -2,7 +2,7 @@ use g9_core::{ParsedChannel, SourceKind, APP_NAME, APP_VERSION, CONTENT_POLICY};
 use g9_iptv::{parse_m3u, ParseOptions};
 use g9_store::{ChannelRow, GroupRow, HistoryRow, SourceRow, StoreStats};
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::fetch::fetch_playlist;
 use crate::state::AppState;
@@ -102,10 +102,14 @@ fn import_parsed(
     if channels.is_empty() {
         return Err("no playable entries found in playlist".into());
     }
+    let epg_url = report.epg_url.clone();
     let mut store = state.store.lock().map_err(|e| e.to_string())?;
     let (source_id, _) = store
         .add_source(kind, name, url, &channels)
         .map_err(|e| e.to_string())?;
+    if let Some(guide) = epg_url {
+        let _ = store.set_setting(&format!("epg_url:{source_id}"), &guide);
+    }
     Ok(ImportResult {
         source_id,
         channel_count: report.channel_count,
@@ -375,4 +379,172 @@ pub async fn ffmpeg_install(app: AppHandle) -> Result<crate::ffmpeg::Status, Str
 #[tauri::command]
 pub fn ffmpeg_remove() -> Result<crate::ffmpeg::Status, String> {
     crate::ffmpeg::remove()
+}
+
+// ------------------------------------------------------------------ web video
+
+#[tauri::command]
+pub fn dl_tool(app: AppHandle) -> crate::dl::ToolStatus {
+    crate::dl::tool_status(&app)
+}
+
+#[tauri::command]
+pub async fn dl_install(app: AppHandle) -> Result<crate::dl::ToolStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::dl::install(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn dl_probe(app: AppHandle, url: String) -> Result<g9_core::download::MediaInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::dl::probe(&app, &url))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn dl_start(
+    app: AppHandle,
+    url: String,
+    height: u32,
+    title: Option<String>,
+) -> Result<crate::dl::Job, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::dl::start(&app, &url, height, title.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn dl_list() -> Vec<crate::dl::Job> {
+    crate::dl::list()
+}
+
+#[tauri::command]
+pub fn dl_toggle(app: AppHandle, id: String) -> Result<crate::dl::Job, String> {
+    crate::dl::toggle(&app, &id)
+}
+
+#[tauri::command]
+pub fn dl_cancel(app: AppHandle, id: String) -> Result<crate::dl::Job, String> {
+    crate::dl::cancel(&app, &id)
+}
+
+#[tauri::command]
+pub fn dl_remove(app: AppHandle, id: String, delete_file: bool) -> Result<(), String> {
+    crate::dl::remove(&app, &id, delete_file)
+}
+
+#[tauri::command]
+pub fn dl_play(id: String) -> Result<String, String> {
+    let path = crate::dl::list()
+        .into_iter()
+        .find(|j| j.id == id)
+        .and_then(|j| j.path)
+        .ok_or("That download has not finished yet")?;
+    if std::path::Path::new(&path).is_file() {
+        Ok(path)
+    } else {
+        Err("That file is no longer on disk".into())
+    }
+}
+
+#[tauri::command]
+pub fn dl_reveal(app: AppHandle, id: String) -> Result<(), String> {
+    let path = crate::dl::list()
+        .into_iter()
+        .find(|j| j.id == id)
+        .and_then(|j| j.path)
+        .ok_or("That download has not finished yet")?;
+    crate::args::reveal_in_folder(app, path).map(|_| ())
+}
+
+// ------------------------------------------------------------------ guide + portals
+
+#[tauri::command]
+pub fn epg_status() -> crate::epg::GuideStatus {
+    crate::epg::status()
+}
+
+#[tauri::command]
+pub async fn epg_load(app: AppHandle, url: String) -> Result<crate::epg::GuideStatus, String> {
+    let dir = app.path().app_data_dir().ok();
+    tauri::async_runtime::spawn_blocking(move || {
+        let text = crate::fetch::fetch_guide(&url)?;
+        let st = crate::epg::load(&text, &url);
+        if !st.loaded {
+            return Err("that address did not return a guide".into());
+        }
+        if let Some(dir) = dir {
+            crate::epg::store(&dir, &text);
+        }
+        Ok(st)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn epg_load_source(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<crate::epg::GuideStatus, String> {
+    let dir = app.path().app_data_dir().ok();
+    let key = format!("epg_url:{id}");
+    let url = state
+        .store
+        .lock()
+        .map_err(|e| e.to_string())?
+        .setting(&key)
+        .map_err(|e| e.to_string())?
+        .ok_or("This playlist did not come with a guide address")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let text = crate::fetch::fetch_guide(&url)?;
+        let st = crate::epg::load(&text, &url);
+        if !st.loaded {
+            return Err("that address did not return a guide".into());
+        }
+        if let Some(dir) = dir {
+            crate::epg::store(&dir, &text);
+        }
+        Ok(st)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn epg_clear() {
+    crate::epg::clear()
+}
+
+#[tauri::command]
+pub fn epg_now(ids: Vec<String>) -> Vec<crate::epg::Guide> {
+    crate::epg::now_next(&ids, None)
+}
+
+#[tauri::command]
+pub async fn xtream_import(
+    state: State<'_, AppState>,
+    server: String,
+    user: String,
+    pass: String,
+    name: Option<String>,
+) -> Result<ImportResult, String> {
+    let portal = tauri::async_runtime::spawn_blocking(move || {
+        crate::xtream::import(&server, &user, &pass, name)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let mut out = import_parsed(
+        &state,
+        SourceKind::Url,
+        &portal.name,
+        "xtream://",
+        &portal.m3u,
+    )?;
+    out.group_count = portal.groups;
+    Ok(out)
 }

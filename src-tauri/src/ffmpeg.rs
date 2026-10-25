@@ -21,6 +21,7 @@ use tauri::{AppHandle, Manager};
 static BIN_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// Static Windows build (GPL, no installer). Downloaded only on request.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub const WIN_ZIP: &str =
     "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
 

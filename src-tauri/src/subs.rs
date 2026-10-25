@@ -637,7 +637,7 @@ fn ass_to_vtt(ass: &str) -> String {
         let mut chars = text.chars().peekable();
         while let Some(c) = chars.next() {
             if c == '{' {
-                while let Some(n) = chars.next() {
+                for n in chars.by_ref() {
                     if n == '}' {
                         break;
                     }

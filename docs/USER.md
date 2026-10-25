@@ -7,7 +7,8 @@ G9 is a player, not a TV service. You bring files or a playlist you are allowed 
 - **Media → Open file…** for a local video.
 - **Open URL…** for an HTTP(S) stream.
 - **Open path / SMB…** for a UNC path (`\\server\share\video.mp4`).
-- **Add playlist / IPTV…** to paste or import an M3U you are allowed to use.
+- **Add playlist / IPTV…** to paste or import an M3U you are allowed to use, or an **Xtream
+  Codes** portal (server, username, password) if your provider gives you those instead
 - **Find DLNA servers…** to browse a LAN MediaServer.
 - **Subscribe to podcast…** for an RSS feed.
 
@@ -49,13 +50,21 @@ everything opens as an overlay card over the picture.
   mouse wheel nudges it, and Settings → Equalizer adds EQ, presets and boost.
 - If a source is refused by the engine, one **Press to play** button retries it.
 - **Settings → View → Playlist** is the file queue — it plays the next file when one ends.
-- **PiP** pops the picture out; **always-on-top** pins the window.
+- **Always-on-top** pins the window; there is no picture-in-picture.
 - **360°** turns on look-around for equirectangular footage (drag to look).
 - **Sleep timer** stops playback after N minutes; answer *OK* to the follow-up to also schedule a
   Windows shutdown, or use **Cancel PC shutdown** in Settings.
 - **Transcript** shows the same captions as scrolling text, follows playback and seeks when you click a line.
 - **Shader effect** applies a WebGL look (Sharpen / Vivid / Mono / Night, or your own `.frag` files).
 - **Open in new window** runs a second, independent player window — handy for a second screen.
+
+## Live TV and the guide
+
+- The live sheet groups channels, searches them, and keeps favourites on top.
+- If your playlist points at an XMLTV guide (`url-tvg`), press **Load guide** once and every
+  channel gets **now / next** underneath it. No guide address in the playlist? G9 asks for one —
+  paste an `.xml` or a gzipped `.xml.gz`.
+- The parsed guide is kept between launches and now/next refreshes itself while the list is open.
 
 ## Keys
 
@@ -75,6 +84,29 @@ everything opens as an overlay card over the picture.
 | Esc | Close overlays / exit TV Mode |
 
 Swipe on a touch screen: horizontal seek, vertical volume.
+
+## Downloading videos
+
+The welcome screen has a link box. Paste the address of a video page — YouTube, Instagram,
+Facebook, or any other site the downloader knows — and press **Check**. G9 reads the page and
+lists the qualities it offers (4K down to 360p, plus audio-only) with an estimated size next to
+each. Pick one and press **Download**.
+
+- Files land in **Videos → G9** under your user folder.
+- Downloads keep running while you watch something else, and Windows shows a notification when
+  one finishes.
+- **Downloads** (welcome screen, Media menu, or Settings → Video downloads) lists every job with
+  percent, size, speed and time left. Each row has **Play**, **Pause/Resume**, **Folder** and
+  **Delete**.
+- Paused or interrupted jobs continue from their partial files; a job that was still running when
+  G9 closed comes back **paused** — press Resume.
+- **Delete** asks whether to take the file with it. Deleting keeps G9's list tidy either way.
+
+The downloader itself (`yt-dlp`) is not bundled. The first time you try, G9 offers **Install
+downloader**: one click, about 30 MB, into G9's own app data folder. A `yt-dlp` already on PATH is
+used instead if you have one, and a managed FFmpeg lets G9 merge high-quality video and audio.
+
+Only download material you have the rights to. G9 does not host, ship, or point at any video.
 
 ## FFmpeg
 

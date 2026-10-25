@@ -7,8 +7,10 @@
 
 mod m3u;
 mod sanitize;
+pub mod xmltv;
 
 pub use m3u::{parse_m3u, ParseOptions};
 pub use sanitize::{is_dangerous_media_url, sanitize_logo_url};
+pub use xmltv::{now_next, parse as parse_xmltv, NowNext, Programme};
 
 pub use g9_core::{ParseReport, ParsedChannel, SourceKind, StreamType};

@@ -99,8 +99,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.4.0' }}
-          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.4.0' }} — Windows
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.5.0' }}
+          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.5.0' }} — Windows
           draft: false
           prerelease: false
           generate_release_notes: false
@@ -114,14 +114,13 @@ jobs:
             | `*.msi` | MSI |
             | `G9-windows-x64-portable.zip` | Portable `G9.exe` |
 
-            **v0.4.0**
-            - Windows "Open with": G9 registers as a viewer for video, audio and playlist files and plays what you double-click (reinstall this version to register)
-            - Split screen: snap left/right from the caption buttons or Ctrl+Alt+arrows
-            - Responsive layout down to small windows; Settings is a centred dialog
-            - GIF export fixed (proper LZW), saved through the file dialog
-            - In-app dialogs with icons and keyboard handling; no native browser chrome inside the player
-            - Removed the Picture-in-picture button
-            - Everything from 0.2/0.3: subtitles, queue, chapters, DLNA, podcasts, IPTV, JSON IPC, EQ, 360, transcript, shaders, managed FFmpeg
+            **v0.5.0**
+            - Download videos from YouTube, Instagram, Facebook and other sites straight from the welcome screen, with a quality and size picker
+            - Downloads run in the background, notify on completion, pause/resume, auto-resume partial files, play, reveal in Explorer or delete
+            - One-click managed yt-dlp install (Settings → Video downloads); only download what you have the rights to
+            - IPTV guide: XMLTV now/next under every channel, gzip guides supported, kept between launches
+            - Xtream Codes portals import straight into the channel list
+            - Everything from 0.4: Open with, split screen, responsive UI, working GIF
 
             Full list: [FEATURE-LIST.md](https://github.com/rreon633-design/G9/blob/main/FEATURE-LIST.md)
 
