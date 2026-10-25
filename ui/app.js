@@ -4954,6 +4954,17 @@
       })
       .catch(function () {});
   })();
+  /* Fun Mode drives the same player through this small bridge. It is defined
+     last, after every helper it points at exists. */
+  window.G9Bridge = {
+    play: function (title, url) { playUrl(title, url); },
+    hideGate: hideGate,
+    toast: toast,
+    showChrome: showChrome,
+    hideTv: function () { if (state.tv) { tvHide(); setTv(false); } },
+    isTv: function () { return !!state.tv; },
+  };
+
   refresh()
     .then(function () {
       // Left in TV mode last time: come back to a playing channel.

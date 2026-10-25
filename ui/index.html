@@ -134,6 +134,7 @@
               <button type="button" data-act="about">About G9</button>
             </div>
           </div>
+          <button type="button" class="menu-btn tv-toggle" id="btn-fun" title="Fun Mode — movies, series, anime, manga" aria-pressed="false">Fun Mode</button>
           <button type="button" class="menu-btn tv-toggle" id="btn-tv" title="TV mode" aria-pressed="false">TV Mode</button>
         </nav>
 
@@ -163,6 +164,71 @@
 
       <div class="zap" id="zap"></div>
       <pre class="diag" id="diag"></pre>
+
+
+      <section class="fun" id="fun" hidden aria-label="Fun Mode">
+        <header class="fun-nav" id="fun-nav">
+          <div class="fun-brand">
+            <span class="fun-mark">G9</span>
+            <span class="fun-chip">FUN</span>
+          </div>
+          <nav class="fun-tabs" id="fun-tabs" aria-label="Browse">
+            <button type="button" data-tab="all" aria-selected="true">Home</button>
+            <button type="button" data-tab="movie" aria-selected="false">Movies</button>
+            <button type="button" data-tab="series" aria-selected="false">Series</button>
+            <button type="button" data-tab="anime" aria-selected="false">Anime</button>
+            <button type="button" data-tab="drama" aria-selected="false">Drama</button>
+            <button type="button" data-tab="manga" aria-selected="false">Manga</button>
+          </nav>
+          <label class="fun-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.6-3.6" /></svg>
+            <input id="fun-q" type="search" placeholder="Search titles, genres…" autocomplete="off" aria-label="Search Fun Mode" />
+          </label>
+          <button type="button" class="fun-ghost" id="fun-sources">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            Sources
+          </button>
+          <button type="button" class="fun-avatar" id="fun-profile" title="Playback settings">P</button>
+          <button type="button" class="fun-close" id="fun-close" title="Close (Esc)">
+            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </header>
+
+        <div class="fun-hero" id="fun-hero"></div>
+
+        <div class="fun-rows" id="fun-rows"></div>
+
+        <div class="fun-note" id="fun-note" hidden></div>
+
+        <section class="fun-browse" id="fun-browse" hidden>
+          <div class="fun-browse-head">
+            <button type="button" class="fun-round" id="fun-browse-back" aria-label="Back">
+              <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" /></svg>
+            </button>
+            <div>
+              <h2 id="fun-browse-title">Movies</h2>
+              <div class="fun-browse-sub" id="fun-browse-sub"></div>
+            </div>
+            <div class="fun-sort" id="fun-sort">
+              <button type="button" data-sort="quality" aria-pressed="true">Best quality</button>
+              <button type="button" data-sort="year" aria-pressed="false">Newest</button>
+              <button type="button" data-sort="score" aria-pressed="false">Top rated</button>
+            </div>
+          </div>
+          <div class="fun-grid" id="fun-browse-grid"></div>
+        </section>
+
+        <section class="fun-searchview" id="fun-searchview" hidden>
+          <h2 id="fun-search-head">Results</h2>
+          <div class="fun-grid" id="fun-search-grid"></div>
+        </section>
+
+        <div class="fun-scrim" id="fun-sheet" hidden>
+          <div class="fun-sheet" role="dialog" aria-modal="true" id="fun-sheet-card"></div>
+        </div>
+
+        <div class="fun-reader" id="fun-reader" hidden></div>
+      </section>
 
       <section class="tv" id="tv" hidden aria-label="Live TV">
         <header class="tv-top">
@@ -523,6 +589,7 @@
       </div>
     </div>
 
+    <script src="./fun.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

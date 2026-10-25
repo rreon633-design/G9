@@ -14,6 +14,20 @@ G9 is a player, not a TV service. You bring files or a playlist you are allowed 
 
 There is no bundled channel pack and no “demo clips” menu.
 
+## Fun Mode
+
+Click **Fun Mode** in the top bar for movies, web series, anime, drama and manga.
+
+It starts empty on purpose: G9 ships no catalogue. Open **Sources** (top right) and add one of:
+
+- **A Stremio addon** — paste its `manifest.json` URL. Its catalogs become shelves.
+- **An RSS feed** — paste the feed address; items that link a magnet appear on the wall.
+- **MangaDex** — flip it on for manga, manhwa and manhua, with a built-in reader.
+
+Click any card for episodes or chapters, source chips and **Play** (or **Read**). **See all** opens
+a grid you can sort; the box at the top searches every enabled source. Magnet results are labelled
+`Magnet` and start playing when the torrent engine lands in v0.10.0.
+
 ## From Windows Explorer
 
 After installing with the G9 installer, **right-click a video, audio or playlist file → Open with

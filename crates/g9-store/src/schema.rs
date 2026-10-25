@@ -83,5 +83,45 @@ pub fn migrate(conn: &Connection) -> Result<()> {
          CREATE INDEX IF NOT EXISTS idx_channels_language ON channels(language);
          CREATE INDEX IF NOT EXISTS idx_channels_quality ON channels(quality);",
     )?;
+
+    // v3: Fun Mode. Sources the user added, plus one row per title they have
+    // started — that is both "Continue watching" and the recents list.
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS fun_sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            name TEXT NOT NULL,
+            url TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            manifest TEXT,
+            added_at TEXT NOT NULL,
+            checked_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS fun_progress (
+            source_id INTEGER NOT NULL,
+            item_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            title TEXT NOT NULL,
+            poster TEXT,
+            episode_id TEXT,
+            episode_title TEXT,
+            season INTEGER,
+            episode INTEGER,
+            position REAL NOT NULL DEFAULT 0,
+            duration REAL NOT NULL DEFAULT 0,
+            page INTEGER,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (source_id, item_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_fun_progress_updated ON fun_progress(updated_at DESC);
+        "#,
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO schema_migrations (version) VALUES (3)",
+        [],
+    )?;
     Ok(())
 }

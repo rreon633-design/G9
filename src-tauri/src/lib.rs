@@ -6,6 +6,7 @@ mod epg;
 mod fetch;
 mod ffmpeg;
 mod files;
+mod fun;
 mod ipc;
 mod state;
 mod subs;
@@ -100,6 +101,19 @@ pub fn run() {
             commands::epg_now,
             commands::epg_upcoming,
             commands::xtream_import,
+            fun::fun_sources,
+            fun::fun_source_add,
+            fun::fun_source_remove,
+            fun::fun_source_toggle,
+            fun::fun_home,
+            fun::fun_search,
+            fun::fun_details,
+            fun::fun_streams,
+            fun::fun_resolve,
+            fun::fun_pages,
+            fun::fun_progress_save,
+            fun::fun_progress_list,
+            fun::fun_progress_remove,
         ])
         .run(tauri::generate_context!())
         .expect("G9 failed to start");

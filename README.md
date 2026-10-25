@@ -11,14 +11,14 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.7.0)
+## Windows release (v0.8.0)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.7.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
-| `G9_0.7.0_x64_en-US.msi` | MSI for managed deployment |
+| `G9_0.8.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.8.0_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
 Download: **[Releases](https://github.com/rreon633-design/G9/releases)**
@@ -29,6 +29,10 @@ download small.
 
 ## What it does
 
+- **Fun Mode** — movies, web series, anime, drama, manga / manhwa / manhua on one Netflix-shaped
+  wall. It reads **sources you add**: any Stremio addon, any RSS feed of magnet links, the managed
+  yt-dlp resolver, and MangaDex for the reader. Nothing is bundled, and the wall says so until you
+  add something. Magnet playback lands in v0.10.0
 - **Video downloader** — paste a link to a video page (YouTube, Instagram, Facebook and other
   sites), pick a quality and size, and let it run in the background; pause, resume, play, reveal
   or delete from the Downloads panel. Needs a managed `yt-dlp`, installed with one click
@@ -42,7 +46,7 @@ download small.
 - IPTV from an M3U **you are allowed to use**; live sheet with favourites, groups, search
 - Online subtitles (OpenSubtitles hash + title, TheSubDB, Podnapisi) with auto-apply; sidecar
   SRT/VTT/ASS; subtitle browser; live cue translation
-- Chapters, playlist queue, PiP, always-on-top, 360° look-around, transcript pane
+- Chapters, playlist queue, always-on-top, 360° look-around, transcript pane (no PiP by design)
 - EQ / boost, speed 0.25–2× with pitch lock, A–B loop, bookmarks, sleep timer
 - Frame save, record-what-is-playing, webcam recording, scene poster
 - DLNA browse, podcast RSS

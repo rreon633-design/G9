@@ -7,6 +7,42 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 - Nothing yet.
 
+## [0.8.0] — 2026-10-25
+
+Fun Mode: movies, series, anime and manga on one wall, built only from sources you add.
+
+### Added
+
+- **Fun Mode** — a new top-bar mode next to TV Mode. A Netflix-shaped wall: a featured hero,
+  **Continue watching**, a ranked **Top 10**, and one rail per shelf, with live search, a
+  **See all** grid that sorts by quality / newest / rating, and a details sheet carrying the
+  synopsis, source chips, episode or chapter lists and My List / Download.
+- **`g9-sources` crate** — the source layer, parsed offline and unit-tested:
+  - **Stremio addons** (`manifest.json`, `catalog`, `meta`, `stream`, `subtitles`): paste any
+    addon URL and its catalogs appear as shelves.
+  - **RSS feeds of magnets** — Nyaa-style feeds (seeders, size, category, release titles) or any
+    RSS feed whose items link a magnet.
+  - **yt-dlp resolver** — the managed engine now also answers "resolve this page": `-J` formats
+    become playable streams with the `http_headers` the CDN wants.
+  - **MangaDex** — official API for manga, manhwa and manhua: search, chapter lists, page images.
+- **Reader** — full-screen, continuous paged reading for MangaDex chapters, with reading progress
+  saved per title.
+- **`fun_*` commands** — `fun_sources`, `fun_source_add`, `fun_source_remove`, `fun_source_toggle`,
+  `fun_home`, `fun_search`, `fun_details`, `fun_streams`, `fun_resolve`, `fun_pages`,
+  `fun_progress_save`, `fun_progress_list`, `fun_progress_remove`.
+- **Schema v3** — `fun_sources` and `fun_progress` tables (resume points, recents, chapter marks).
+
+### Notes
+
+- **Nothing is bundled.** No catalogue, no playlist, no credential: the wall starts as a short
+  "add a source" explainer and fills up from what you add. MangaDex is off until you switch it on.
+- Failures stay one short line and never name the source or print a URL.
+- Magnet links are recognised and labelled but do not play yet — torrent streaming is the next
+  release (`v0.10.0` in `docs/FUN-MODE-PLAN.md`).
+- Every control in the mode is wired: verified by `domtest/smoke6.js`, which drives the wall →
+  sheet → episode → player, the sources dialog, search, browse sorting, tabs and the reader.
+
+
 - Dismissing a Save dialog no longer falls back to a browser download (save results are now
   `path` / `cancelled` / `unsupported`).
 

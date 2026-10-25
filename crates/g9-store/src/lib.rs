@@ -18,6 +18,37 @@ pub enum StoreError {
     Msg(String),
 }
 
+/// One Fun Mode source the user added (`fun_sources`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunSourceRow {
+    pub id: i64,
+    pub kind: String,
+    pub name: String,
+    pub url: String,
+    pub enabled: bool,
+    pub manifest: Option<String>,
+    pub added_at: String,
+    pub checked_at: Option<String>,
+}
+
+/// One title the user has started. Doubles as the recents row.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunProgressRow {
+    pub source_id: i64,
+    pub item_id: String,
+    pub kind: String,
+    pub title: String,
+    pub poster: Option<String>,
+    pub episode_id: Option<String>,
+    pub episode_title: Option<String>,
+    pub season: Option<i32>,
+    pub episode: Option<i32>,
+    pub position: f64,
+    pub duration: f64,
+    pub page: Option<i32>,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceRow {
     pub id: i64,
@@ -459,6 +490,183 @@ impl Store {
         Ok(())
     }
 
+    // ---------- Fun Mode ----------
+
+    pub fn fun_sources(&self) -> Result<Vec<FunSourceRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, kind, name, url, enabled, manifest, added_at, checked_at
+             FROM fun_sources ORDER BY id",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(FunSourceRow {
+                    id: r.get(0)?,
+                    kind: r.get(1)?,
+                    name: r.get(2)?,
+                    url: r.get(3)?,
+                    enabled: r.get::<_, i64>(4)? != 0,
+                    manifest: r.get(5)?,
+                    added_at: r.get(6)?,
+                    checked_at: r.get(7)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn fun_source_add(
+        &self,
+        kind: &str,
+        name: &str,
+        url: &str,
+        manifest: Option<&str>,
+    ) -> Result<i64> {
+        let existing: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT id FROM fun_sources WHERE url = ?1",
+                params![url],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if let Some(id) = existing {
+            self.conn.execute(
+                "UPDATE fun_sources SET kind = ?1, name = ?2, manifest = ?3, enabled = 1,
+                 checked_at = datetime('now') WHERE id = ?4",
+                params![kind, name, manifest, id],
+            )?;
+            return Ok(id);
+        }
+        self.conn.execute(
+            "INSERT INTO fun_sources (kind, name, url, manifest, added_at, checked_at)
+             VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
+            params![kind, name, url, manifest],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn fun_source_set_enabled(&self, id: i64, enabled: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE fun_sources SET enabled = ?1 WHERE id = ?2",
+            params![enabled as i64, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn fun_source_remove(&self, id: i64) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM fun_sources WHERE id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM fun_progress WHERE source_id = ?1", params![id])?;
+        Ok(())
+    }
+
+    /// Upsert one progress row. A finished title (`position/duration > .95`) is
+    /// kept so it still shows in recents, just without a resume point.
+    #[allow(clippy::too_many_arguments)]
+    pub fn fun_progress_save(&self, row: &FunProgressRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO fun_progress (source_id, item_id, kind, title, poster, episode_id,
+                episode_title, season, episode, position, duration, page, updated_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,
+                     CASE WHEN ?13 = '' THEN datetime('now') ELSE ?13 END)
+             ON CONFLICT(source_id, item_id) DO UPDATE SET
+                kind = excluded.kind, title = excluded.title, poster = excluded.poster,
+                episode_id = excluded.episode_id, episode_title = excluded.episode_title,
+                season = excluded.season, episode = excluded.episode,
+                position = excluded.position, duration = excluded.duration,
+                page = COALESCE(excluded.page, fun_progress.page),
+                updated_at = CASE WHEN excluded.updated_at = '' THEN datetime('now')
+                                  ELSE excluded.updated_at END",
+            params![
+                row.source_id,
+                row.item_id,
+                row.kind,
+                row.title,
+                row.poster,
+                row.episode_id,
+                row.episode_title,
+                row.season,
+                row.episode,
+                row.position,
+                row.duration,
+                row.page,
+                row.updated_at.clone(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn fun_progress_list(&self, limit: i64) -> Result<Vec<FunProgressRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT source_id, item_id, kind, title, poster, episode_id, episode_title,
+                    season, episode, position, duration, page, updated_at
+             FROM fun_progress ORDER BY updated_at DESC LIMIT ?1",
+        )?;
+        let rows = stmt
+            .query_map(params![limit], |r| {
+                Ok(FunProgressRow {
+                    source_id: r.get(0)?,
+                    item_id: r.get(1)?,
+                    kind: r.get(2)?,
+                    title: r.get(3)?,
+                    poster: r.get(4)?,
+                    episode_id: r.get(5)?,
+                    episode_title: r.get(6)?,
+                    season: r.get(7)?,
+                    episode: r.get(8)?,
+                    position: r.get(9)?,
+                    duration: r.get(10)?,
+                    page: r.get(11)?,
+                    updated_at: r.get(12)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn fun_progress_for(
+        &self,
+        source_id: i64,
+        item_id: &str,
+    ) -> Result<Option<FunProgressRow>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT source_id, item_id, kind, title, poster, episode_id, episode_title,
+                        season, episode, position, duration, page, updated_at
+                 FROM fun_progress WHERE source_id = ?1 AND item_id = ?2",
+                params![source_id, item_id],
+                |r| {
+                    Ok(FunProgressRow {
+                        source_id: r.get(0)?,
+                        item_id: r.get(1)?,
+                        kind: r.get(2)?,
+                        title: r.get(3)?,
+                        poster: r.get(4)?,
+                        episode_id: r.get(5)?,
+                        episode_title: r.get(6)?,
+                        season: r.get(7)?,
+                        episode: r.get(8)?,
+                        position: r.get(9)?,
+                        duration: r.get(10)?,
+                        page: r.get(11)?,
+                        updated_at: r.get(12)?,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
+    }
+
+    pub fn fun_progress_remove(&self, source_id: i64, item_id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM fun_progress WHERE source_id = ?1 AND item_id = ?2",
+            params![source_id, item_id],
+        )?;
+        Ok(())
+    }
+
     pub fn stats(&self) -> Result<StoreStats> {
         let sources: i64 = self
             .conn
@@ -616,5 +824,69 @@ mod tests {
         assert_eq!(facets.qualities.len(), 2);
         assert_eq!(facets.languages.len(), 1);
         assert!(facets.countries.iter().all(|f| f.count == 1));
+    }
+
+    #[test]
+    fn fun_sources_and_progress_round_trip() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path().join("g9.db")).unwrap();
+
+        let a = store
+            .fun_source_add(
+                "stremio",
+                "Demo Addon",
+                "https://addon.example/manifest.json",
+                Some("{}"),
+            )
+            .unwrap();
+        let b = store
+            .fun_source_add("rss", "Anime feed", "https://nyaa.si/?page=rss&q=x", None)
+            .unwrap();
+        assert_ne!(a, b);
+        // Re-adding the same URL updates instead of duplicating.
+        let again = store
+            .fun_source_add(
+                "stremio",
+                "Demo Addon 2",
+                "https://addon.example/manifest.json",
+                None,
+            )
+            .unwrap();
+        assert_eq!(again, a);
+        let list = store.fun_sources().unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].name, "Demo Addon 2");
+        assert!(list[0].enabled);
+
+        store.fun_source_set_enabled(b, false).unwrap();
+        let list = store.fun_sources().unwrap();
+        assert!(!list.iter().find(|s| s.id == b).unwrap().enabled);
+
+        let mut row = FunProgressRow {
+            source_id: a,
+            item_id: "tt1".into(),
+            kind: "movie".into(),
+            title: "A Film".into(),
+            poster: None,
+            episode_id: None,
+            episode_title: None,
+            season: None,
+            episode: None,
+            position: 120.0,
+            duration: 600.0,
+            page: None,
+            updated_at: String::new(),
+        };
+        store.fun_progress_save(&row).unwrap();
+        row.position = 300.0;
+        store.fun_progress_save(&row).unwrap();
+        let got = store.fun_progress_for(a, "tt1").unwrap().unwrap();
+        assert!((got.position - 300.0).abs() < 0.01);
+        assert!(!got.updated_at.is_empty());
+        assert_eq!(store.fun_progress_list(10).unwrap().len(), 1);
+
+        store.fun_source_remove(a).unwrap();
+        assert!(store.fun_progress_for(a, "tt1").unwrap().is_none());
+        assert_eq!(store.fun_sources().unwrap().len(), 1);
     }
 }

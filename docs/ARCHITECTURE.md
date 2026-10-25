@@ -6,10 +6,14 @@ ui/  HTML + CSS + JS
         ▼
 src-tauri  (crate g9)
         │
-   ┌────┼──────────┬──────────┬─────────┐
-   ▼    ▼          ▼          ▼         ▼
-g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
-                   ipc.rs    fetch.rs
+   ┌────┼──────────┬──────────┬─────────┬──────────┐
+   ▼    ▼          ▼          ▼         ▼          ▼
+g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs   fun.rs
+                   ipc.rs    fetch.rs             │
+                                                   ▼
+                                              g9-sources
+                                        (addons · rss · ytdlp
+                                         · mangadex parsers)
 ```
 
 ## Rules
@@ -28,6 +32,7 @@ g9-iptv  g9-store  subs.rs   dlna.rs   tools.rs
 |---|---|
 | `g9-core` | Version, content policy, DTOs, errors, download format ladder |
 | `g9-iptv` | Streaming M3U parse, injection strip, dangerous URL filter, XMLTV now/next |
+| `g9-sources` | Fun Mode source layer: Stremio addon protocol, RSS magnets, yt-dlp `-J`, MangaDex. Pure parsing — no network, no catalogue |
 | `g9-store` | SQLite WAL, sources, channels (country/language/quality), history, settings |
 | `g9` (`src-tauri`) | Window, commands, subtitles, DLNA, IPC, optional ffmpeg |
 
@@ -87,3 +92,11 @@ Release artifacts come only from tags; `main` never publishes.
 
 A later phase could add libmpv behind the same commands without changing the playlist store —
 that would be a different product, and the only way to get shaders, NVDEC, and disc menus.
+
+## Fun Mode
+
+`fun.rs` is the only place that does HTTP for Fun Mode; `g9-sources` is the only place that
+parses. A shelf is `catalog → parse_catalogs → Item`s; a stream is `stream route → parse_streams →
+Stream`, best first. `Stream` carries the headers a CDN needs, so a future local proxy can serve
+referer-gated links without the webview ever seeing them. Progress rows (`fun_progress`) are
+written on every play and on every chapter open, which is what Continue watching reads.

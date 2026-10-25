@@ -1,0 +1,12 @@
+[package]
+name = "g9-sources"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Fun Mode sources: Stremio addons, RSS feeds, yt-dlp and MangaDex. Parsing only — no bundled catalogue."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }

@@ -16,9 +16,10 @@
 |---|---|
 | `npm install` | CLI only — no frontend npm libraries |
 | `npm run dev` | `tauri dev` |
-| `cargo test -p g9-core -p g9-iptv -p g9-store` | the crates GitHub CI runs |
+| `cargo test -p g9-core -p g9-iptv -p g9-store -p g9-sources` | the crates GitHub CI runs |
+| `node domtest/smoke6.js` | Fun Mode: wall → sheet → play, sources, search, browse, reader |
 | `cargo fmt --all` | format |
-| `cargo clippy -p g9-core -p g9-iptv -p g9-store --all-targets -- -D warnings` | lint (CI) |
+| `cargo clippy -p g9-core -p g9-iptv -p g9-store -p g9-sources --all-targets -- -D warnings` | lint (CI) |
 | `cargo check -p g9` | fast compile check of the app crate (needs WebKit on Linux, works on Windows) |
 | `bash scripts/ci-local.sh` | local gates incl. `tauri build --debug` (needs GTK) |
 

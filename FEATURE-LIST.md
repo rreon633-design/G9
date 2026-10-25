@@ -243,3 +243,21 @@ libplacebo-grade Anime4K/FSRCNNX chain does not. The rest are engine-level or ac
 **“12 more vs VLC”** — recorder, IPTV, podcasts, filters (CSS), frame-step, bookmarks, URL, speed+pitch-lock, extract/repair/convert (ffmpeg PATH), 360 look-around: shipped. Independent pitch-shift, disc menus, codec plugins: **not implemented**.
 
 **“23 long-tail”** — playlist, chapters (ffprobe), visualizer, PiP, background audio, cue browser, line-repeat, inspect, poster, sleep, settings JSON, gestures, RTMP: shipped. **v0.3.0** adds multi-window, a downloaded FFmpeg, a transcript pane, WebGL shader effects and a PC shutdown timer. Disc menus, cast-out, cloud, Plex/Jellyfin/Emby, skins, album art/TMDB library: **not implemented**.
+
+## Fun Mode (v0.8.0)
+
+| Feature | State |
+|---|---|
+| Netflix-shaped wall (hero, Continue watching, ranked Top 10, rails) | shipped |
+| Movies · Web series · Anime · Drama · Manga/Manhwa/Manhua tabs | shipped |
+| Live search across every enabled source | shipped |
+| See all → grid with quality / newest / rating sort | shipped |
+| Details sheet: synopsis, source chips, episode & chapter lists, My List, Download | shipped |
+| Sources dialog: add/remove/toggle addons, feeds and MangaDex | shipped |
+| Stremio addon client (manifest, catalog, meta, stream, subtitles) | shipped |
+| RSS magnet feeds (Nyaa-style namespaces, seeders, size) | shipped |
+| yt-dlp resolver (`-J` → streams + required headers) | shipped |
+| MangaDex reader (search, chapters, pages, reading progress) | shipped |
+| Playback preferences (quality, subtitles, autoplay, fallback) | shipped |
+| Torrent streaming for magnet results | planned, v0.10.0 |
+| Community site scrapers (AnimePahe, AnimeHeaven, TokyoInsider) | opt-in, v0.12.0 |

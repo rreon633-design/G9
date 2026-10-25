@@ -89,7 +89,7 @@ fn managed_path(app: &AppHandle) -> Option<PathBuf> {
 }
 
 /// The binary G9 will run: managed copy, else `yt-dlp` on PATH.
-fn binary(app: &AppHandle) -> PathBuf {
+pub fn binary(app: &AppHandle) -> PathBuf {
     managed_path(app).unwrap_or_else(|| PathBuf::from(exe("yt-dlp")))
 }
 
