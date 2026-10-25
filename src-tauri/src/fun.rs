@@ -10,7 +10,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use g9_sources::model::{Details, Episode, Item, Kind, Shelf, Stream};
-use g9_sources::{mangadex, rss, stremio, ytdlp};
+use g9_sources::{archive, mangadex, rss, stremio, ytdlp};
 use g9_store::{FunLibRow, FunProgressRow, FunSourceRow};
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -232,6 +232,7 @@ pub fn fun_sources(state: State<AppState>) -> Result<Vec<FunSource>, String> {
                 "rss" => "magnet feed".into(),
                 "mangadex" => "manga · manhwa · manhua".into(),
                 "ytdlp" => "paste any link".into(),
+                "archive" => "public-domain films".into(),
                 other => other.to_string(),
             };
             FunSource {
@@ -371,8 +372,29 @@ fn demo_items() -> Vec<Item> {
     out
 }
 
+/// A fresh install still gets a wall: the Internet Archive is added once, with
+/// no account and no key. Removing it in Sources is remembered — it never
+/// comes back on its own.
+fn ensure_starter_source(state: &State<'_, AppState>) -> Result<(), String> {
+    let store = store_of(state)?;
+    if store.setting("fun.seeded").map_err(store_err)?.is_some() {
+        return Ok(());
+    }
+    store
+        .fun_source_add(
+            "archive",
+            "Internet Archive",
+            archive::API,
+            Some("{\"starter\":true}"),
+        )
+        .map_err(store_err)?;
+    store.set_setting("fun.seeded", "1").map_err(store_err)?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn fun_home(state: State<'_, AppState>) -> Result<FunHome, String> {
+    let _ = ensure_starter_source(&state);
     let sources = all_sources(&state)?;
     let enabled: Vec<FunSourceRow> = sources.into_iter().filter(|s| s.enabled).collect();
     let views = fun_sources(state.clone()).unwrap_or_default();
@@ -407,6 +429,10 @@ pub async fn fun_home(state: State<'_, AppState>) -> Result<FunHome, String> {
                 },
                 "mangadex" => match build_mangadex_shelf(src) {
                     Ok(row) => shelves.push(row),
+                    Err(e) => errors.push(format!("{}: {e}", src.name)),
+                },
+                "archive" => match build_archive_shelves(src) {
+                    Ok(mut rows) => shelves.append(&mut rows),
                     Err(e) => errors.push(format!("{}: {e}", src.name)),
                 },
                 _ => {}
@@ -502,6 +528,30 @@ fn build_stremio_home(src: &FunSourceRow) -> Result<Vec<Shelf>, String> {
     Ok(rows)
 }
 
+/// Two rows from the archive's free collections. One request each, cached.
+fn build_archive_shelves(src: &FunSourceRow) -> Result<Vec<Shelf>, String> {
+    let mut rows = Vec::new();
+    for (collection, title) in archive::COLLECTIONS.iter().take(2) {
+        let url = archive::search_url("", collection, 20, 1);
+        let Ok(body) = get_cached(&url) else { continue };
+        let items = archive::parse_search(&body, src.id)?;
+        if items.is_empty() {
+            continue;
+        }
+        rows.push(Shelf {
+            id: format!("{}:{}", src.id, collection),
+            title: (*title).to_string(),
+            source_id: src.id,
+            kind: Kind::Movie,
+            items,
+        });
+    }
+    if rows.is_empty() {
+        return Err("the archive did not answer".into());
+    }
+    Ok(rows)
+}
+
 fn build_rss_shelf(src: &FunSourceRow) -> Result<Shelf, String> {
     let body = get_cached(&src.url)?;
     let entries = rss::parse_feed(&body, &src.name, Kind::Anime);
@@ -571,6 +621,14 @@ pub async fn fun_search(state: State<'_, AppState>, q: String) -> Result<Vec<Ite
                             if let Ok(mut got) = stremio::parse_catalogs(&body, &cat.kind, src.id) {
                                 all.append(&mut got);
                             }
+                        }
+                    }
+                }
+                "archive" => {
+                    let url = archive::search_url(&query, "", 40, 1);
+                    if let Ok(body) = get_cached(&url) {
+                        if let Ok(mut got) = archive::parse_search(&body, src.id) {
+                            all.append(&mut got);
                         }
                     }
                 }
@@ -690,6 +748,11 @@ pub async fn fun_details(
             };
             Ok((details, Vec::new()))
         }
+        "archive" => {
+            let body = get_cached(&archive::metadata_url(&item_id))?;
+            let (details, streams) = archive::parse_item(&body, src.id, &src.name)?;
+            Ok((details, streams))
+        }
         other => Err(format!("{other} sources have no details")),
     })
     .await?;
@@ -734,9 +797,84 @@ pub async fn fun_streams(
                 .map(|e| vec![e.stream.clone()])
                 .ok_or_else(|| "That release left the feed".to_string())
         }
+        "archive" => {
+            let body = get_cached(&archive::metadata_url(&item_id))?;
+            let (_, streams) = archive::parse_item(&body, src.id, &src.name)?;
+            Ok(streams)
+        }
         other => Err(format!("{other} sources stream through their own screen")),
     })
     .await
+}
+
+/// One more page of a catalog, so a shelf can keep going instead of stopping
+/// at the first forty. `id` is the shelf id: `source:kind:catalog`.
+#[tauri::command]
+pub async fn fun_catalog(
+    state: State<'_, AppState>,
+    id: String,
+    skip: Option<u32>,
+) -> Result<Vec<Item>, String> {
+    let mut parts = id.splitn(3, ':');
+    let source_id: i64 = parts
+        .next()
+        .and_then(|p| p.parse().ok())
+        .ok_or_else(|| "That shelf has no source".to_string())?;
+    let kind = parts.next().unwrap_or("movie").to_string();
+    let catalog = parts.next().unwrap_or_default().to_string();
+    if catalog.is_empty() {
+        return Err("That shelf cannot page".into());
+    }
+    let src = source_row(&state, source_id)?;
+    let base = src.url.trim_end_matches("/manifest.json").to_string();
+    let at = skip.unwrap_or(0);
+    work(move || {
+        let extra = format!("skip={at}");
+        let url = stremio::catalog_url(&base, &kind, &catalog, Some(&extra));
+        let body = get(&url)?;
+        let mut items = stremio::parse_catalogs(&body, &kind, source_id)?;
+        items.truncate(40);
+        Ok(items)
+    })
+    .await
+}
+
+/// Subtitle tracks an addon offers for one episode. Stremio addons publish
+/// theirs through their own route, so this is the only place they can come from.
+#[tauri::command]
+pub async fn fun_subtitles(
+    state: State<'_, AppState>,
+    id: String,
+    kind: Option<String>,
+    video: Option<String>,
+) -> Result<Vec<g9_sources::Subtitle>, String> {
+    let source_id = parse_source_id(&id);
+    let item_id = strip_source_id(&id);
+    let src = source_row(&state, source_id)?;
+    if src.kind != "stremio" {
+        return Ok(Vec::new());
+    }
+    let base = src.url.trim_end_matches("/manifest.json").to_string();
+    let kind_hint = kind.unwrap_or_else(|| "movie".into());
+    let video_id = video.unwrap_or(item_id);
+    work(move || {
+        let url = stremio::subtitle_url(&base, &kind_hint, &video_id);
+        // An addon with no subtitle route answers 404 — that is not an error.
+        match get(&url) {
+            Ok(body) => Ok(stremio::parse_subtitles(&body)),
+            Err(_) => Ok(Vec::new()),
+        }
+    })
+    .await
+}
+
+/// The text of one subtitle file, converted to WebVTT by the caller's player.
+#[tauri::command]
+pub async fn fun_subtitle_text(url: String) -> Result<String, String> {
+    if !url.starts_with("http") {
+        return Err("Not a subtitle link".into());
+    }
+    work(move || get(&url)).await
 }
 
 /// Resolve an arbitrary page with the managed yt-dlp — the "paste a link" box.

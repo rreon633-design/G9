@@ -30,9 +30,10 @@ download small.
 ## What it does
 
 - **Fun Mode** — movies, web series, anime, drama, manga / manhwa / manhua on one Netflix-shaped
-  wall. It reads **sources you add**: any Stremio addon, any RSS feed of magnet links, the managed
-  yt-dlp resolver, and MangaDex for the reader. Nothing is bundled, and the wall says so until you
-  add something. It keeps **My List**, a **Watching** tab that resumes the exact episode, watched /
+  wall. It opens **already populated** from the Internet Archive's public-domain film collections
+  (no account, no key), then reads **sources you add**: any Stremio addon, any RSS feed of magnet
+  links, the managed yt-dlp resolver, and MangaDex for the reader. Nothing licensed is bundled, and
+  a source you remove stays removed. It keeps **My List**, a **Watching** tab that resumes the exact episode, watched /
   following / not-interested flags, merged search across every source, genre-year-quality filters,
   more-like-this and cast pages, autoplay-next, a sleep timer and a mini player. Magnet playback
   lands in v0.11.0

@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.10.1** · source: `main`  
+Last updated: 2026-10-25 · release **v0.11.0** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -257,6 +257,33 @@ libplacebo-grade Anime4K/FSRCNNX chain does not. The rest are engine-level or ac
 **“12 more vs VLC”** — recorder, IPTV, podcasts, filters (CSS), frame-step, bookmarks, URL, speed+pitch-lock, extract/repair/convert (ffmpeg PATH), 360 look-around: shipped. Independent pitch-shift, disc menus, codec plugins: **not implemented**.
 
 **“23 long-tail”** — playlist, chapters (ffprobe), visualizer, PiP, background audio, cue browser, line-repeat, inspect, poster, sleep, settings JSON, gestures, RTMP: shipped. **v0.3.0** adds multi-window, a downloaded FFmpeg, a transcript pane, WebGL shader effects and a PC shutdown timer. Disc menus, cast-out, cloud, Plex/Jellyfin/Emby, skins, album art/TMDB library: **not implemented**.
+
+## Fun Mode — second list (v0.11.0)
+
+Nineteen more Fun Mode features, all inside the player or the wall. **Seventeen shipped in
+0.11.0**; the last two need provider metadata G9 does not have yet.
+
+| # | Feature | Status |
+|---|---|---|
+| 1 | Stream picker table, remembered per title | **Shipped** — `fun_streams` list under the sheet, `g9.fun.picks` |
+| 2 | Source's own subtitles before any online search | **Shipped** — `fun_subtitles`, `fun_subtitle_text`, bridge `applySubtitle` |
+| 3 | Multi-source title merge | **Shipped** — `dedupe()` by title + year, "N sources" on the card |
+| 4 | Cross-source resume | **Shipped** — `crossSourceResume()` matches by normalised title |
+| 5 | Season switcher + episode sort/search/random | **Shipped** — `episodeTools` / `paintEpisodeList` |
+| 6 | Reader modes (scroll / paged, fit) | **Shipped** — persisted in `g9.fun.reader` |
+| 7 | Chapter navigation | **Shipped** — ‹ Chapter / Chapter › in the reader |
+| 8 | Real reading resume (page) | **Shipped** — `page` on `fun_progress_save`, reopened on load |
+| 9 | Night reading | **Shipped** — dims the pages, not the chrome |
+| 10 | Library de-duplication by title | **Shipped** — in `libItems()` |
+| 11 | Watch-time stats | **Shipped** — *Watch time* tile in the hub |
+| 12 | Cross-title queue | **Shipped** — `g9.fun.queue`, started when an episode ends |
+| 13 | Search inside a series | **Shipped** — episode search box |
+| 14 | Catalog paging | **Shipped** — `fun_catalog`, *Load more* in browse |
+| 15 | Filters the addon declares itself | **Open** — needs `catalog.extra` option lists parsed per addon; 0.12.0 |
+| 16 | Surprise me | **Shipped** — *Random* on long seasons and the wall |
+| 17 | Thumbs → recommendations | **Shipped** — `g9.fun.likes`, reorders *Because you watched* |
+| 18 | Per-source `Accept-Language` | **Open** — Stremio addons have no such extra; needs a header override per source; 0.12.0 |
+| 19 | Pre-play GB + Mbps estimate | **Shipped** — on every stream row |
 
 ## Fun Mode (v0.10.0)
 

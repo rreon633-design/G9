@@ -183,6 +183,11 @@
   // ---------------------------------------------------------------- rails
 
   function railHTML(row) {
+    // Hidden titles never reach a rail, whichever list built it.
+    row = Object.assign({}, row, {
+      items: (row.items || []).filter(function (i) { return !flagOn("hidden", i.id); })
+    });
+    if (!row.items.length) return "";
     var cards = row.items.map(function (item, i) {
       var opts = { progress: item.__progress, noBadge: !!row.ranked };
       if (row.ranked) {
@@ -475,29 +480,19 @@
         " · " + episodes.length + " chapters</span>" +
         '<span class="fun-srcchip warn"><i></i>pages load on open</span>';
     } else {
-      chips = streams.slice(0, 3).map(function (s) {
-        return '<span class="fun-srcchip' + (s.magnet ? " warn" : "") + '"><i></i>' +
-          esc(s.provider || "source") + " · " + esc(s.label || "") + "</span>";
-      }).join("");
-      if (!chips) chips = '<span class="fun-srcchip warn"><i></i>No stream yet</span>';
+      chips = '<span class="fun-srcchip"><i></i>' + streams.length + " source" +
+        (streams.length === 1 ? "" : "s") + "</span>" +
+        (streams.some(function (s) { return s.magnet; })
+          ? '<span class="fun-srcchip warn"><i></i>magnet needs the torrent engine</span>'
+          : "");
     }
 
     var list;
     if (episodes.length) {
       list = '<h3 class="sub">' + (reading ? "Chapters" : "Episodes") +
-        "<span>" + episodes.length + " available</span></h3><div class=\"fun-eps\">" +
-        episodes.map(function (e, i) {
-          return '<button type="button" class="fun-ep" data-ep="' + i + '">' +
-            '<span class="n">' + esc(e.number != null ? e.number : i + 1) + "</span>" +
-            '<span class="th" style="background:' + bg + '">' +
-            (e.thumb ? '<img src="' + esc(e.thumb) + '" alt="" loading="lazy" onerror="this.remove()" />' : "") + "</span>" +
-            "<span><span class=\"tt\">" + esc(e.title || ("Episode " + (i + 1))) + "</span>" +
-            '<span class="ts">' + [e.released ? esc(String(e.released).slice(0, 10)) : "",
-              e.overview ? esc(String(e.overview).slice(0, 70)) : ""]
-              .filter(Boolean).join(" · ") + "</span></span>" +
-            '<span class="dur">' + (e.runtime ? e.runtime + (reading ? "p" : "m") : "") + "</span>" +
-            "</button>";
-        }).join("") + "</div>";
+        "<span>" + episodes.length + " available</span></h3>" +
+        episodeTools(item, episodes) +
+        '<div class="fun-eps" data-eplist></div>';
     } else {
       list = '<div class="fun-infogrid">' +
         "<div><div class=\"k\">SOURCE</div><div class=\"v\">" + esc(item.subtitle || kindWord(item.kind, item)) + "</div></div>" +
@@ -528,6 +523,12 @@
       '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>' +
       (reading ? "" : '<button type="button" class="fun-icon-btn" data-download aria-label="Download">' +
         '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg></button>') +
+      '<button type="button" class="fun-icon-btn" data-queue aria-label="Add to queue" title="Add to queue">' +
+      '<svg viewBox="0 0 24 24"><path d="M4 7h12M4 12h12M4 17h7M17 14l4 3-4 3"/></svg></button>' +
+      '<button type="button" class="fun-icon-btn" data-taste="1" aria-label="Like" title="Like">' +
+      '<svg viewBox="0 0 24 24"><path d="M7 21V10l4-6 1 1v5h6l-1 11z"/></svg></button>' +
+      '<button type="button" class="fun-icon-btn" data-taste="-1" aria-label="Not for me" title="Not for me">' +
+      '<svg viewBox="0 0 24 24"><path d="M7 3v11l4 6 1-1v-5h6l-1-11z"/></svg></button>' +
       '<button type="button" class="fun-icon-btn" data-flag="watched" aria-label="Mark watched" title="Mark watched">' +
       '<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></button>' +
       '<button type="button" class="fun-icon-btn" data-flag="follow" aria-label="Follow" title="Follow for new episodes">' +
@@ -541,6 +542,7 @@
       "</div>" +
       (item.synopsis ? '<p class="syn">' + esc(item.synopsis) + "</p>" : "") +
       '<div class="fun-srcrow"><span class="lbl">SOURCES</span>' + chips + "</div>" +
+      (reading ? "" : streamRows(item, streams)) +
       ((item.genres || []).length ? '<div class="fun-genrerow">' + item.genres.slice(0, 8).map(function (g) {
         return '<button type="button" class="fun-tag" data-genre="' + esc(g) + '">' + esc(g) + "</button>";
       }).join("") + "</div>" : "") +
@@ -555,7 +557,7 @@
     card.querySelector("[data-play]").addEventListener("click", function () {
       if (reading) {
         var first = episodes[pickChapterIndex(payload)] || episodes[0];
-        if (first) openReader(item, first);
+        if (first) openReader(item, first, episodes);
         else toast("No chapters for this one");
       } else {
         playFrom(payload, item, episodes[0] || null);
@@ -603,6 +605,37 @@
       if (!url) { toast("Nothing to copy for this one"); return; }
       copyText(url, "Link copied");
     });
+    var qBtn = card.querySelector("[data-queue]");
+    if (qBtn) {
+      qBtn.classList.toggle("is-on", queueList().some(function (r) { return r.id === item.id; }));
+      qBtn.addEventListener("click", function () {
+        var queued = queueList().some(function (r) { return r.id === item.id; });
+        if (queued) { queueRemove(item.id); qBtn.classList.remove("is-on"); toast("Removed from the queue"); }
+        else { queueAdd(item); qBtn.classList.add("is-on"); }
+      });
+    }
+    card.querySelectorAll("[data-taste]").forEach(function (b) {
+      var value = Number(b.getAttribute("data-taste"));
+      if (tasteOf(item.id) === value) b.classList.add("is-on");
+      b.addEventListener("click", function () {
+        setTaste(item, value);
+        card.querySelectorAll("[data-taste]").forEach(function (x) { x.classList.remove("is-on"); });
+        b.classList.add("is-on");
+      });
+    });
+    card.querySelectorAll("[data-stream]").forEach(function (b) {
+      var s = streams[Number(b.getAttribute("data-stream"))];
+      if (s && s.magnet) { b.classList.add("is-off"); }
+      b.addEventListener("click", function () {
+        if (!s) return;
+        if (s.magnet) { toast("Magnet — the torrent engine lands in v0.11.0"); return; }
+        state.picked = state.picked || {};
+        state.picked[item.id] = s.url;
+        try { localStorage.setItem("g9.fun.picks", JSON.stringify(state.picked)); } catch (e) {}
+        playFrom({ streams: [s], details: payload && payload.details, progress: payload && payload.progress }, item, episodes[0] || null);
+      });
+    });
+
     // Cast row: only when the source listed people.
     var cast = item.cast || [];
     if (cast.length) {
@@ -631,14 +664,7 @@
     card.querySelectorAll("[data-genre]").forEach(function (b) {
       b.addEventListener("click", function () { openGenre(b.getAttribute("data-genre")); });
     });
-    card.querySelectorAll(".fun-ep").forEach(function (row) {
-      row.addEventListener("click", function () {
-        var ep = episodes[Number(row.getAttribute("data-ep"))];
-        if (!ep) return;
-        if (reading) openReader(item, ep);
-        else playFrom(payload, item, ep);
-      });
-    });
+    paintEpisodeList(card, item, payload, episodes, bg, reading);
     if (!skipPlay) card.scrollTop = 0;
   }
 
@@ -648,6 +674,23 @@
   }
 
   // ---------------------------------------------------------------- playing
+
+  /// The same show kept from another source still remembers where you were.
+  function crossSourceResume(item, episode) {
+    var key = normTitle(item.title);
+    if (!key) return 0;
+    for (var i = 0; i < state.watching.length; i++) {
+      var w = state.watching[i];
+      if (normTitle(w.title) !== key) continue;
+      if (w.source_id + ":" + w.item_id === item.id) continue;
+      if (!(w.position > 5) || !(w.duration > 0)) continue;
+      if (w.position / w.duration > 0.94) continue;
+      if (episode && String(w.episode) !== String(episode.number)) continue;
+      if (!episode && w.episode != null) continue;
+      return w.position;
+    }
+    return 0;
+  }
 
   function playFrom(payload, item, episode) {
     var streams = (payload && payload.streams) || [];
@@ -662,14 +705,19 @@
     state.playCtx = {
       payload: payload, item: item, list: eps, index: at,
       streams: ranked, si: 0,
-      resume: payload && payload.progress && at >= 0 &&
-        payload.progress.episode_id === episode.id ? payload.progress.position : 0
+      resume: (payload && payload.progress && at >= 0 &&
+        payload.progress.episode_id === episode.id ? payload.progress.position : 0) ||
+        crossSourceResume(item, episode)
     };
     startStream(pickStream(streams), item, episode, state.playCtx.resume);
   }
 
   /// Best stream for this viewer: language preference, then the quality cap.
-  function pickStream(streams) {
+  function pickStream(streams, item) {
+    if (item && state.picked && state.picked[item.id]) {
+      var wanted = streams.filter(function (s) { return s.url === state.picked[item.id]; });
+      if (wanted.length) return wanted[0];
+    }
     var ranked = rankStreams(streams);
     var wanted = null;
     for (var i = 0; i < ranked.length; i++) {
@@ -688,7 +736,7 @@
         state.playCtx = Object.assign(state.playCtx || {}, {
           item: item, streams: ranked, si: 0
         });
-        startStream(pickStream(streams), item, episode);
+        startStream(pickStream(streams, item), item, episode);
       })
       .catch(function (err) { toast(String(err || "No sources for this one").slice(0, 90)); });
   }
@@ -703,6 +751,7 @@
     hide();
     if (b && b.play) b.play(item.title, stream.url);
     else toast("Player unavailable");
+    fetchAddonSubs(item, episode);
     if (resumeAt && resumeAt > 5) {
       window.setTimeout(function () {
         var b = bridgeOrNull();
@@ -736,28 +785,94 @@
 
   // ---------------------------------------------------------------- reader
 
-  function openReader(item, chapter) {
+  var READER_MODES = ["strip", "paged"];
+
+  function openReader(item, chapter, list) {
     state.layer = "reader";
     var host = el("fun-reader");
     if (!host) return;
+    var chapters = (list || []).slice();
+    var at = -1;
+    for (var i = 0; i < chapters.length; i++) if (chapter && chapters[i].id === chapter.id) at = i;
+    state.reader = {
+      item: item, chapter: chapter, list: chapters, at: at,
+      pages: [], page: 0, mode: state.readerMode || "strip",
+      night: !!state.readerNight, fit: state.readerFit || "width"
+    };
     host.hidden = false;
-    host.innerHTML = '<div class="fun-reader-top"><b>' + esc(item.title) + "</b>" +
+    host.innerHTML = '<div class="fun-reader-top">' +
+      '<b>' + esc(item.title) + "</b>" +
       '<span class="sp" id="fun-reader-pos">loading…</span>' +
-      '<span class="fun-pages"><button type="button" data-reader-close>Close</button></span></div>' +
+      '<span class="fun-pages">' +
+      '<button type="button" class="fun-tag" data-rmode>Scroll</button>' +
+      '<button type="button" class="fun-tag" data-rfit>Width</button>' +
+      '<button type="button" class="fun-tag" data-rnight>Night</button>' +
+      '<button type="button" class="fun-tag" data-rprev>‹ Chapter</button>' +
+      '<button type="button" class="fun-tag" data-rnext>Chapter ›</button>' +
+      '<button type="button" data-reader-close>Close</button>' +
+      "</span></div>" +
       '<div class="fun-reader-stage" id="fun-reader-stage"><div class="fun-empty">Loading pages…</div></div>';
-
     host.querySelector("[data-reader-close]").addEventListener("click", closeReader);
+    host.querySelector("[data-rmode]").addEventListener("click", function () {
+      var r = state.reader;
+      r.mode = r.mode === "strip" ? "paged" : "strip";
+      state.readerMode = r.mode;
+      writeJSON("g9.fun.reader", { mode: r.mode, fit: r.fit, night: r.night });
+      paintReader();
+    });
+    host.querySelector("[data-rfit]").addEventListener("click", function () {
+      var r = state.reader;
+      r.fit = r.fit === "width" ? "height" : "width";
+      state.readerFit = r.fit;
+      writeJSON("g9.fun.reader", { mode: r.mode, fit: r.fit, night: r.night });
+      paintReader();
+    });
+    host.querySelector("[data-rnight]").addEventListener("click", function () {
+      var r = state.reader;
+      r.night = !r.night;
+      state.readerNight = r.night;
+      writeJSON("g9.fun.reader", { mode: r.mode, fit: r.fit, night: r.night });
+      paintReader();
+    });
+    host.querySelector("[data-rprev]").addEventListener("click", function () { stepChapter(-1); });
+    host.querySelector("[data-rnext]").addEventListener("click", function () { stepChapter(1); });
+    loadChapter(item, chapter);
+  }
 
+  function loadChapter(item, chapter) {
+    var r = state.reader;
+    if (!r || !chapter) return;
+    r.chapter = chapter;
+    var stage = el("fun-reader-stage");
+    if (stage) stage.innerHTML = '<div class="fun-empty">Loading pages…</div>';
     invoke("fun_pages", { id: item.id, chapter: chapter.id })
       .then(function (pages) {
-        state.reader = { item: item, chapter: chapter, pages: pages, index: 0 };
+        r.pages = pages || [];
+        r.page = 0;
         paintReader();
+        // Resume the page saved for this chapter.
+        var saved = null;
+        for (var i = 0; i < state.watching.length; i++) {
+          var w = state.watching[i];
+          if (w.source_id + ":" + w.item_id === item.id && w.episode_id === chapter.id) saved = w;
+        }
+        if (saved && saved.page > 1) r.page = Math.min(saved.page - 1, Math.max(0, r.pages.length - 1));
+        paintReader();
+        toast("Resumed at page " + (r.page + 1));
       })
       .catch(function (err) {
-        var stage = el("fun-reader-stage");
         if (stage) stage.innerHTML = '<div class="fun-empty"><div class="big">Pages unavailable</div>' +
           esc(String(err || "").slice(0, 90)) + "</div>";
       });
+  }
+
+  function stepChapter(delta) {
+    var r = state.reader;
+    if (!r || !r.list || r.at < 0) { toast("No chapter list for this one"); return; }
+    var next = r.list[r.at + delta];
+    if (!next) { toast(delta > 0 ? "That was the last chapter" : "That was the first chapter"); return; }
+    r.at += delta;
+    loadChapter(r.item, next);
   }
 
   function paintReader() {
@@ -765,14 +880,56 @@
     if (!r) return;
     var stage = el("fun-reader-stage");
     var pos = el("fun-reader-pos");
-    if (pos) pos.textContent = r.chapter.title + " · " + r.pages.length + " pages";
+    if (pos) {
+      pos.textContent = r.chapter.title + " · " +
+        (r.pages.length ? (r.mode === "paged" ? (r.page + 1) + " / " + r.pages.length : r.pages.length + " pages") : "loading…");
+    }
+    var host = el("fun-reader");
+    if (host) {
+      host.classList.toggle("is-night", !!r.night);
+      host.classList.toggle("is-paged", r.mode === "paged");
+      host.classList.toggle("fit-height", r.fit === "height");
+      var m = host.querySelector("[data-rmode]");
+      if (m) m.textContent = r.mode === "paged" ? "Paged" : "Scroll";
+      var f = host.querySelector("[data-rfit]");
+      if (f) f.textContent = r.fit === "height" ? "Height" : "Width";
+      var n = host.querySelector("[data-rnight]");
+      if (n) n.classList.toggle("is-on", !!r.night);
+    }
     if (!stage) return;
-    stage.innerHTML = r.pages.map(function (url, i) {
-      return '<img src="' + esc(url) + '" alt="Page ' + (i + 1) + '" loading="' + (i < 3 ? "eager" : "lazy") +
-        '" onerror="this.alt=\'Page failed to load\'" />';
-    }).join("");
+    if (!r.pages.length) { stage.innerHTML = '<div class="fun-empty">No pages</div>'; return; }
+    if (r.mode === "paged") {
+      stage.innerHTML = '<div class="fun-reader-page"><img src="' + esc(r.pages[r.page]) +
+        '" alt="Page ' + (r.page + 1) + '" onerror="this.alt=\'Page failed to load\'" /></div>' +
+        '<div class="fun-reader-nav"><button type="button" class="fun-btn" data-page="-1">‹</button>' +
+        '<span>' + (r.page + 1) + " / " + r.pages.length + "</span>" +
+        '<button type="button" class="fun-btn" data-page="1">›</button></div>';
+      stage.querySelectorAll("[data-page]").forEach(function (b) {
+        b.addEventListener("click", function () { turnPage(Number(b.getAttribute("data-page"))); });
+      });
+    } else {
+      stage.innerHTML = r.pages.map(function (url, i) {
+        return '<img src="' + esc(url) + '" alt="Page ' + (i + 1) + '" loading="' + (i < 3 ? "eager" : "lazy") +
+          '" onerror="this.alt=\'Page failed to load\'" />';
+      }).join("");
+    }
     closeSheet();
     saveReading(r);
+  }
+
+  function turnPage(delta) {
+    var r = state.reader;
+    if (!r || !r.pages.length) return;
+    var next = r.page + delta;
+    if (next < 0) { toast("Start of the chapter"); return; }
+    if (next >= r.pages.length) {
+      // End of a chapter in paged mode: offer the next one.
+      if (r.list && r.at >= 0 && r.list[r.at + 1]) { stepChapter(1); return; }
+      toast("End of the chapter");
+      return;
+    }
+    r.page = next;
+    paintReader();
   }
 
   function saveReading(r) {
@@ -782,7 +939,8 @@
       row: {
         source_id: sourceId, item_id: providerId, kind: "manga", title: r.item.title,
         poster: r.item.poster || null, episode_id: r.chapter.id, episode_title: r.chapter.title,
-        season: null, episode: null, position: 0, duration: 0, page: 1, updated_at: ""
+        season: null, episode: null, position: 0, duration: 0,
+        page: (r.page || 0) + 1, updated_at: ""
       }
     }).catch(function () {});
   }
@@ -998,10 +1156,39 @@
         (state.sort === "year" ? "newest first" : state.sort === "score" ? "top rated first" : "best quality first");
     }
     paintFilters();
+    paintBrowseMore(all.length);
     el("fun-browse-grid").innerHTML = items.length
       ? items.map(function (i) { return cardHTML(i, { sources: i.sources }); }).join("")
       : '<div class="fun-empty"><div class="big">Nothing here</div>' +
         (all.length ? "No title matches those filters." : "Add a source to fill this shelf.") + "</div>";
+  }
+
+  /// Paging for shelves that came from an addon catalog: ask for the next 40.
+  function paintBrowseMore(have) {
+    var host = el("fun-browse-more");
+    if (!host) return;
+    var page = state.browse && state.browse.page;
+    if (!page) { host.hidden = true; host.innerHTML = ""; return; }
+    host.hidden = false;
+    host.innerHTML = '<button type="button" class="fun-btn" data-more>' +
+      (state.browse.loading ? "Loading…" : "Load more") + "</button>" +
+      '<span class="sub">' + have + " loaded</span>";
+    host.querySelector("[data-more]").addEventListener("click", function () {
+      if (state.browse.loading) return;
+      state.browse.loading = true;
+      paintBrowseMore(have);
+      invoke("fun_catalog", { id: page, skip: have })
+        .then(function (items) {
+          var seen = {};
+          state.browse.items.forEach(function (i) { seen[i.id] = 1; });
+          (items || []).forEach(function (i) { if (!seen[i.id]) state.browse.items.push(i); });
+          if (!items || !items.length) { state.browse.page = null; toast("That is the end of this shelf"); }
+        })
+        .catch(function () { toast("The addon stopped answering"); })
+        .then(function () {
+          if (state.browse) { state.browse.loading = false; paintBrowse(); }
+        });
+    });
   }
 
   function closeBrowse() {
@@ -1128,12 +1315,19 @@
   // ---------------------------------------------------------------- events
 
   function wire() {
+    // Remembered between launches: the streams you picked, how you read.
+    state.picked = readJSON("g9.fun.picks", {});
+    state.readerMode = readJSON("g9.fun.reader", {}).mode || "strip";
+    state.readerFit = readJSON("g9.fun.reader", {}).fit || "width";
+    state.readerNight = !!readJSON("g9.fun.reader", {}).night;
     var btn = el("btn-fun");
     if (btn) btn.addEventListener("click", toggle);
     var close = el("fun-close");
     if (close) close.addEventListener("click", hide);
     var sources = el("fun-sources");
     if (sources) sources.addEventListener("click", openSources);
+    var surpriseBtn = el("fun-surprise");
+    if (surpriseBtn) surpriseBtn.addEventListener("click", surprise);
     var refresh = el("fun-refresh");
     if (refresh) refresh.addEventListener("click", function () {
       refresh.classList.add("is-spin");
@@ -1424,15 +1618,21 @@
   }
 
   function libItems(kind) {
-    return (state.lib[kind] || []).map(function (r) {
-      return {
+    var seen = {};
+    var out = [];
+    (state.lib[kind] || []).forEach(function (r) {
+      var key = String(r.title || r.item_id).toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (seen[key]) return; // same title kept from two sources -> one card
+      seen[key] = 1;
+      out.push({
         id: r.item_id,
         title: r.title,
         kind: r.item_kind || "movie",
         poster: r.poster || null,
         subtitle: null
-      };
+      });
     });
+    return out;
   }
 
   function sourceName(item) {
@@ -1462,6 +1662,18 @@
 
     var out = rows.slice();
     var insertAt = Math.min(1, out.length);
+
+    // Tonight's queue goes first: the one you built by hand.
+    var queued = queueList();
+    if (queued.length) {
+      out.unshift({
+        id: "queue", title: "Your queue", kind: "", tag: "UP NEXT",
+        items: queued.map(function (r) {
+          return { id: r.id, title: r.title, kind: r.kind, poster: r.poster };
+        }),
+        more: false
+      });
+    }
 
     // "Because you watched" — the kinds you actually start, then genre overlap.
     if (state.watching.length) {
@@ -1507,6 +1719,7 @@
 
   function openBrowseItems(title, items, opts) {
     state.browse = Object.assign({ title: title, items: items.slice() }, opts || {});
+    state.browse.page = (opts && opts.page) || null;
     state.filters = { genre: (opts && opts.genre) || "", year: "", quality: "" };
     el("fun-browse-title").textContent = title;
     paintBrowse();
@@ -1975,7 +2188,16 @@
     window.clearInterval(state.posTimer);
     if (!ctx || !ctx.list || ctx.index < 0) return false;
     var next = ctx.list[ctx.index + 1];
-    if (!next) return false;
+    if (!next) {
+      var queued = queueNext();
+      if (queued) {
+        queueRemove(queued.id);
+        toast("Up next from your queue · " + queued.title);
+        resolveThenPlay({ id: queued.id, title: queued.title, kind: queued.kind }, null);
+        return true;
+      }
+      return false;
+    }
     if (prefs.autoplay === "off") return false;
     if (state.now && state.now.episode) {
       var row = progressRow(ctx.item, state.now.episode, 1, 1);
@@ -2183,6 +2405,7 @@
       hubTile("playback", "Playback", "Quality cap, languages, autoplay, sleep timer") +
       hubTile("library", "My List & history", state.lib.list.length + " saved · " + state.watching.length + " in progress") +
       hubTile("sources", "Sources", "Addons, feeds and MangaDex") +
+      hubTile("stats", "Watch time", "Hours this month, by kind") +
       hubTile("data", "Data", "Back up or restore what G9 knows") +
       "</div>" +
       '<div class="fun-rowend"><button type="button" class="fun-btn is-info" data-close-sheet>Done</button></div></div>';
@@ -2202,7 +2425,8 @@
             x.setAttribute("aria-selected", String(x.getAttribute("data-tab") === "list"));
           });
           paintRows();
-        } else openData();
+        } else if (what === "stats") openStats();
+        else openData();
       });
     });
   }
@@ -2354,6 +2578,276 @@
       try { localStorage.setItem("g9.fun.wizard", "1"); } catch (e) {}
     };
     paint();
+  }
+
+
+
+  // ---------------------------------------------------------------- subtitles
+
+  /// Ask the source for its own subtitle tracks and offer the best match first.
+  function fetchAddonSubs(item, episode) {
+    if (!item || !item.id || prefs.subs === "off") return;
+    var video = episode && episode.id ? episode.id : "";
+    invoke("fun_subtitles", { id: item.id, kind: item.kind || "movie", video: video })
+      .then(function (tracks) {
+        tracks = (tracks || []).filter(function (t) { return t && t.url; });
+        if (!tracks.length) return;
+        var want = String(prefs.subs || "auto").toLowerCase();
+        var pick = null;
+        if (want === "auto") {
+          var audio = String(prefs.audio || "").toLowerCase();
+          for (var i = 0; i < tracks.length && !pick; i++) {
+            if (audio && String(tracks[i].lang || "").toLowerCase().indexOf(audio) === 0) pick = tracks[i];
+          }
+          if (!pick) pick = tracks[0];
+        } else {
+          for (var j = 0; j < tracks.length && !pick; j++) {
+            if (String(tracks[j].lang || "").toLowerCase().indexOf(want) === 0) pick = tracks[j];
+          }
+        }
+        if (!pick) return;
+        state.subTracks = tracks;
+        invoke("fun_subtitle_text", { url: pick.url })
+          .then(function (text) {
+            var br = bridge();
+            if (!text || !br || !br.applySubtitle) return;
+            var ok = br.applySubtitle(text, pick.label || pick.lang || "subtitles");
+            if (ok) toast("Subtitles · " + (pick.label || pick.lang || "from the source"));
+          })
+          .catch(function () {});
+      })
+      .catch(function () {});
+  }
+
+  // ---------------------------------------------------------------- sources & episodes in the sheet
+
+  function estimate(size) {
+    if (!size) return "";
+    // Rough guide only: "for a two-hour film this is about X Mbps".
+    var mbps = (Number(size) * 8) / (2 * 3600 * 1e6);
+    return "≈ " + mbps.toFixed(1) + " Mbps for 2 h";
+  }
+
+  function humanGB(bytes) {
+    if (!bytes) return "";
+    var gb = Number(bytes) / 1073741824;
+    return gb >= 1 ? gb.toFixed(1) + " GB" : Math.round(Number(bytes) / 1048576) + " MB";
+  }
+
+  /// Every stream as a row you can pick, instead of "whatever is best".
+  function streamRows(item, streams) {
+    if (!streams || !streams.length) return "";
+    var chosen = (state.picked || {})[item.id];
+    return '<div class="fun-streams">' + streams.map(function (s, i) {
+      var mine = chosen && chosen === s.url;
+      return '<button type="button" class="fun-stream' + (mine ? " is-picked" : "") +
+        (s.magnet ? " is-magnet" : "") + '" data-stream="' + i + '">' +
+        '<span class="prov">' + esc(s.provider || "source") + "</span>" +
+        '<span class="lab">' + esc(s.label || "stream") + "</span>" +
+        (s.size ? '<span class="sz">' + humanGB(s.size) + "</span>" : "") +
+        (s.seeds ? '<span class="sz">' + s.seeds + " seeds</span>" : "") +
+        '<span class="est">' + esc(s.magnet ? "needs the torrent engine" : estimate(s.size)) + "</span>" +
+        "</button>";
+    }).join("") + "</div>";
+  }
+
+  function episodeTools(item, episodes) {
+    if (episodes.length <= 6) return "";
+    var seasons = [];
+    episodes.forEach(function (e) {
+      if (e.season != null && seasons.indexOf(e.season) < 0) seasons.push(e.season);
+    });
+    seasons.sort(function (a, b) { return a - b; });
+    return '<div class="fun-eptools">' +
+      (seasons.length > 1
+        ? '<select class="fun-epsel" data-season><option value="">All seasons</option>' +
+          seasons.map(function (n) {
+            return '<option value="' + n + '">Season ' + n + "</option>";
+          }).join("") + "</select>"
+        : "") +
+      '<input class="fun-epsearch" data-epsearch placeholder="Find an episode…" />' +
+      '<button type="button" class="fun-tag" data-epsort="number">Number</button>' +
+      '<button type="button" class="fun-tag" data-epsort="air">Air date</button>' +
+      '<button type="button" class="fun-tag" data-random>Random</button>' +
+      "</div>";
+  }
+
+  /// The episode list, re-painted by the toolbar above it.
+  function paintEpisodeList(card, item, payload, episodes, bg, reading) {
+    var host = card.querySelector("[data-eplist]");
+    if (!host) return;
+    var seasonSel = card.querySelector("[data-season]");
+    var search = card.querySelector("[data-epsearch]");
+    var sort = "number";
+
+    var paint = function () {
+      var list = episodes.slice();
+      if (seasonSel && seasonSel.value !== "") {
+        list = list.filter(function (e) { return String(e.season) === seasonSel.value; });
+      }
+      var q = String((search && search.value) || "").trim().toLowerCase();
+      if (q) {
+        list = list.filter(function (e) {
+          return String(e.title || "").toLowerCase().indexOf(q) >= 0 ||
+            String(e.number) === q;
+        });
+      }
+      if (sort === "air") {
+        list.sort(function (a, b) {
+          return String(a.released || "9999").localeCompare(String(b.released || "9999"));
+        });
+      } else {
+        list.sort(function (a, b) { return (a.number || 0) - (b.number || 0); });
+      }
+      if (!list.length) {
+        host.innerHTML = '<div class="fun-empty">No episode matches that.</div>';
+        return;
+      }
+      host.innerHTML = list.map(function (e) {
+        var i = episodes.indexOf(e);
+        return '<button type="button" class="fun-ep" data-ep="' + i + '">' +
+          '<span class="n">' + esc(e.number != null ? e.number : i + 1) + "</span>" +
+          '<span class="th" style="background:' + bg + '">' +
+          (e.thumb ? '<img src="' + esc(e.thumb) + '" alt="" loading="lazy" onerror="this.remove()" />' : "") + "</span>" +
+          '<span><span class="tt">' + esc(e.title || ("Episode " + (i + 1))) + "</span>" +
+          '<span class="ts">' + [e.released ? esc(String(e.released).slice(0, 10)) : "",
+            e.runtime ? e.runtime + (reading ? " pages" : " min") : "",
+            e.overview ? esc(String(e.overview).slice(0, 70)) : ""]
+            .filter(Boolean).join(" · ") + "</span></span>" +
+          '<span class="dur">' + (e.runtime ? e.runtime + (reading ? "p" : "m") : "") + "</span>" +
+          "</button>";
+      }).join("");
+      host.querySelectorAll(".fun-ep").forEach(function (row) {
+        row.addEventListener("click", function () {
+          var ep = episodes[Number(row.getAttribute("data-ep"))];
+          if (!ep) return;
+          if (reading) openReader(item, ep, episodes);
+          else playFrom(payload, item, ep);
+        });
+      });
+    };
+
+    if (seasonSel) seasonSel.addEventListener("change", paint);
+    if (search) search.addEventListener("input", paint);
+    card.querySelectorAll("[data-epsort]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        sort = b.getAttribute("data-epsort");
+        card.querySelectorAll("[data-epsort]").forEach(function (x) {
+          x.setAttribute("aria-pressed", String(x === b));
+        });
+        paint();
+      });
+    });
+    var rnd = card.querySelector("[data-random]");
+    if (rnd) rnd.addEventListener("click", function () {
+      var ep = episodes[Math.floor(Math.random() * episodes.length)];
+      if (!ep) return;
+      if (reading) openReader(item, ep, episodes);
+      else playFrom(payload, item, ep);
+    });
+    paint();
+  }
+
+  // ---------------------------------------------------------------- queue + taste (device-local)
+
+  var QUEUE_KEY = "g9.fun.queue";
+  var LIKE_KEY = "g9.fun.likes";
+
+  function readJSON(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key) || "null") || fallback; }
+    catch (e) { return fallback; }
+  }
+  function writeJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  }
+
+  function queueList() {
+    var q = readJSON(QUEUE_KEY, []);
+    return Array.isArray(q) ? q : [];
+  }
+  function queueAdd(item) {
+    var q = queueList();
+    if (q.some(function (r) { return r.id === item.id; })) { toast("Already queued"); return; }
+    q.push({ id: item.id, title: item.title, kind: item.kind || "movie", poster: item.poster || null });
+    writeJSON(QUEUE_KEY, q);
+    toast("Queued · " + item.title);
+    applyHome(state.home || { shelves: [], sources: [], demo: false });
+  }
+  function queueRemove(id) {
+    writeJSON(QUEUE_KEY, queueList().filter(function (r) { return r.id !== id; }));
+    applyHome(state.home || { shelves: [], sources: [], demo: false });
+  }
+  function queueNext() {
+    var q = queueList();
+    return q.length ? q[0] : null;
+  }
+
+  function likes() { return readJSON(LIKE_KEY, {}); }
+  function setTaste(item, value) {
+    var map = likes();
+    map[item.id] = value;
+    writeJSON(LIKE_KEY, map);
+    toast(value > 0 ? "Liked — it will shape the wall" : "Noted — fewer like this");
+  }
+  function tasteOf(itemId) { return likes()[itemId] || 0; }
+
+  // ---------------------------------------------------------------- stats
+
+  function openStats() {
+    state.layer = "profile";
+    var card = sheetHost(true);
+    card.innerHTML = '<div class="fun-plain"><h2>Watch time</h2>' +
+      '<p class="lead">Counted from the positions G9 saved on this PC. Nothing leaves the machine.</p>' +
+      '<div class="fun-empty" id="stats-body">Counting…</div>' +
+      '<div class="fun-rowend"><button type="button" class="fun-btn is-info" data-close-sheet>Done</button></div></div>';
+    card.querySelectorAll("[data-close-sheet]").forEach(function (b) {
+      b.addEventListener("click", closeSheet);
+    });
+    invoke("fun_progress_list", { limit: 200 })
+      .then(function (rows) {
+        var body = el("stats-body");
+        if (!body) return;
+        var total = 0, byMonth = {}, byKind = {};
+        (rows || []).forEach(function (r) {
+          var pos = Number(r.position) || 0;
+          total += pos;
+          var m = String(r.updated_at || "").slice(0, 7) || "—";
+          byMonth[m] = (byMonth[m] || 0) + pos;
+          byKind[r.kind || "other"] = (byKind[r.kind || "other"] || 0) + pos;
+        });
+        if (!total) {
+          body.outerHTML = '<div class="fun-empty"><div class="big">Nothing watched yet</div>' +
+            "Play something and the hours show up here.</div>";
+          return;
+        }
+        var hours = (total / 3600);
+        var months = Object.keys(byMonth).sort().reverse().slice(0, 6);
+        var peak = Math.max.apply(null, months.map(function (m) { return byMonth[m]; }));
+        body.outerHTML = '<div class="fun-stat-total">' + hours.toFixed(1) + " h watched</div>" +
+          '<div class="fun-stat-rows">' + months.map(function (m) {
+            var pct = peak ? Math.round((byMonth[m] / peak) * 100) : 0;
+            return '<div class="fun-stat-row"><span>' + esc(m) + "</span>" +
+              '<i style="width:' + pct + '%"></i>' +
+              "<b>" + (byMonth[m] / 3600).toFixed(1) + " h</b></div>";
+          }).join("") + "</div>" +
+          '<div class="fun-stat-kinds">' + Object.keys(byKind).map(function (k) {
+            return "<span>" + esc(k) + " · " + (byKind[k] / 3600).toFixed(1) + " h</span>";
+          }).join("") + "</div>";
+      })
+      .catch(function () {
+        var body = el("stats-body");
+        if (body) body.textContent = "Stats need the desktop app";
+      });
+  }
+
+  function surprise() {
+    var pool = state.items.filter(function (i) {
+      return !flagOn("hidden", i.id) && !flagOn("watched", i.id);
+    });
+    if (!pool.length) { toast("Nothing to surprise you with yet"); return; }
+    var pick = pool[Math.floor(Math.random() * pool.length)];
+    toast("Try " + pick.title);
+    openItem(pick);
   }
 
   window.G9Fun = {

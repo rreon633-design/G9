@@ -252,3 +252,10 @@ imported as JSON.
 Network calls happen only when you ask for them: playlist / RSS URLs you add, online subtitle
 search, DLNA discovery on your LAN, and caption translation (MyMemory). Nothing is uploaded
 in the background.
+
+## Where the first titles come from
+
+A new install arrives with **Internet Archive** as its only source. It serves films and series that
+are public domain or openly licensed (feature films, classic TV, noir, sci-fi, animation), streams
+straight over HTTPS, and needs no account. Remove it in **Fun Mode → Sources → Remove** and it will
+not come back; the wall then waits for sources you add yourself.

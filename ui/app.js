@@ -5879,6 +5879,8 @@
         duration: isFinite(video.duration) ? video.duration : 0
       };
     },
+    // A subtitle track the source itself offers (Fun Mode, v0.11).
+    applySubtitle: function (text, name) { return applySubText(text, name); },
     // Subtitle preferences from Fun Mode's Playback sheet.
     setSubLanguage: function (lang) {
       var next = String(lang || "en").toLowerCase().slice(0, 5);

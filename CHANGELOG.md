@@ -7,6 +7,42 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 - Nothing yet.
 
+## [0.11.0] — 2026-10-25
+
+Fun Mode now opens with something to watch on a machine that has never been configured,
+and the wall acts like a place you keep things instead of a shop window.
+
+### Added
+
+- **A source on first run, with no account and no key.** A fresh install seeds the Internet
+  Archive's public-domain film collections — feature films, classic TV, noir, sci-fi and
+  animation — so the wall is never an empty demo. Remove it in Sources and it stays removed.
+- **Stream picking.** Every stream a source offers is listed under the title with its size,
+  its estimate in Mbps, and its seeds; the one you pick is remembered for that show.
+- **Subtitles from the source itself.** Addons that publish their own subtitle tracks are
+  offered before any online search, matched to your subtitle language.
+- **Episode tools** on long seasons: a season switcher, a search box, sort by number or air
+  date, and a *Random* button.
+- **Reader modes** — scroll or paged — plus chapter navigation and **night reading**, which
+  dims the page without dimming the interface.
+- **Real reading resume.** The page you stopped on is saved and reopened.
+- **Watch time.** A totals screen in the hub: hours this month, and hours by kind.
+- **A queue** that survives a restart: *Add to queue* on any title, and when an episode ends
+  the next thing you queued starts.
+- **Like / not for me** on a title, which reorders the *Because you watched* row.
+- **Catalog paging** for addon shelves: *Load more* asks the addon for the next page.
+- **Cross-source resume.** The same show kept from two sources remembers one position.
+- **First-run tour** (three short cards) and a **Playback** panel that now says what it does.
+- **Context menu** on any card: play, list, queue, mark watched, hide, copy link.
+- `fun_catalog`, `fun_subtitles` and `fun_subtitle_text` commands; `g9_sources::archive`.
+
+### Changed
+
+- Library cards de-duplicate by title, so the same show saved from two sources is one card.
+- `g9.fun.recents`, reading mode and stream picks live on the device and are cleared with
+  *Clear cache* in Settings.
+- The debug-seed commands from the 0.10 development cycle are gone.
+
 ## [0.10.1] — 2026-10-25
 
 Two switches in the Playback sheet were shipped in 0.8.0 and never did anything. They do now.

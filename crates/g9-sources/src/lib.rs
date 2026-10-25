@@ -8,11 +8,14 @@
 //! * [`rss`] — any RSS feed of magnet links (Nyaa-compatible namespaces).
 //! * [`ytdlp`] — the `-J` JSON that the yt-dlp engine G9 already installs prints.
 //! * [`mangadex`] — the official MangaDex API for manga / manhwa / manhua.
+//! * [`archive`] — Internet Archive's public-domain film collections, so the wall
+//!   is not empty on a fresh install (no account, no key, no catalogue of ours).
 //!
 //! Everything here is a pure function over text or `serde_json::Value`, so the
 //! whole layer is tested offline against fixtures. Network calls live in the
 //! app crate (`src-tauri/src/fun.rs`).
 
+pub mod archive;
 pub mod html;
 pub mod mangadex;
 pub mod model;
