@@ -61,7 +61,13 @@ the failing job prints it as a GitHub Actions **annotation**.
    - `Cargo.lock` → the four `g9*` packages
    - `package.json`, `package-lock.json`
    - `src-tauri/tauri.conf.json`
-   - `CHANGELOG.md`, `README.md`, `FEATURE-LIST.md`, `docs/DEVELOPMENT.md`, `.github/workflows/release.yml`
+   - `CHANGELOG.md`, `README.md`, `FEATURE-LIST.md`, `docs/DEVELOPMENT.md`
+   - the `## [x.y.z]` heading in `CHANGELOG.md` — it *is* the release page body (see below)
+
+   Nothing about the release text is edited anywhere else: `scripts/release-notes.sh` turns the
+   `CHANGELOG.md` section into the Notes on the GitHub Release, and `.github/workflows/release-notes.yml`
+   re-syncs that body from `main`. Check it locally with
+   `bash scripts/release-notes.sh 0.8.0 CHANGELOG.md /tmp/notes.md`.
 2. Commit and push `main`; wait for **CI** to be green (including `windows-app`).
 3. Tag and push:
 
@@ -71,7 +77,8 @@ git push origin v0.4.0
 ```
 
 4. **Release Windows** builds on `windows-latest`:
-   `cargo test --release` → `npx tauri build --bundles nsis,msi` → portable zip → GitHub Release.
+   `cargo test --release` → `npx tauri build --bundles nsis,msi` → portable zip → GitHub Release
+   whose body is `release-notes.md`, generated from `CHANGELOG.md` at the tag.
 
 ### If a release run fails
 
@@ -88,6 +95,9 @@ git push origin v0.4.0
 ```
 
 Never re-point a tag whose release **did** publish; bump the patch version instead.
+
+A wrong or stale release **body** never needs a tag move: fix `CHANGELOG.md` on `main`, and
+**Release notes** rewrites the published page on the next push.
 
 ### File associations
 

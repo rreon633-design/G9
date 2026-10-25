@@ -47,7 +47,7 @@ jobs:
         run: npm ci
 
       - name: Test crates (release)
-        run: cargo test -p g9-core -p g9-iptv -p g9-store --release
+        run: cargo test -p g9-core -p g9-iptv -p g9-store -p g9-sources --release
 
       - name: Build Windows installers
         shell: pwsh
@@ -96,38 +96,24 @@ jobs:
           path: dist-win/*
           if-no-files-found: error
 
+      - name: Compose release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(sed -nE 's/^version *= *"([^"]+)".*/v\1/p' Cargo.toml | head -1)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          bash scripts/release-notes.sh "${tag#v}" CHANGELOG.md release-notes.md
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.7.0' }}
-          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.7.0' }} — Windows
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || steps.notes.outputs.tag }}
+          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || steps.notes.outputs.tag }} — Windows
           draft: false
           prerelease: false
           generate_release_notes: false
+          body_path: release-notes.md
           files: dist-win/*
-          body: |
-            **Windows 10 / 11 64-bit (x64)** — optimized (LTO, stripped).
-
-            | File | What |
-            |---|---|
-            | `*-setup.exe` | NSIS installer (per-user, LZMA, no admin) |
-            | `*.msi` | MSI |
-            | `G9-windows-x64-portable.zip` | Portable `G9.exe` |
-
-            **v0.7.0**
-            - GIF export is gone: the toolbar button, the Media menu entry and the encoder were removed
-            - TV Mode grew up: a now-playing bar with Play/Pause and Watch, a RECENT row of the channels you actually watched, and paging for big playlists
-            - What's on: the ... on any channel card shows the next programmes with times and a NOW marker
-            - Guide button in the wall loads or refreshes the programme guide
-            - Keyboard and remote control: arrows walk the wall, Enter tunes, digits jump to a channel, F favourites, / searches, G reloads the guide
-            - Esc backs out one level (popover first, then the wall)
-            - Fixed: one-line XMLTV programmes were dropped by the parser; big playlists load a page at a time
-            - Everything from 0.6: working downloads with the engine install, TV mode filters, guides, Xtream
-
-            Full list: [FEATURE-LIST.md](https://github.com/rreon633-design/G9/blob/main/FEATURE-LIST.md)
-
-            G9 is a player. It ships **no channels**. Add your own legal sources.
-
-            WebView2 is downloaded automatically if missing (already present on Windows 11).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

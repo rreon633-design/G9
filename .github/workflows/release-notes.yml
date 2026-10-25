@@ -1,0 +1,48 @@
+name: Release notes
+
+# The release page body is generated from CHANGELOG.md by scripts/release-notes.sh.
+# A tag's workflow can only read the files at that tag, so a notes fix on main
+# never reaches an already published release. This job closes that gap: whenever
+# main moves, the release matching the version in Cargo.toml gets its notes
+# rewritten. It never creates a release — the tag build does that.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-notes
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Sync notes for the current version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compose release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          tag=$(sed -nE 's/^version *= *"([^"]+)".*/v\1/p' Cargo.toml | head -1)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          bash scripts/release-notes.sh "${tag#v}" CHANGELOG.md release-notes.md
+          head -12 release-notes.md
+
+      - name: Patch the published release
+        if: github.ref_type == 'branch' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.notes.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file release-notes.md
+            echo "Updated release notes for $TAG."
+          else
+            echo "::notice::No published release for $TAG yet — the tag build will publish it."
+          fi

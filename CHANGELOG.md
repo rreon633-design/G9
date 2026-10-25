@@ -5,7 +5,11 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 ## [Unreleased]
 
-- Nothing yet.
+### Changed
+
+- Release pages are generated: `scripts/release-notes.sh` builds the GitHub Release body from the
+  matching `CHANGELOG.md` section, and a **Release notes** workflow re-syncs it from `main`, so the
+  page can no longer advertise the previous version's bullets.
 
 ## [0.8.0] — 2026-10-25
 
