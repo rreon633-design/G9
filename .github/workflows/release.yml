@@ -115,12 +115,10 @@ jobs:
             | `G9-windows-x64-portable.zip` | Portable `G9.exe` |
 
             **v0.3.0**
-            - Managed FFmpeg: one click downloads a static FFmpeg + ffprobe into app data
-              (nothing is bundled; PATH still works)
+            - Managed FFmpeg: one click downloads a static FFmpeg + ffprobe into app data (nothing is bundled; PATH still works)
             - Extra player windows, transcript pane, WebGL shader effects (built-in + your .frag)
             - Windows shutdown timer beside the sleep timer, with Cancel
-            - Everything from 0.2.0: cinema chrome, multi-provider subtitles, playlist queue, PiP,
-              storyboard, chapters, DLNA, podcasts, IPTV, JSON IPC, EQ/boost, GIF, 360 look-around
+            - Everything from 0.2.0: cinema chrome, multi-provider subtitles, playlist queue, PiP, storyboard, chapters, DLNA, podcasts, IPTV, JSON IPC, EQ/boost, GIF, 360 look-around
 
             Full list: [FEATURE-LIST.md](https://github.com/rreon633-design/G9/blob/main/FEATURE-LIST.md)
 

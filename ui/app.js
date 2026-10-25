@@ -1394,6 +1394,12 @@
       paintShaderList(state.shaderName || "Off");
     }
     render([]);
+    invoke("shaders_dir")
+      .then(function (dir) {
+        var hint = document.getElementById("shader-hint");
+        if (hint && dir) hint.textContent = "Drop .frag files here: " + dir;
+      })
+      .catch(function () {});
     invoke("list_user_shaders")
       .then(function (list) {
         render(
