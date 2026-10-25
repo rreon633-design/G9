@@ -2,6 +2,7 @@ mod commands;
 mod dlna;
 mod fetch;
 mod ffmpeg;
+mod files;
 mod ipc;
 mod state;
 mod subs;
@@ -62,6 +63,10 @@ pub fn run() {
             windows::cancel_pc_shutdown,
             windows::list_user_shaders,
             windows::shaders_dir,
+            files::save_data_url,
+            files::write_chunk,
+            files::save_frame,
+            files::pictures_dir,
         ])
         .run(tauri::generate_context!())
         .expect("G9 failed to start");

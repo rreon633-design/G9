@@ -49,7 +49,6 @@
     cuePos: 14,
     cueColor: "#ffffff",
     cues: [],
-    storyBusy: false,
     boost: 100,
     eq: [0, 0, 0, 0, 0, 0],
     abA: null,
@@ -78,9 +77,6 @@
   var infoModal = document.getElementById("info-modal");
   var toastEl = document.getElementById("toast");
   var seekEl = document.getElementById("seek");
-  var preview = document.getElementById("preview");
-  var scrubEl = document.getElementById("scrub");
-  var scrubCanvas = document.getElementById("scrub-canvas");
   var eqPanel = document.getElementById("eq-panel");
   var subPanel = document.getElementById("sub-panel");
   var fxPanel = document.getElementById("fx-panel");
@@ -132,18 +128,111 @@
     var h = Math.floor(t / 3600);
     return h ? h + ":" + m + ":" + s : m + ":" + s;
   }
+  function shortError(e, fallback) {
+    var msg = String((e && e.message) || e || "").replace(/https?:\/\/\S+/g, " ");
+    msg = msg
+      .replace(/\b(Local|Embedded|TheSubDB|OpenSubtitles|Podnapisi|Whisper|MyMemory)\b\s*:?/gi, " ")
+      .replace(/["“”]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!msg) return fallback || "Something went wrong";
+    if (/no subtitles|not found|no match/i.test(msg)) return "No subtitles found";
+    if (msg.length > 72) msg = msg.slice(0, 70).replace(/[,;:.\s]+$/, "") + "…";
+    return msg;
+  }
   function fail(e) {
-    document.getElementById("info-meta").textContent = e && e.message ? e.message : String(e);
+    var msg = shortError(e);
+    toast(msg);
+    var meta = document.getElementById("info-meta");
+    var modal = document.getElementById("info-modal");
+    if (meta && modal && !modal.hidden) meta.textContent = msg;
   }
 
   function toast(msg) {
     if (!toastEl) return;
-    toastEl.textContent = msg;
+    var text = String(msg == null ? "" : msg).replace(/\s+/g, " ").trim();
+    if (text.length > 96) text = text.slice(0, 94).replace(/[,;:.]$/, "") + "…";
+    toastEl.textContent = text;
     toastEl.classList.add("show");
     window.clearTimeout(toast._t);
     toast._t = window.setTimeout(function () {
       toastEl.classList.remove("show");
     }, 2800);
+  }
+
+  /// One reusable dialog: text input, a row of choices, or a confirm.
+  /// WebView2 never shows window.prompt(), so everything goes through this.
+  function ask(opts) {
+    var back = document.getElementById("ask-back");
+    if (!back) return Promise.resolve(opts.input ? window.prompt(opts.title || "", opts.value || "") : null);
+    return new Promise(function (resolve) {
+      var title = document.getElementById("ask-title");
+      var hint = document.getElementById("ask-hint");
+      var input = document.getElementById("ask-input");
+      var choices = document.getElementById("ask-choices");
+      var okBtn = document.getElementById("ask-ok");
+      var cancelBtn = document.getElementById("ask-cancel");
+      title.textContent = opts.title || "";
+      hint.textContent = opts.hint || "";
+      hint.hidden = !opts.hint;
+      input.hidden = !opts.input;
+      input.value = opts.value || "";
+      choices.hidden = !opts.choices;
+      choices.innerHTML = "";
+      okBtn.textContent = opts.okText || "OK";
+      okBtn.hidden = !!opts.choices && !!opts.autoPick;
+      var picked = opts.choices ? opts.choices[0] : "ok";
+      if (opts.choices) {
+        opts.choices.forEach(function (c) {
+          var b = document.createElement("button");
+          b.type = "button";
+          b.textContent = c;
+          b.addEventListener("click", function () {
+            done(c);
+          });
+          choices.appendChild(b);
+        });
+      }
+      function cleanup() {
+        back.hidden = true;
+        document.removeEventListener("keydown", onKey, true);
+      }
+      function done(v) {
+        cleanup();
+        resolve(v);
+      }
+      function onKey(ev) {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          done(null);
+        } else if (ev.key === "Enter") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          done(opts.input ? input.value.trim() || null : picked);
+        }
+      }
+      okBtn.onclick = function () {
+        done(opts.input ? input.value.trim() || null : picked);
+      };
+      cancelBtn.onclick = function () {
+        done(null);
+      };
+      back.onmousedown = function (ev) {
+        if (ev.target === back) done(null);
+      };
+      back.hidden = false;
+      document.addEventListener("keydown", onKey, true);
+      window.setTimeout(function () {
+        if (opts.input) {
+          input.focus();
+          input.select();
+        } else okBtn.focus();
+      }, 40);
+    });
+  }
+  function askText(title, value, hint, okText) {
+    return ask({ title: title, value: value, hint: hint, input: true, okText: okText });
   }
 
   function clearSubs() {
@@ -182,9 +271,8 @@
     state.subMeta = result;
     state.subRaw = result.vtt || "";
     applyVttText(shiftVtt(state.subRaw, state.subDelay || 0), result);
-    var label = result.movie || result.release || result.query || "captions";
-    var src = result.provider ? " · " + result.provider : "";
-    toast("Subtitles · " + label + src);
+    var lang = (result.language || "en").toUpperCase();
+    toast("Subtitles ready · " + lang);
   }
 
   function parseVttTime(s) {
@@ -366,21 +454,33 @@
     if (typeof rec.subDelay === "number") state.subDelay = rec.subDelay;
     if (rec.eq) {
       state.eq = rec.eq;
-      applyEq();
+      if (audioGraph) applyEq();
     }
-    if (rec.boost) setBoost(rec.boost, true);
+    if (rec.boost) {
+      state.boost = Number(rec.boost) || 100;
+      var bv = document.getElementById("eq-boost-val");
+      if (bv) bv.textContent = state.boost + "%";
+      var bi = document.getElementById("eq-boost");
+      if (bi) bi.value = String(state.boost);
+      if (audioGraph) audioGraph.gain.gain.value = state.boost / 100;
+    }
     if (rec.t > 5 && isFinite(video.duration) && rec.t < video.duration - 5) {
       video.currentTime = rec.t;
       toast("Resumed " + fmt(rec.t));
     }
   }
   function ensureAudio() {
-    if (audioGraph) return audioGraph;
+    if (audioGraph) {
+      if (audioGraph.ctx.state === "suspended") audioGraph.ctx.resume().catch(function () {});
+      return audioGraph;
+    }
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
+    var ctx = null;
+    var src = null;
     try {
-      var ctx = new AC();
-      var src = ctx.createMediaElementSource(video);
+      ctx = new AC();
+      src = ctx.createMediaElementSource(video);
       var last = src;
       var filters = EQ_FREQ.map(function (freq, i) {
         var f = ctx.createBiquadFilter();
@@ -400,11 +500,24 @@
       gain.connect(analyser);
       analyser.connect(ctx.destination);
       audioGraph = { ctx: ctx, filters: filters, gain: gain, analyser: analyser };
+      if (ctx.state === "suspended") ctx.resume().catch(function () {});
       return audioGraph;
     } catch (e) {
+      // Once a MediaElementSource exists the element is silent unless it reaches
+      // the speakers, so always finish the chain even when a node failed.
+      try {
+        if (src && ctx) src.connect(ctx.destination);
+      } catch (e2) {}
       return null;
     }
   }
+  /// WebView may create the context suspended; a gesture unlocks it.
+  function unlockAudio() {
+    if (audioGraph && audioGraph.ctx.state === "suspended") {
+      audioGraph.ctx.resume().catch(function () {});
+    }
+  }
+
   function applyEq() {
     var g = ensureAudio();
     if (!g) return;
@@ -450,64 +563,102 @@
       host.appendChild(col);
     });
   }
-  function snapshot() {
-    if (!video.videoWidth) {
-      toast("Nothing to capture");
-      return;
+  function safeName(ext) {
+    var base = String(state.title || "g9")
+      .replace(/[\\/:*?"<>|]+/g, "_")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (base.length > 70) base = base.slice(0, 70);
+    return (base || "g9") + ext;
+  }
+  var picsDir = null;
+  function initPicsDir() {
+    invoke("pictures_dir")
+      .then(function (dir) {
+        picsDir = typeof dir === "string" && dir ? dir : null;
+      })
+      .catch(function () {});
+  }
+  function pickSave(name, label, ext) {
+    var api = tauri();
+    if (!api || !api.dialog || !api.dialog.save) return Promise.resolve(null);
+    var path = name;
+    if (picsDir) {
+      var sep = picsDir.indexOf("\\") >= 0 ? "\\" : "/";
+      path = picsDir.replace(/[\\/]+$/, "") + sep + name;
     }
+    return api.dialog
+      .save({ defaultPath: path, filters: [{ name: label, extensions: [ext] }] })
+      .catch(function () {
+        return null;
+      });
+  }
+  function downloadBlob(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 6000);
+  }
+  function frameCanvas() {
+    if (!video.videoWidth || !video.videoHeight) return null;
     var c = document.createElement("canvas");
     c.width = video.videoWidth;
     c.height = video.videoHeight;
-    c.getContext("2d").drawImage(video, 0, 0);
-    c.toBlob(function (blob) {
-      if (!blob) return;
-      var a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = (state.title || "g9").replace(/[\\/:*?"<>|]/g, "_") + ".jpg";
-      a.click();
-      toast("Saved frame");
-    }, "image/jpeg", 0.92);
+    var ctx = c.getContext("2d");
+    ctx.drawImage(video, 0, 0, c.width, c.height);
+    return c;
   }
-  function buildStoryboard() {
-    var canvas = document.getElementById("story");
-    if (!canvas || !video.duration || !isFinite(video.duration) || state.mediaKind === "live") {
-      if (canvas) canvas.classList.remove("has-thumbs");
+  function snapshot() {
+    if (!video.videoWidth) {
+      toast("Nothing to capture yet");
       return;
     }
-    if (state.storyBusy) return;
-    state.storyBusy = true;
-    var n = 12;
-    var w = Math.max(640, canvas.clientWidth || 640);
-    canvas.width = w;
-    canvas.height = 48;
-    var ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, w, 48);
-    if (!preview.src && video.src) preview.src = video.currentSrc || video.src;
-    var i = 0;
-    var tw = w / n;
-    function step() {
-      if (i >= n) {
-        state.storyBusy = false;
-        canvas.classList.add("has-thumbs");
-        return;
-      }
-      try {
-        preview.currentTime = ((i + 0.5) / n) * video.duration;
-      } catch (e) {
-        state.storyBusy = false;
-        return;
-      }
-      preview.onseeked = function () {
-        preview.onseeked = null;
-        try {
-          ctx.drawImage(preview, i * tw, 0, tw - 1, 48);
-        } catch (e2) {}
-        i++;
-        window.setTimeout(step, 30);
-      };
+    var name = safeName(".jpg");
+    var destP = pickSave(name, "JPEG image", "jpg");
+    var data = null;
+    var canvas = null;
+    try {
+      canvas = frameCanvas();
+      data = canvas ? canvas.toDataURL("image/jpeg", 0.92) : null;
+    } catch (e) {
+      data = null; // protected/foreign stream: canvas is tainted
     }
-    window.setTimeout(step, 200);
+    destP
+      .then(function (dest) {
+        if (data) {
+          if (!dest) {
+            var bin = atob(data.split(",")[1] || "");
+            var bytes = new Uint8Array(bin.length);
+            for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            downloadBlob(new Blob([bytes], { type: "image/jpeg" }), name);
+            toast("Frame saved");
+            return null;
+          }
+          return invoke("save_data_url", { path: dest, dataUrl: data }).then(function () {
+            toast("Frame saved");
+          });
+        }
+        if (state.mediaKind === "file" && state.mediaPath && dest) {
+          return invoke("save_frame", {
+            path: state.mediaPath,
+            seconds: video.currentTime || 0,
+            dest: dest,
+          }).then(function () {
+            toast("Frame saved");
+          });
+        }
+        toast("This source won't allow a screenshot");
+        return null;
+      })
+      .catch(function (e) {
+        toast(shortError(e, "Could not save the frame"));
+      });
   }
   function exportGif() {
     if (!video.videoWidth || typeof encodeGif !== "function") {
@@ -605,14 +756,16 @@
       toast("Open a video first");
       return;
     }
-    var map = marksMap();
-    if (!map[key]) map[key] = [];
-    var name = window.prompt("Bookmark name", fmt(video.currentTime));
-    if (name == null) return;
-    map[key].push({ t: video.currentTime, name: name || fmt(video.currentTime) });
-    saveMarks(map);
-    renderMarks();
-    toast("Bookmark saved");
+    var at = video.currentTime;
+    askText("Bookmark", fmt(at), "Name this position", "Add").then(function (name) {
+      if (name == null) return;
+      var map = marksMap();
+      if (!map[key]) map[key] = [];
+      map[key].push({ t: at, name: name || fmt(at) });
+      saveMarks(map);
+      renderMarks();
+      toast("Bookmark saved");
+    });
   }
   function renderMarks() {
     var host = document.getElementById("mark-list");
@@ -665,8 +818,12 @@
       toast("No captions to translate");
       return;
     }
-    var to = window.prompt("Translate captions to language code (es, hi, fr, de…)", "es");
-    if (!to) return;
+    askText("Translate captions to", "es", "Language code: es, hi, fr, de…", "Translate").then(function (to) {
+      if (!to) return;
+      translateCues(to);
+    });
+  }
+  function translateCues(to) {
     toast("Translating…");
     var i = 0;
     function next() {
@@ -694,24 +851,26 @@
   function sidecarDest(ext) {
     var src = state.mediaPath || "";
     if (!src || src.indexOf("http") === 0) {
-      return window.prompt("Save as", "g9-out." + ext);
+      return askText("Save as", "g9-out." + ext, "File name next to your media folder", "Save");
     }
-    return src.replace(/\.[^.]+$/, "") + "." + ext;
+    return Promise.resolve(src.replace(/\.[^.]+$/, "") + "." + ext);
   }
   function extractAudio() {
     if (state.mediaKind !== "file" || !state.mediaPath) {
       toast("Open a local file first");
       return;
     }
-    var dest = sidecarDest("mp3");
-    if (!dest) return;
-    toast("Extracting audio…");
-    invoke("extract_audio", { path: state.mediaPath, dest: dest })
-      .then(function (r) {
-        toast("Saved " + (r.output || dest));
+    var path = state.mediaPath;
+    sidecarDest("mp3")
+      .then(function (dest) {
+        if (!dest) return null;
+        toast("Extracting audio…");
+        return invoke("extract_audio", { path: path, dest: dest }).then(function () {
+          toast("Audio saved");
+        });
       })
       .catch(function (e) {
-        toast(String(e && e.message ? e.message : e));
+        toast(shortError(e, "Could not extract audio"));
       });
   }
   function repairFile() {
@@ -719,20 +878,145 @@
       toast("Open a local file first");
       return;
     }
-    var dest = sidecarDest("fixed.mp4");
-    if (!dest) return;
-    toast("Remuxing…");
-    invoke("remux_repair", { path: state.mediaPath, dest: dest })
-      .then(function (r) {
-        toast("Repaired " + (r.output || dest));
+    var path = state.mediaPath;
+    sidecarDest("fixed.mp4")
+      .then(function (dest) {
+        if (!dest) return null;
+        toast("Repairing…");
+        return invoke("remux_repair", { path: path, dest: dest }).then(function () {
+          toast("Repaired copy saved");
+        });
       })
       .catch(function (e) {
-        toast(String(e && e.message ? e.message : e));
+        toast(shortError(e, "Repair failed"));
+      });
+  }
+  function recordSource() {
+    var stream = null;
+    try {
+      if (video.captureStream) stream = video.captureStream();
+      else if (video.mozCaptureStream) stream = video.mozCaptureStream();
+    } catch (e) {
+      stream = null;
+    }
+    if (stream && stream.getTracks().length) return stream;
+    if (!video.videoWidth) return null;
+    var c = document.createElement("canvas");
+    c.width = video.videoWidth;
+    c.height = video.videoHeight;
+    var ctx2 = c.getContext("2d");
+    var cs = null;
+    try {
+      cs = c.captureStream(30);
+    } catch (e2) {
+      return null;
+    }
+    var alive = true;
+    (function draw() {
+      if (!alive) return;
+      try {
+        ctx2.drawImage(video, 0, 0, c.width, c.height);
+      } catch (e3) {}
+      requestAnimationFrame(draw);
+    })();
+    cs.addEventListener("inactive", function () {
+      alive = false;
+    });
+    return cs;
+  }
+  function toggleRecord() {
+    if (recorder && recorder.state === "recording") {
+      recorder.stop();
+      return;
+    }
+    var stream = recordSource();
+    if (!stream) {
+      toast("Open something to record");
+      return;
+    }
+    startRecorder(stream);
+  }
+  function recordWebcam() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast("No camera here");
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({ video: true, audio: true })
+      .then(function (stream) {
+        startRecorder(stream);
+      })
+      .catch(function () {
+        toast("Camera not available");
+      });
+  }
+  function b64bytes(bytes) {
+    var out = "";
+    var step = 0x8000;
+    for (var i = 0; i < bytes.length; i += step) {
+      out += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
+    }
+    return btoa(out);
+  }
+  function saveRecording(blob) {
+    var name = safeName(".webm");
+    pickSave(name, "WebM video", "webm")
+      .then(function (dest) {
+        if (!dest) {
+          downloadBlob(blob, name);
+          toast("Recording saved");
+          return null;
+        }
+        return blob.arrayBuffer().then(function (ab) {
+          var bytes = new Uint8Array(ab);
+          var step = 512 * 1024;
+          var chain = Promise.resolve();
+          var first = true;
+          for (var i = 0; i < bytes.length; i += step) {
+            (function (slice, isFirst) {
+              chain = chain.then(function () {
+                return invoke("write_chunk", {
+                  path: dest,
+                  dataB64: b64bytes(slice),
+                  append: !isFirst,
+                });
+              });
+            })(bytes.subarray(i, Math.min(i + step, bytes.length)), first);
+            first = false;
+          }
+          return chain.then(function () {
+            toast("Recording saved");
+          });
+        });
+      })
+      .catch(function (e) {
+        toast(shortError(e, "Could not save the recording"));
       });
   }
   function startRecorder(stream, extraStop) {
+    if (typeof window.MediaRecorder !== "function") {
+      toast("Recording isn't available here");
+      return;
+    }
+    var mime = "";
+    var hasVideo = (stream.getVideoTracks ? stream.getVideoTracks() : []).length > 0;
+    var wants = hasVideo
+      ? ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]
+      : ["audio/webm;codecs=opus", "audio/webm", "video/webm"];
+    wants.some(function (m) {
+      if (window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(m)) {
+        mime = m;
+        return true;
+      }
+      return false;
+    });
     var chunks = [];
-    recorder = new MediaRecorder(stream);
+    try {
+      recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    } catch (e) {
+      toast("Recording isn't available here");
+      return;
+    }
     recorder.ondataavailable = function (ev) {
       if (ev.data && ev.data.size) chunks.push(ev.data);
     };
@@ -741,138 +1025,36 @@
         t.stop();
       });
       if (extraStop) extraStop();
-      var blob = new Blob(chunks, { type: "video/webm" });
-      var a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "g9-record.webm";
-      a.click();
+      var type = mime ? mime.split(";")[0] : "video/webm";
+      var blob = new Blob(chunks, { type: type });
       recorder = null;
-      toast("Recording saved");
-    };
-    recorder.start();
-    toast("Recording… Record again to stop");
-  }
-  function toggleRecord() {
-    if (recorder && recorder.state === "recording") {
-      recorder.stop();
-      return;
-    }
-    var kind = window.prompt("Record: screen  |  webcam  |  region", "screen");
-    if (!kind) return;
-    kind = kind.toLowerCase();
-    if (kind.indexOf("region") >= 0) {
-      beginRegionRecord();
-      return;
-    }
-    var job =
-      kind.indexOf("cam") >= 0
-        ? navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        : navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-    job.then(function (stream) {
-      startRecorder(stream);
-    }).catch(function (e) {
-      toast(String(e && e.message ? e.message : e));
-    });
-  }
-  function beginRegionRecord() {
-    var layer = document.getElementById("region");
-    var box = document.getElementById("region-box");
-    layer.hidden = false;
-    var drag = null;
-    function pos(ev) {
-      return { x: ev.clientX, y: ev.clientY };
-    }
-    function onDown(ev) {
-      drag = pos(ev);
-      box.style.left = drag.x + "px";
-      box.style.top = drag.y + "px";
-      box.style.width = "0";
-      box.style.height = "0";
-    }
-    function onMove(ev) {
-      if (!drag) return;
-      var p = pos(ev);
-      var x = Math.min(drag.x, p.x);
-      var y = Math.min(drag.y, p.y);
-      box.style.left = x + "px";
-      box.style.top = y + "px";
-      box.style.width = Math.abs(p.x - drag.x) + "px";
-      box.style.height = Math.abs(p.y - drag.y) + "px";
-    }
-    function finish() {
-      layer.hidden = true;
-      layer.removeEventListener("mousedown", onDown);
-      layer.removeEventListener("mousemove", onMove);
-      layer.removeEventListener("mouseup", onUp);
-      var r = box.getBoundingClientRect();
-      if (r.width < 8 || r.height < 8) {
-        toast("Region too small");
+      if (!blob.size) {
+        toast("Nothing was recorded");
         return;
       }
-      navigator.mediaDevices
-        .getDisplayMedia({ video: true, audio: false })
-        .then(function (stream) {
-          var src = document.createElement("video");
-          src.srcObject = stream;
-          src.muted = true;
-          src.play();
-          var c = document.createElement("canvas");
-          c.width = Math.round(r.width);
-          c.height = Math.round(r.height);
-          var ctx = c.getContext("2d");
-          var run = true;
-          function tick() {
-            if (!run) return;
-            try {
-              var vw = src.videoWidth || window.screen.width;
-              var vh = src.videoHeight || window.screen.height;
-              var sx = ((r.left + (window.screenX || 0)) / window.screen.width) * vw;
-              var sy = ((r.top + (window.screenY || 0)) / window.screen.height) * vh;
-              var sw = (r.width / window.screen.width) * vw;
-              var sh = (r.height / window.screen.height) * vh;
-              ctx.drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
-            } catch (e) {}
-            requestAnimationFrame(tick);
-          }
-          src.addEventListener("loadedmetadata", tick);
-          var mixed = c.captureStream(24);
-          startRecorder(mixed, function () {
-            run = false;
-            src.srcObject = null;
-          });
-        })
-        .catch(function (e) {
-          toast(String(e && e.message ? e.message : e));
-        });
-    }
-    function onUp() {
-      if (drag) finish();
-      drag = null;
-    }
-    layer.addEventListener("mousedown", onDown);
-    layer.addEventListener("mousemove", onMove);
-    layer.addEventListener("mouseup", onUp);
-    toast("Drag a region");
+      saveRecording(blob);
+    };
+    recorder.start(1000);
+    toast("Recording · press again to stop");
   }
   function convertMedia() {
     if (state.mediaKind !== "file" || !state.mediaPath) {
       toast("Open a local file first");
       return;
     }
-    var kind = window.prompt("Convert to: mp4  |  webm  |  mp3", "mp4");
-    if (!kind) return;
-    kind = kind.replace(".", "").toLowerCase();
-    if (kind !== "mp4" && kind !== "webm" && kind !== "mp3") kind = "mp4";
-    var dest = sidecarDest(kind);
-    if (!dest) return;
-    toast("Converting…");
-    invoke("convert_media", { path: state.mediaPath, dest: dest })
-      .then(function (r) {
-        toast("Saved " + (r.output || dest));
-      })
-      .catch(function (e) {
-        toast(String(e && e.message ? e.message : e));
+    ask({ title: "Convert / Save", choices: ["mp4", "webm", "mp3"] }).then(function (kind) {
+      if (!kind) return;
+      var path = state.mediaPath;
+      return sidecarDest(kind).then(function (dest) {
+        if (!dest) return null;
+        toast("Converting…");
+        return invoke("convert_media", { path: path, dest: dest }).then(function () {
+          toast("Saved " + kind.toUpperCase());
+        });
       });
+    }).catch(function (e) {
+      toast(shortError(e, "Conversion failed"));
+    });
   }
   var look360 = { on: false, yaw: 0, pitch: 0, drag: null, raf: 0 };
   function toggle360() {
@@ -966,15 +1148,25 @@
     });
   })();
   function setLiveTx() {
-    state.liveTx = !state.liveTx;
-    if (state.liveTx && !state.txLang) {
-      state.txLang = window.prompt("Live translate to (es, hi, fr…)", "es") || "es";
+    var turningOn = !state.liveTx;
+    if (turningOn && !state.txLang) {
+      askText("Live translate to", "es", "Language code: es, hi, fr…", "Start").then(function (lang) {
+        if (!lang) return;
+        state.txLang = lang;
+        state.liveTx = true;
+        toast("Live translate → " + state.txLang);
+      });
+      return;
     }
+    state.liveTx = turningOn;
     toast(state.liveTx ? "Live translate → " + state.txLang : "Live translate off");
   }
   function openPodcast() {
-    var url = window.prompt("Podcast RSS URL");
-    if (!url) return;
+    askText("Subscribe to podcast", "", "Paste the RSS feed URL", "Subscribe").then(function (url) {
+      if (url) loadPodcast(url);
+    });
+  }
+  function loadPodcast(url) {
     toast("Loading feed…");
     invoke("fetch_url", { url: url })
       .then(function (xml) {
@@ -993,8 +1185,8 @@
         showChrome();
         toast(state.podcasts.length + " episode(s)");
       })
-      .catch(function (e) {
-        toast(String(e && e.message ? e.message : e));
+      .catch(function () {
+        toast("Could not load that feed");
       });
   }
   function handleIpc(msg) {
@@ -1550,27 +1742,35 @@
     step();
   }
   function sleepTimer() {
-    var m = Number(window.prompt("Sleep after minutes (0 cancels)", "30"));
-    window.clearTimeout(state.sleepId);
-    if (!m) {
-      toast("Sleep timer off");
-      return;
-    }
-    var power = window.confirm("Also shut down the PC when the timer fires?\nOK = shut down · Cancel = only pause G9");
-    state.sleepId = window.setTimeout(function () {
-      video.pause();
-      toast("Sleep timer");
-    }, m * 60 * 1000);
-    if (power) {
-      invoke("schedule_pc_shutdown", { seconds: Math.round(m * 60) })
-        .then(function (msg) {
-          toast(msg);
-        })
-        .catch(function (e) {
-          toast(String(e.message || e));
-        });
-    }
-    toast("Sleep in " + m + " min");
+    askText("Sleep after minutes", "30", "0 turns the timer off", "Next").then(function (min) {
+      var m = Number(min);
+      window.clearTimeout(state.sleepId);
+      if (!m || m < 0) {
+        toast("Sleep timer off");
+        return;
+      }
+      ask({
+        title: "When " + m + " minutes pass",
+        hint: "G9 can pause, or also shut the PC down (Windows).",
+        choices: ["Pause G9", "Shut down the PC"],
+      }).then(function (choice) {
+        if (!choice) return;
+        state.sleepId = window.setTimeout(function () {
+          video.pause();
+          toast("Sleep timer");
+        }, m * 60 * 1000);
+        if (choice === "Shut down the PC") {
+          invoke("schedule_pc_shutdown", { seconds: Math.round(m * 60) })
+            .then(function (msg) {
+              toast(msg);
+            })
+            .catch(function () {
+              toast("PC shutdown unavailable");
+            });
+        }
+        toast("Sleep in " + m + " min");
+      });
+    });
   }
   function exportCfg() {
     var data = {};
@@ -1615,9 +1815,13 @@
       toast("Open a local file first");
       return;
     }
-    var url = window.prompt("RTMP URL (rtmp://…)");
-    if (!url) return;
-    toast("Starting ffmpeg broadcast…");
+    askText("Broadcast RTMP", "rtmp://", "Server URL, e.g. rtmp://host/live/key", "Start").then(function (url) {
+      if (!url) return;
+      startRtmp(url);
+    });
+  }
+  function startRtmp(url) {
+    toast("Starting broadcast…");
     invoke("rtmp_out", { path: state.mediaPath, rtmp: url })
       .then(function () {
         toast("Broadcast finished");
@@ -1627,15 +1831,16 @@
       });
   }
   function openPath() {
-    var p = window.prompt("File path or SMB share (\\\\server\\share\\video.mp4)");
-    if (!p) return;
-    p = p.trim();
-    state.mediaKind = p.indexOf("http") === 0 ? "url" : "file";
-    state.mediaPath = p;
-    var title = p.split(/[/\\]/).pop() || p;
-    var src = p.indexOf("http") === 0 ? p : convertFileSrc(p);
-    playUrl(title, src);
-    maybeAutoSubs();
+    askText("Open path", "", "Local path or UNC share", "Open").then(function (raw) {
+      var p = (raw || "").trim();
+      if (!p) return;
+      state.mediaKind = p.indexOf("http") === 0 ? "url" : "file";
+      state.mediaPath = p;
+      var title = p.split(/[/\\]/).pop() || p;
+      var src = p.indexOf("http") === 0 ? p : convertFileSrc(p);
+      playUrl(title, src);
+      maybeAutoSubs();
+    });
   }
   function openDlna() {
     toast("Searching DLNA…");
@@ -1708,34 +1913,6 @@
     if (x > 1) x = 1;
     return x * (video.duration || 0);
   }
-  var scrubTimer = 0;
-  function showScrub(ev) {
-    if (state.storyBusy) return;
-    if (!video.duration || !isFinite(video.duration)) return;
-    var t = seekTimeFromEvent(ev);
-    var rect = seekEl.getBoundingClientRect();
-    var x = ev.clientX;
-    if (x < rect.left + 90) x = rect.left + 90;
-    if (x > rect.right - 90) x = rect.right - 90;
-    scrubEl.style.left = x + "px";
-    document.getElementById("scrub-time").textContent = fmt(t);
-    scrubEl.classList.add("show");
-    window.clearTimeout(scrubTimer);
-    scrubTimer = window.setTimeout(function () {
-      if (!preview.src && video.src) preview.src = video.currentSrc || video.src;
-      if (!preview.src) return;
-      try {
-        preview.currentTime = t;
-      } catch (e) {}
-    }, 40);
-  }
-  preview.addEventListener("seeked", function () {
-    try {
-      var ctx = scrubCanvas.getContext("2d");
-      ctx.drawImage(preview, 0, 0, scrubCanvas.width, scrubCanvas.height);
-    } catch (e) {}
-  });
-
   function mediaQuery() {
     return state.lastQuery || state.title || "";
   }
@@ -1757,10 +1934,7 @@
       state.wantGenerate = false;
     })
       .then(applyVtt)
-      .catch(function (e) {
-        toast(e && e.message ? e.message : String(e));
-        fail(e);
-      });
+      .catch(fail);
   }
 
   function maybeAutoSubs() {
@@ -1867,6 +2041,47 @@
     });
   }
 
+  function paintAudioStage() {
+    var stage = document.getElementById("audio-stage");
+    if (!stage) return;
+    var only = !video.videoWidth && !video.videoHeight && (video.duration > 0 || !!video.currentSrc);
+    var live = state.mediaKind === "live" || (video.duration === Infinity);
+    stage.hidden = !only || live;
+    if (stage.hidden) return;
+    document.getElementById("audio-title").textContent = state.title || "Audio";
+    var bits = [];
+    if (video.duration && isFinite(video.duration)) bits.push(fmt(video.duration));
+    bits.push("Audio track");
+    var sub = document.getElementById("audio-sub");
+    if (sub) sub.textContent = bits.join(" · ");
+    stage.classList.toggle("playing", !video.paused);
+  }
+  var audioWarned = false;
+  function warnIfSilent() {
+    if (audioWarned) return;
+    window.setTimeout(function () {
+      if (state.mediaKind === "live" || video.paused) return;
+      var decoded = video.webkitAudioDecodedByteCount;
+      if (
+        typeof decoded === "number" &&
+        decoded === 0 &&
+        !video.muted &&
+        video.volume > 0
+      ) {
+        audioWarned = true;
+        toast("No audio this engine can decode — try Convert / Save");
+      }
+    }, 3500);
+  }
+  function showGate() {
+    var gate = document.getElementById("gate");
+    if (!gate) return;
+    gate.hidden = false;
+  }
+  function hideGate() {
+    var gate = document.getElementById("gate");
+    if (gate) gate.hidden = true;
+  }
   function setPlaying(on) {
     document.getElementById("play").innerHTML = on ? ICO_PAUSE : ICO_PLAY;
     document.getElementById("play").title = on ? "Pause" : "Play";
@@ -1879,6 +2094,7 @@
 
   function updateMeta() {
     var bits = [];
+    if (!video.videoWidth && (video.duration > 0 || !!video.currentSrc)) bits.push("Audio");
     if (video.videoWidth) bits.push(video.videoWidth + " × " + video.videoHeight);
     if (video.duration && isFinite(video.duration)) bits.push(fmt(video.duration));
     var ch = state.current;
@@ -2307,10 +2523,6 @@
     paintAb();
     video.removeAttribute("src");
     video.load();
-    if (preview) {
-      preview.removeAttribute("src");
-      preview.load();
-    }
     var isHls = /\.m3u8(\?|$)/i.test(url);
     var nativeHls = video.canPlayType && video.canPlayType("application/vnd.apple.mpegurl");
     if (isHls && !nativeHls) {
@@ -2318,15 +2530,16 @@
       return;
     }
     video.src = url;
-    if (preview) preview.src = url;
     bindMediaSession();
     video.play().then(function () {
       setPlaying(true);
       updateMeta();
-      ensureAudio();
-      if (audioGraph && audioGraph.ctx.state === "suspended") audioGraph.ctx.resume();
+      paintAudioStage();
+      hideGate();
+      unlockAudio();
     }).catch(function () {
-      fail("Could not play this source");
+      // Autoplay policy or an unsupported container: give the user one tap.
+      showGate();
     });
   }
 
@@ -2488,7 +2701,16 @@
   document.getElementById("btn-file").addEventListener("click", function () {
     openDialog({
       multiple: false,
-      filters: [{ name: "Media", extensions: ["mp4", "mkv", "webm", "mp3", "m4v", "mov", "avi"] }],
+      filters: [
+        {
+          name: "Video and audio",
+          extensions: [
+            "mp4", "mkv", "webm", "m4v", "mov", "avi", "ts", "mpg", "mpeg",
+            "mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "wma",
+          ],
+        },
+        { name: "All files", extensions: ["*"] },
+      ],
     }).then(function (path) {
       if (typeof path !== "string") return;
       var title = path.split(/[/\\]/).pop() || path;
@@ -2503,13 +2725,13 @@
   document.getElementById("btn-podcast").addEventListener("click", openPodcast);
   document.getElementById("btn-dlna").addEventListener("click", openDlna);
   document.getElementById("btn-url").addEventListener("click", function () {
-    var url = window.prompt("Stream or file URL");
-    if (url) {
+    askText("Open URL", "https://", "Stream, HLS playlist or direct file link", "Open").then(function (url) {
+      if (!url) return;
       state.mediaKind = "url";
       state.mediaPath = url;
       playUrl(url.split(/[/\\]/).pop() || url, url);
       maybeAutoSubs();
-    }
+    });
   });
   document.getElementById("btn-import").addEventListener("click", function () {
     importModal.hidden = false;
@@ -2579,6 +2801,7 @@
         showChrome();
       }
       if (act === "record") toggleRecord();
+      if (act === "webcamrtc") recordWebcam();
       if (act === "convert") convertMedia();
       if (act === "360") toggle360();
       if (act === "livetx") setLiveTx();
@@ -2617,6 +2840,14 @@
     });
   });
 
+  var gateBtn = document.getElementById("gate-play");
+  if (gateBtn)
+    gateBtn.addEventListener("click", function () {
+      video.play().then(hideGate).catch(function () {
+        toast("This file can't play here");
+        hideGate();
+      });
+    });
   document.getElementById("play").addEventListener("click", togglePlay);
   document.getElementById("seek-back").addEventListener("click", function () {
     skip(-10);
@@ -2770,11 +3001,6 @@
       setCueColor(btn.getAttribute("data-cue-color"));
     });
   });
-  document.getElementById("story").addEventListener("click", function (ev) {
-    if (!video.duration) return;
-    var r = ev.currentTarget.getBoundingClientRect();
-    video.currentTime = ((ev.clientX - r.left) / r.width) * video.duration;
-  });
   document.getElementById("eq-close").addEventListener("click", function () {
     eqPanel.hidden = true;
   });
@@ -2876,10 +3102,6 @@
   seekEl.addEventListener("input", function () {
     if (video.duration) video.currentTime = (Number(seekEl.value) / 1000) * video.duration;
   });
-  seekEl.addEventListener("mousemove", showScrub);
-  seekEl.addEventListener("mouseleave", function () {
-    scrubEl.classList.remove("show");
-  });
   function paintMute() {
     var btn = document.getElementById("btn-mute");
     if (!btn) return;
@@ -2887,6 +3109,22 @@
     btn.innerHTML = off ? ICO_MUTE : ICO_VOL;
     btn.title = off ? "Unmute" : "Mute";
     btn.classList.toggle("on", off);
+    paintVol();
+  }
+  function paintVol() {
+    var pct = Math.round((video.muted ? 0 : video.volume) * 100);
+    var inp = document.getElementById("vol");
+    if (inp) {
+      if (document.activeElement !== inp) inp.value = String(pct);
+      inp.style.setProperty("--p", pct + "%");
+    }
+    var lab = document.getElementById("vol-val");
+    if (lab) lab.textContent = String(pct);
+  }
+  function nudgeVolume(delta) {
+    video.volume = Math.max(0, Math.min(1, Math.round((video.volume + delta) * 100) / 100));
+    if (video.volume > 0) video.muted = false;
+    paintMute();
   }
   document.getElementById("btn-mute").addEventListener("click", function () {
     video.muted = !video.muted;
@@ -2897,6 +3135,17 @@
     if (video.volume > 0) video.muted = false;
     paintMute();
   });
+  var volWrap = document.getElementById("vol-wrap");
+  if (volWrap)
+    volWrap.addEventListener(
+      "wheel",
+      function (ev) {
+        ev.preventDefault();
+        nudgeVolume(ev.deltaY < 0 ? 0.05 : -0.05);
+        showChrome();
+      },
+      { passive: false }
+    );
   video.addEventListener("volumechange", paintMute);
   paintMute();
 
@@ -2931,15 +3180,20 @@
     updateMeta();
     if (state.subsOn) showCueTrack();
     restoreResume();
-    window.setTimeout(buildStoryboard, 400);
+    paintAudioStage();
   });
   video.addEventListener("play", function () {
+    var stage = document.getElementById("audio-stage");
+    if (stage) stage.classList.add("playing");
     setPlaying(true);
     showChrome();
     bindMediaSession();
-    if (audioGraph && audioGraph.ctx.state === "suspended") audioGraph.ctx.resume();
+    unlockAudio();
+    warnIfSilent();
   });
   video.addEventListener("pause", function () {
+    var stage = document.getElementById("audio-stage");
+    if (stage) stage.classList.remove("playing");
     setPlaying(false);
     showChrome();
     saveResume();
@@ -2973,6 +3227,9 @@
   });
 
   app.addEventListener("mousemove", showChrome);
+  ["pointerdown", "keydown"].forEach(function (evt) {
+    window.addEventListener(evt, unlockAudio, { passive: true });
+  });
   showChrome();
 
   window.addEventListener("keydown", function (ev) {
@@ -2986,8 +3243,7 @@
       if (fxPanel) fxPanel.hidden = true;
       if (speedPanel) speedPanel.hidden = true;
       if (markPanel) markPanel.hidden = true;
-      var region = document.getElementById("region");
-      if (region) region.hidden = true;
+      hideGate();
       if (state.tv) {
         setTv(false);
         return;
@@ -3070,5 +3326,6 @@
     playUrl(decodeURIComponent((src.split("/").pop() || "G9").split("?")[0]), src);
     video.play().catch(function () {});
   })();
+  initPicsDir();
   refresh();
 })();

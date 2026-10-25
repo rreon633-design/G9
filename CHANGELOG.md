@@ -3,6 +3,39 @@
 All notable changes to G9. Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `v*` tag.
 
+## [0.3.1] — 2026-10-25
+
+Fixes for playback sound, captures, and the seek bar.
+
+### Fixed
+
+- **No sound on some files.** The equaliser chain built a Web Audio graph as soon as a file
+  opened; a suspended context then muted the element permanently. The graph is now built only
+  when you touch EQ / boost / visualizer, resumes on any gesture, and always reaches the speakers.
+- **Autoplay refused by the engine** no longer fails silently: WebView2 starts with
+  `--autoplay-policy=no-user-gesture-required`, a failure shows a one-tap **Press to play** gate,
+  and a source whose audio codec the engine cannot decode says so instead of playing silently.
+- **Screenshots now save files.** Save frame asks for a location (Pictures by default) and writes
+  through the backend; if the canvas is protected, a local file falls back to FFmpeg.
+- **Screen recording works.** MediaRecorder was recording the desktop through an API WebView2 does
+  not implement. It now records the playback stream (picture + sound) or the webcam, and streams
+  the WebM to disk in 512 KB chunks instead of one giant blob download.
+- **Subtitle errors** are one short line — "No subtitles found" — and no longer list which services
+  were tried, URLs, or API details. Provider names are logged only to the console.
+- Toast messages are smaller and clamped to a single line.
+
+### Changed
+
+- **Removed the seek-bar preview**: no storyboard strip, no hover thumbnail, no second decoder.
+  The bar is a plain scrub bar again.
+- Volume is a pill with mute, slider, live percentage, wheel and keyboard support.
+- Audio-only files open in **music mode** with a title, duration and level meter.
+- Open-file dialog also accepts mp3, m4a, aac, flac, wav, ogg, opus, wma.
+
+### Removed
+
+- Region screen recording (needed desktop capture, which WebView2 does not expose).
+
 ## [0.3.0] — 2026-10-25
 
 Closing part of the gap list without turning G9 into a second media core.
@@ -142,6 +175,7 @@ multi-window, independent pitch shift. See the gap list in `FEATURE-LIST.md`.
 - Local files, URL / HLS, M3U / IPTV import, Live TV sheet
 - Diagnostics overlay, keyboard map
 
+[0.3.1]: https://github.com/rreon633-design/G9/releases/tag/v0.3.1
 [0.3.0]: https://github.com/rreon633-design/G9/releases/tag/v0.3.0
 [0.2.0]: https://github.com/rreon633-design/G9/releases/tag/v0.2.0
 [0.1.2]: https://github.com/rreon633-design/G9/releases/tag/v0.1.2

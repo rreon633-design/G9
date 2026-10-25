@@ -3,7 +3,7 @@
 G9 is a **Windows cinema player** (Tauri 2 + WebView2 + vanilla HTML/CSS/JS).  
 It is **not** mpv, VLC, or PotPlayer: playback is the OS web engine, not FFmpeg/`libplacebo`. Features that need those engines are listed as **out of scope** on purpose.
 
-Last updated: 2026-10-25 · release **v0.3.0** · source: `main`  
+Last updated: 2026-10-25 · release **v0.3.1** · source: `main`  
 History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implemented](#listed-by-you--not-implemented)
 
 ---
@@ -26,6 +26,7 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - System media keys (Media Session / SMTC)
 - JSON IPC on `127.0.0.1:18765` (one JSON object per line)
 - File **playlist queue** (Settings → View → Playlist; plays next on end)
+- **Music mode** — audio-only files get a record stage with title, duration and a level meter instead of a black rectangle
 - **Chapters** (ffprobe, if on PATH)
 - **Picture-in-picture**
 - **Always on top**
@@ -35,14 +36,11 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - **Extra player windows** (a second independent window, its own file and state)
 
 ### Picture
-- Hover **scrub preview**
-- **Storyboard** strip on the seek bar
 - CSS filters: brightness, contrast, saturation
 - Save frame (JPEG)
 - Export **GIF** (A–B range, or ~2.4s around now)
-- Screen / webcam recording (MediaRecorder → WebM)
+- **Record what is playing** — video plus sound to WebM (a second click stops), or record the webcam
 - **360° look-around** for equirectangular video (WebGL, drag)
-- **Region** screen capture (draw a rectangle, then record)
 - Audio **visualizer** (spectrum)
 - **Scene poster** (3×2 stills)
 - **Shader effects** — built-in Sharpen / Vivid / Mono / Night plus your own `.frag` files in the shaders folder (WebGL, over the video frame)
@@ -64,7 +62,9 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - **Transcript pane** — the same cues as scrollable text, highlights and follows playback, click a line to seek
 
 ### Audio
-- Mute + volume on the transport
+- Volume pill: mute, slider, live percentage, mouse wheel, keyboard nudges
+- Autoplay unlocked by the engine, with a one-tap **play gate** if a source is refused
+- **Music mode** for audio-only files (course of the transport stays available)
 - 6-band EQ, Bass / Voice / Movie, boost to 200%
 - Audio-description track pick (when the file tags one)
 
@@ -202,10 +202,10 @@ libplacebo-grade Anime4K/FSRCNNX chain does not. The rest are engine-level or ac
 
 | You asked for | What G9 actually has |
 |---|---|
-| Always-on Netflix-style storyboard **plus** hover preview | Hover preview **and** a 12-thumb strip — not a dense continuous filmstrip. |
+| Netflix-style storyboard **plus** hover preview | **Removed on request** in 0.3.1 — the seek bar is a plain scrub bar again. |
 | Full HW decode paths (DXVA **and** NVDEC **and** QSV **and** VT) | DXVA via WebView2 only. |
 | Advanced ASS/SSA styling | Size, colour, position, outline; no karaoke/libass. |
-| Screen recorder with **region + FPS + encoder profiles** | Region / screen / webcam → WebM via MediaRecorder. No bitrate/FPS UI. |
+| Screen recorder with **region + FPS + encoder profiles** | Records **playback** (picture + sound) or the webcam to WebM. No desktop/window capture (WebView2 has no screen-capture API), no region selection, no bitrate UI. |
 | Universal transcoder (all codecs/containers) | FFmpeg (managed download or PATH): mp4 / webm / mp3 + extract + remux. |
 | Real-time filters (sharpen, motion blur, spatial blur, noise) | CSS brightness / contrast / saturation, plus **WebGL shader effects** (built-in Sharpen / Vivid / Mono / Night and your own `.frag`). No Anime4K / FSRCNNX / temporal filters. |
 | Codec inspection **and** live CPU/GPU/decode stats | Info dialog + dropped frames; ffprobe dump if FFmpeg is installed. No live GPU meter. |
@@ -218,7 +218,7 @@ libplacebo-grade Anime4K/FSRCNNX chain does not. The rest are engine-level or ac
 
 **Cinema / first 12** — shipped except bundled Whisper and NVDEC vendor switches.
 
-**“9 more”** — IPC, a11y (basic), AD tracks, record, region record: shipped. Shaders, RTX, OpenCodec, DVB: **not implemented**.
+**“9 more”** — IPC, a11y (basic), AD tracks, record: shipped. Shaders, RTX, OpenCodec, DVB: **not implemented**.
 
 **“12 more vs VLC”** — recorder, IPTV, podcasts, filters (CSS), frame-step, bookmarks, URL, speed+pitch-lock, extract/repair/convert (ffmpeg PATH), 360 look-around: shipped. Independent pitch-shift, disc menus, codec plugins: **not implemented**.
 

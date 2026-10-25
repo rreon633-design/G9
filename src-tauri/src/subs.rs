@@ -1,6 +1,9 @@
 //! Subtitle providers: sidecar files, TheSubDB, OpenSubtitles, Podnapisi.
 
 use g9_core::{APP_NAME, APP_VERSION, USER_AGENT};
+
+/// One message for every provider failure: short, and it names no service.
+pub const NO_SUBTITLE_MSG: &str = "No subtitles found";
 use md5::{Digest, Md5};
 use serde::Serialize;
 use std::io::{Read, Seek, SeekFrom};
@@ -464,11 +467,11 @@ pub fn fetch_best(
         }
     }
 
-    Err(if errors.is_empty() {
-        format!("no subtitles for “{q}”")
-    } else {
-        format!("no subtitles for “{q}” ({})", errors.join(" · "))
-    })
+    // Details stay in the log. The UI only ever shows a short, source-free line.
+    if !errors.is_empty() {
+        eprintln!("g9 subtitles: {}", errors.join(" | "));
+    }
+    Err(NO_SUBTITLE_MSG.into())
 }
 
 fn run_hidden(cmd: &mut std::process::Command) -> Result<std::process::Output, String> {

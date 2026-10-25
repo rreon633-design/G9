@@ -99,8 +99,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.3.0' }}
-          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.3.0' }} — Windows
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.3.1' }}
+          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.3.1' }} — Windows
           draft: false
           prerelease: false
           generate_release_notes: false
@@ -114,11 +114,13 @@ jobs:
             | `*.msi` | MSI |
             | `G9-windows-x64-portable.zip` | Portable `G9.exe` |
 
-            **v0.3.0**
-            - Managed FFmpeg: one click downloads a static FFmpeg + ffprobe into app data (nothing is bundled; PATH still works)
-            - Extra player windows, transcript pane, WebGL shader effects (built-in + your .frag)
-            - Windows shutdown timer beside the sleep timer, with Cancel
-            - Everything from 0.2.0: cinema chrome, multi-provider subtitles, playlist queue, PiP, storyboard, chapters, DLNA, podcasts, IPTV, JSON IPC, EQ/boost, GIF, 360 look-around
+            **v0.3.1**
+            - Sound fix: the equaliser no longer mutes files, autoplay is unlocked, and a refused source shows one Play button
+            - Save frame and Record what is playing now write real files (Pictures by default); webcam recording too
+            - Music mode for audio-only files, volume pill with percentage and wheel
+            - Seek-bar preview removed — plain scrub bar
+            - Short errors that name no service ("No subtitles found")
+            - Everything from 0.2.0/0.3.0: cinema chrome, subtitles, playlist queue, PiP, chapters, DLNA, podcasts, IPTV, JSON IPC, EQ/boost, GIF, 360 look-around, transcript, shaders, managed FFmpeg
 
             Full list: [FEATURE-LIST.md](https://github.com/rreon633-design/G9/blob/main/FEATURE-LIST.md)
 

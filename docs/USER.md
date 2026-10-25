@@ -23,11 +23,14 @@ everything opens as an overlay card over the picture.
 
 ## Playback
 
-- Hover the **seek bar** for a frame preview; the **storyboard** strip jumps to a scene.
+- The **seek bar** is a plain scrub bar — no thumbnail preview.
+- Audio-only files open in **music mode**: title, duration and a level meter instead of a black screen.
 - **CC** searches online subtitles and applies the best match; open the subtitle browser to
   click a line and seek to it.
 - **i** opens Media info (centred card).
-- Speaker icon mutes. Settings → Equalizer for EQ and boost.
+- The **volume pill** on the right: speaker icon mutes, the slider shows a live percentage, the
+  mouse wheel nudges it, and Settings → Equalizer adds EQ, presets and boost.
+- If a source is refused by the engine, one **Press to play** button retries it.
 - **Settings → View → Playlist** is the file queue — it plays the next file when one ends.
 - **PiP** pops the picture out; **always-on-top** pins the window.
 - **360°** turns on look-around for equirectangular footage (drag to look).
@@ -62,6 +65,15 @@ G9 does not bundle FFmpeg. Open **Settings → FFmpeg engine** and press **Downl
 (~100 MB, static Windows build). Convert / Save, extract audio, remux / repair, chapters, inspect,
 RTMP out and embedded subtitle extraction then use that copy; if you prefer, put `ffmpeg` and
 `ffprobe` on PATH and G9 will use them instead. **Remove** deletes the managed copy.
+
+## Saving frames and recording
+
+- **Save frame** (camera icon or `S`) asks where to write a JPEG — default folder is your Pictures.
+  If the source is copy-protected and the frame cannot be read, G9 falls back to FFmpeg when the
+  file is local.
+- **Record what is playing** records the picture and the sound to WebM; press again to stop and
+  choose where to save. **Record webcam** does the same from the camera.
+- Desktop/window capture is not part of G9: the webview has no screen-capture API.
 
 ## Shaders
 
