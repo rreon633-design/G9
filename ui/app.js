@@ -1,7 +1,12 @@
-/* G9 player UI — HTML / CSS / vanilla JS only. Talks to Tauri via window.__TAURI__. */
+/* G9 player UI — HTML / CSS / vanilla JS. Cadence shell. */
 
 (function () {
   "use strict";
+
+  var ICO_PLAY =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l12 7-12 7z" fill="currentColor" stroke="none" /></svg>';
+  var ICO_PAUSE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor" stroke="none" /></svg>';
 
   var state = {
     view: "watch",
@@ -21,6 +26,7 @@
     zapTimer: 0,
     status: "Ready",
     error: "",
+    playing: false,
   };
 
   var video = document.getElementById("video");
@@ -29,6 +35,7 @@
   var diag = document.getElementById("diag");
   var listEl = document.getElementById("list");
   var chipsEl = document.getElementById("chips");
+  var sheet = document.getElementById("sheet");
   var importModal = document.getElementById("import-modal");
   var hlsSession = null;
 
@@ -39,7 +46,7 @@
   function invoke(cmd, args) {
     var api = tauri();
     if (!api || !api.core || !api.core.invoke) {
-      return Promise.reject(new Error("Open G9 with `cargo tauri dev` — backend not attached."));
+      return Promise.reject(new Error("Open G9 via the desktop app."));
     }
     return api.core.invoke(cmd, args || {});
   }
@@ -60,14 +67,18 @@
 
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
 
   function fmt(t) {
     if (!isFinite(t) || t < 0) return "00:00";
-    var s = Math.floor(t % 60).toString().padStart(2, "0");
-    var m = Math.floor((t / 60) % 60).toString().padStart(2, "0");
+    var s = Math.floor(t % 60)
+      .toString()
+      .padStart(2, "0");
+    var m = Math.floor((t / 60) % 60)
+      .toString()
+      .padStart(2, "0");
     var h = Math.floor(t / 3600);
     return h ? h + ":" + m + ":" + s : m + ":" + s;
   }
@@ -83,6 +94,13 @@
     setStatus("Error", e && e.message ? e.message : e);
   }
 
+  function setPlaying(on) {
+    state.playing = on;
+    var btn = document.getElementById("play");
+    btn.innerHTML = on ? ICO_PAUSE : ICO_PLAY;
+    btn.title = on ? "Pause" : "Play";
+  }
+
   function paintChrome() {
     var live = !!state.current;
     document.getElementById("tally").classList.toggle("live", live);
@@ -90,24 +108,24 @@
     document.getElementById("stat-ch").textContent = state.stats ? state.stats.channels : 0;
     document.getElementById("stat-src").textContent = state.stats ? state.stats.sources : 0;
     document.getElementById("stat-ver").textContent = "v" + (state.info ? state.info.version : "0.1.0");
-    document.getElementById("legal").textContent = state.info ? state.info.content_policy : "";
+    var legal = document.getElementById("legal");
+    if (legal) legal.textContent = state.info ? state.info.content_policy : "";
     poster.style.display = live || video.src ? "none" : "grid";
-
     document.querySelectorAll("#nav [data-view]").forEach(function (btn) {
       btn.classList.toggle("active", btn.getAttribute("data-view") === state.view);
     });
+    sheet.hidden = state.view === "watch";
   }
 
-  function renderSide() {
-    var title = document.getElementById("side-title");
-    var count = document.getElementById("side-count");
+  function renderSheet() {
+    var title = document.getElementById("sheet-title");
+    var count = document.getElementById("sheet-count");
 
     if (state.view === "settings") {
       title.textContent = "Settings";
       chipsEl.innerHTML = "";
       count.textContent = String(state.sources.length);
       var html = '<p class="legal">' + escapeHtml(state.info ? state.info.content_policy : "") + "</p>";
-      html += '<h2 style="margin:18px 0 8px;font-size:13px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase">Sources</h2>';
       if (!state.sources.length) html += '<div class="empty">No playlists yet.</div>';
       state.sources.forEach(function (s) {
         html +=
@@ -123,7 +141,8 @@
           s.id +
           '">Remove</button></div>';
       });
-      html += '<button type="button" class="primary" id="demo" style="margin-top:12px">Load demo clips</button>';
+      html +=
+        '<div style="padding:8px 10px"><button type="button" class="primary" id="demo">Load demo clips</button></div>';
       listEl.innerHTML = html;
       var demo = document.getElementById("demo");
       if (demo) demo.addEventListener("click", loadDemo);
@@ -138,11 +157,11 @@
     }
 
     if (state.view === "library") {
-      title.textContent = "Recent";
+      title.textContent = "Library";
       chipsEl.innerHTML = "";
       count.textContent = String(state.history.length);
       if (!state.history.length) {
-        listEl.innerHTML = '<div class="empty">Open a file or tune a channel. Resume appears here.</div>';
+        listEl.innerHTML = '<div class="empty">Open a file or tune a channel. Recent items appear here.</div>';
         return;
       }
       listEl.innerHTML = state.history
@@ -153,7 +172,7 @@
             '" data-title="' +
             escapeHtml(h.title) +
             '"><div class="n">' +
-            escapeHtml((h.kind || "?").charAt(0)) +
+            escapeHtml((h.kind || "?").charAt(0).toUpperCase()) +
             '</div><div class="meta"><b>' +
             escapeHtml(h.title) +
             "</b><span>" +
@@ -210,7 +229,8 @@
     }
 
     if (!state.channels.length) {
-      listEl.innerHTML = '<div class="empty">Add an M3U playlist or load the demo clips from Settings.</div>';
+      listEl.innerHTML =
+        '<div class="empty">Add a playlist from the list icon in the top bar, or load demo clips in Settings.</div>';
       return;
     }
     listEl.innerHTML = state.channels
@@ -231,7 +251,7 @@
           (c.is_favourite ? " on" : "") +
           '" data-star="' +
           c.id +
-          '">★</button></div>'
+          '" title="Favourite">★</button></div>'
         );
       })
       .join("");
@@ -291,7 +311,7 @@
       .then(function (chs) {
         state.channels = chs;
         paintChrome();
-        renderSide();
+        renderSheet();
       })
       .catch(fail);
   }
@@ -324,7 +344,7 @@
       duration: 0,
     }).catch(function () {});
     paintChrome();
-    renderSide();
+    renderSheet();
   }
 
   function stopHls() {
@@ -350,17 +370,17 @@
     }
 
     video.src = url;
-    video.play().catch(function () {
-      fail("Could not play this source in the webview");
+    video.play().then(function () {
+      setPlaying(true);
+    }).catch(function () {
+      fail("Could not play this source");
     });
-    document.getElementById("play").textContent = "Pause";
   }
 
-  /* Minimal HLS (MPEG-TS) via Media Source Extensions — vanilla JS, no libraries. */
   function playHlsMse(el, url, onError) {
     var aborted = false;
     if (!window.MediaSource) {
-      onError("This webview cannot play HLS (no MediaSource)");
+      onError("This webview cannot play HLS");
       return { abort: function () {} };
     }
     var ms = new MediaSource();
@@ -376,11 +396,11 @@
           var mime = 'video/mp2t; codecs="avc1.42E01E,mp4a.40.2"';
           if (!MediaSource.isTypeSupported(mime)) mime = "video/mp2t";
           if (!MediaSource.isTypeSupported(mime)) {
-            onError("MPEG-TS HLS not supported in this webview");
+            onError("MPEG-TS HLS not supported");
             return;
           }
           var sb = ms.addSourceBuffer(mime);
-          return appendSegments(sb, media.base, media.segments, function () {
+          return appendSegments(sb, media.segments, function () {
             return aborted;
           });
         })
@@ -392,11 +412,13 @@
           }
           return el.play();
         })
+        .then(function () {
+          setPlaying(true);
+        })
         .catch(function (e) {
           if (!aborted) onError(e);
         });
     });
-    document.getElementById("play").textContent = "Pause";
     return {
       abort: function () {
         aborted = true;
@@ -440,7 +462,6 @@
       });
     }
     return {
-      base: url,
       segments: segments.slice(0, 40).map(function (s) {
         return absolutize(url, s);
       }),
@@ -455,7 +476,7 @@
     }
   }
 
-  function appendSegments(sb, _base, urls, isAborted) {
+  function appendSegments(sb, urls, isAborted) {
     var i = 0;
     function next() {
       if (isAborted() || i >= urls.length) return Promise.resolve();
@@ -488,9 +509,14 @@
   }
 
   function togglePlay() {
-    if (video.paused) video.play();
-    else video.pause();
-    document.getElementById("play").textContent = video.paused ? "Play" : "Pause";
+    if (video.paused) {
+      video.play().then(function () {
+        setPlaying(true);
+      });
+    } else {
+      video.pause();
+      setPlaying(false);
+    }
   }
 
   function stop() {
@@ -499,9 +525,10 @@
     video.removeAttribute("src");
     video.load();
     state.current = null;
+    setPlaying(false);
     poster.style.display = "grid";
     paintChrome();
-    renderSide();
+    renderSheet();
   }
 
   function zap(dir) {
@@ -529,7 +556,7 @@
     invoke("load_demo_playlist")
       .then(function (r) {
         state.view = "live";
-        setStatus("Loaded " + r.channel_count + " demo clips (not TV channels)");
+        setStatus("Loaded " + r.channel_count + " demo clips");
         return refresh();
       })
       .catch(fail);
@@ -550,15 +577,7 @@
       .then(function (r) {
         importModal.hidden = true;
         state.view = "live";
-        setStatus(
-          "Imported " +
-            r.channel_count +
-            " · stripped " +
-            r.stripped_extvlcopt +
-            " option lines · skipped " +
-            r.skipped_dangerous +
-            " unsafe URLs"
-        );
+        setStatus("Imported " + r.channel_count + " channels");
         return refresh();
       })
       .catch(fail);
@@ -609,12 +628,18 @@
     if (!btn) return;
     state.view = btn.getAttribute("data-view");
     paintChrome();
-    renderSide();
-    if (state.view === "settings" || state.view === "library") refresh();
+    renderSheet();
+    if (state.view !== "watch") refresh();
+  });
+
+  document.getElementById("sheet-close").addEventListener("click", function () {
+    state.view = "watch";
+    paintChrome();
   });
 
   document.getElementById("q").addEventListener("input", function (ev) {
     state.query = ev.target.value;
+    if (state.view === "watch") state.view = "live";
     loadChannels();
   });
 
@@ -630,17 +655,32 @@
   document.getElementById("btn-url").addEventListener("click", openUrlPrompt);
   document.getElementById("play").addEventListener("click", togglePlay);
   document.getElementById("stop").addEventListener("click", stop);
+  document.getElementById("zap-up").addEventListener("click", function () {
+    zap(-1);
+  });
+  document.getElementById("zap-down").addEventListener("click", function () {
+    zap(1);
+  });
   document.getElementById("fs").addEventListener("click", function () {
     if (video.requestFullscreen) video.requestFullscreen();
   });
   document.getElementById("seek").addEventListener("input", function (ev) {
     if (video.duration) video.currentTime = (Number(ev.target.value) / 1000) * video.duration;
   });
+  document.getElementById("vol").addEventListener("input", function (ev) {
+    video.volume = Number(ev.target.value) / 100;
+  });
   video.addEventListener("timeupdate", function () {
     document.getElementById("time").textContent = fmt(video.currentTime) + " / " + fmt(video.duration || 0);
     if (video.duration) {
       document.getElementById("seek").value = String(Math.floor((video.currentTime / video.duration) * 1000));
     }
+  });
+  video.addEventListener("play", function () {
+    setPlaying(true);
+  });
+  video.addEventListener("pause", function () {
+    setPlaying(false);
   });
   video.addEventListener("error", function () {
     fail("Playback error");
@@ -652,6 +692,14 @@
     if (ev.key === "/" && !typing) {
       ev.preventDefault();
       document.getElementById("q").focus();
+      return;
+    }
+    if (ev.key === "Escape") {
+      importModal.hidden = true;
+      if (state.view !== "watch") {
+        state.view = "watch";
+        paintChrome();
+      }
       return;
     }
     if (typing) return;
