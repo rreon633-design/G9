@@ -82,8 +82,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.2' }}
-          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.2' }} — Windows
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.2.0' }}
+          name: G9 ${{ github.ref_type == 'tag' && github.ref_name || 'v0.2.0' }} — Windows
           draft: false
           prerelease: false
           generate_release_notes: false
@@ -97,10 +97,15 @@ jobs:
             | `*.msi` | MSI |
             | `G9-windows-x64-portable.zip` | Portable `G9.exe` |
 
-            **v0.1.2**
-            - Online subtitle search (OpenSubtitles) — CC auto-applies the best match
-            - Media info dialog
-            - Cinema chrome: Media · Playback · Settings · About G9 · TV Mode
+            **v0.2.0**
+            - Cinema chrome: Media · Settings · TV Mode · About G9
+            - Online subtitles (OpenSubtitles, TheSubDB, Podnapisi) + sidecar/ASS
+            - Scrub preview, storyboard, EQ/boost, A–B, resume, bookmarks
+            - Playlist queue, PiP, visualizer, 360 look-around, GIF, region record
+            - DLNA browse, podcasts, IPTV (your M3U), JSON IPC `127.0.0.1:18765`
+            - Optional ffmpeg on PATH: convert, extract, remux, chapters, RTMP
+
+            Full list: [FEATURE-LIST.md](https://github.com/rreon633-design/G9/blob/main/FEATURE-LIST.md)
 
             G9 is a player. It ships **no channels**. Add your own legal sources.
 

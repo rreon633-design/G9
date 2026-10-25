@@ -151,7 +151,7 @@ pub fn translate(text: &str, from: &str, to: &str) -> Result<String, String> {
     );
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(12))
-        .user_agent("G9/0.1.2")
+        .user_agent(g9_core::USER_AGENT)
         .build()
         .map_err(|e| e.to_string())?;
     let v: serde_json::Value = client

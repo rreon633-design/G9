@@ -4,7 +4,8 @@
 
 - Rust stable (1.77+)
 - Node 20 (only for `@tauri-apps/cli`)
-- Linux packages: `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf`
+- Linux packages (local debug only): `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf`
+- Optional: `ffmpeg` / `ffprobe` on PATH for convert, repair, chapters, inspect, RTMP, embedded subs
 
 ## Commands
 
@@ -12,16 +13,18 @@
 |---|---|
 | `npm install` | CLI only — no frontend npm libraries |
 | `npm run dev` | `tauri dev` |
-| `cargo test --workspace` | parser + store tests |
+| `cargo test -p g9-core -p g9-iptv -p g9-store` | same crates as GitHub CI |
 | `cargo fmt --all` | format |
-| `cargo clippy --workspace --all-targets -- -D warnings` | lint |
-| `bash scripts/ci-local.sh` | same gates as GitHub Actions |
+| `cargo clippy -p g9-core -p g9-iptv -p g9-store --all-targets -- -D warnings` | lint (CI) |
+| `bash scripts/ci-local.sh` | extra local gates (may need GTK to clippy crate `g9`) |
 
 ## Frontend
 
-Edit files in `ui/` and reload the Tauri window. Do not add React, Vue, Svelte, TypeScript, or Vite.
+Edit files in `ui/` and reload the Tauri window. Do not add React, Vue, Svelte, TypeScript, Vite, or frontend npm libraries.
 
 Tauri APIs are used through `window.__TAURI__` (`withGlobalTauri: true`).
+
+CI checks that `ui/index.html`, `ui/styles.css`, `ui/app.js`, and `ui/gif.js` exist and that there is no `ui/main.ts`.
 
 ## Tests of note
 
@@ -29,11 +32,19 @@ Tauri APIs are used through `window.__TAURI__` (`withGlobalTauri: true`).
 - `g9-iptv` parses 100k generated channels in under 10s.
 - `g9-store` upserts sources and searches by name.
 
-## Release
+Ubuntu CI **does not** compile crate `g9` (no WebKit on the runner). Windows **release** builds the full Tauri app.
+
+## Release (Windows only)
+
+1. Bump `Cargo.toml` workspace version, `src-tauri/tauri.conf.json`, `package.json`.
+2. Commit and push `main`.
+3. Tag and push:
 
 ```bash
-git tag v0.1.2
-git push origin v0.1.2
+git tag -a v0.2.0 -m "G9 v0.2.0 Windows"
+git push origin v0.2.0
 ```
 
-GitHub Actions workflow `Release` drafts installers.
+Workflow **Release Windows** (`.github/workflows/release.yml`) builds NSIS, MSI, and a portable zip on `windows-latest`, then publishes a GitHub Release.
+
+Repo setting required: **Settings → Actions → General → Workflow permissions → Read and write**.

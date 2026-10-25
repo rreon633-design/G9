@@ -50,7 +50,8 @@ fn http_get_raw(url: &str) -> Result<String, String> {
     .map_err(|e| e.to_string())?;
     stream.set_read_timeout(Some(Duration::from_secs(6))).ok();
     let req = format!(
-        "GET {path}{q} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\nUser-Agent: G9/0.1.2\r\n\r\n"
+        "GET {path}{q} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\nUser-Agent: {}\r\n\r\n",
+        g9_core::USER_AGENT
     );
     stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
     let mut buf = Vec::new();
