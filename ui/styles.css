@@ -3511,3 +3511,59 @@ input[type="range"]::-webkit-slider-thumb {
 .social-call .call-time,
 .social-call .call-badge,
 .social-call .call-count { color: rgba(238, 242, 247, 0.68); }
+
+/* ---------- latency and quality readouts ---------- */
+.social-rtt {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted-2);
+  margin-left: 8px;
+}
+.call-net {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: rgba(238, 242, 247, 0.72);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.07);
+}
+.call-tier {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: rgba(238, 242, 247, 0.55);
+}
+.call-tile .net {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(238, 242, 247, 0.78);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.call-tile:hover .net,
+.call-tile .net[data-quality="poor"],
+.call-tile .net[data-quality="fair"] { opacity: 1; }
+.call-tile .net[data-quality="poor"] { color: #ffb3a7; }
+.call-grid[data-active]:not([data-active=""]) .call-tile[data-tile]:not([data-tile="self"]) { opacity: 0.92; }
+.call-tile.speaking { box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), 0.85); }
+
+/* The invite dialog is never above a call, and never taller than the conversation. */
+.social-modal { z-index: 2; }
+.social-call { z-index: 3; }
+
+/* Tiles keep their shape instead of being stretched to fill the row. */
+.call-grid:not(.solo) {
+  grid-auto-rows: auto;
+  align-content: center;
+}
+.call-grid:not(.solo) .call-tile {
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: 100%;
+}
+.call-grid.has-peers .call-tile[data-tile="self"] { aspect-ratio: 16 / 9; }

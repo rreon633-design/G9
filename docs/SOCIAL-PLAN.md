@@ -5,8 +5,14 @@ count, joining by link, transport ladder), **v2 wins**.
 
 **Status.** §10 is the release ladder. **0.15.0 shipped the loop** — workspace, link/QR rooms,
 sealed chat, mesh voice and video, clean leave and reopen — with nine devices proven against a
-real hub. The rest of this document is still the plan for 0.16.0 → 0.19.0; nothing below has been
-quietly dropped, and where the shipped code took a simpler path first, §10 says so.
+real hub. **0.16.0 shipped the speed and the honesty**: hub-side call roster (one round trip to
+the first offer), 10 ms Opus with FEC and DTX, H.264 preference, a room-size quality ladder,
+live RTT and per-tile telemetry, socket reconnect with a flushed outbox, and ICE restarts.
+
+The rest of this document is the plan for **0.17.0 → 0.19.0**; nothing below has been quietly
+dropped, and where the shipped code took a simpler path first, §10 says so. The one number still
+out of reach is the one §5 exists for: nine people all sending video needs the SFU, and mesh
+tops out around five or six senders.
 
 Codebase it is written against: `main` @ `v0.14.0` — Tauri 2.12.5, wry 0.57.1, tokio 1.54,
 rusqlite 0.32, reqwest 0.12, Rust edition 2021. Standing constraints that still apply: vanilla

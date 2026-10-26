@@ -33,6 +33,16 @@
     socket: null,
     peers: {}, // device -> { name, video }
     callPending: {}, // devices that announced a call while our microphone was still opening
+    pendingRoster: null, // the hub's call roster, when it arrived before the camera did
+    pendingOffers: {}, // offers that arrived while the camera was still opening
+    hubRoster: false, // the hub keeps call state, so offers can skip a peer round trip
+    callIntent: false, // the call button was pressed and the camera is still opening
+    iceServers: null, // set by Settings; defaults to a public STUN list
+    net: {}, // device -> { rtt, jitter, loss, kbpsIn, res, level }
+    link: { rtt: null, sent: {}, seq: 0, jitter: null },
+    outbox: [], // chat frames written while the socket was down
+    reconnect: { tries: 0, timer: null },
+    leaving: false,
     joined: false,
     call: null, // { video, local, peers: Map, started }
     invite: null,
@@ -248,7 +258,15 @@
   }
 
   function openFrame(key, aad, sealed) {
-    var raw = b64dec(sealed);
+    // Anything on the wire can be garbage — a truncated body, a frame from another room,
+    // a peer sending noise. None of that may throw out of a socket handler.
+    var raw;
+    try {
+      raw = b64dec(sealed);
+    } catch (e) {
+      return Promise.reject(new Error("not a sealed frame"));
+    }
+    if (!raw || raw.length < 13) return Promise.reject(new Error("sealed frame is too short"));
     var iv = raw.slice(0, 12);
     var body = raw.slice(12);
     return window.crypto.subtle
@@ -322,6 +340,7 @@
       '<span class="social-dot" id="social-dot"></span>' +
       "<b>G9 Social</b>" +
       '<span class="social-status" id="social-status">Not connected</span>' +
+      '<span class="social-rtt" id="social-rtt" title="Round trip to the room"></span>' +
       '<span class="spacer"></span>' +
       '<button class="top-btn" id="social-close" title="Close (Esc)">Close</button>' +
       "</div>" +
@@ -711,23 +730,36 @@
     appendMessage(message);
     invoke("social_save_message", { message: message }).catch(function () {});
 
-    if (!S.socket) {
-      setStatus("Offline — the message is saved and will send when the room connects", "busy");
-      return Promise.resolve(false);
-    }
     return frame("chat", { type: "chat", id: message.id, text: text, ts: message.ts }).then(function (ok) {
+      if (ok === "queued") {
+        message.state = "pending";
+        setStatus("Queued — it will send the moment the room is back", "busy");
+        paintMessages();
+        return false;
+      }
       if (!ok) {
         message.state = "failed";
         paintMessages();
         invoke("social_set_state", { id: message.id, newState: "failed" }).catch(function () {});
+      } else {
+        message.sentAt = Date.now();
       }
       return ok;
     });
   }
 
-  /// Encrypt a payload and hand it to the hub. Resolves false when there is no socket.
+  /// Encrypt a payload and hand it to the hub. Chat written while the socket is down goes
+  /// into the outbox and is sent the moment the room is back; control frames are dropped,
+  /// because a stale offer is worse than no offer.
   function frame(kind, payload, to) {
-    if (!S.socket || !S.plainKey) return Promise.resolve(false);
+    if (!S.plainKey) return Promise.resolve(false);
+    if (!S.socket) {
+      if (kind === "chat") {
+        S.outbox.push({ kind: kind, payload: payload, to: to });
+        return Promise.resolve("queued");
+      }
+      return Promise.resolve(false);
+    }
     var sender = S.identity.id;
     var aad = frameAad(S.room.id, sender, kind);
     payload.v = 1;
@@ -751,15 +783,40 @@
       return;
     }
     if (!data || !data.t) return;
+    if (data.t === "pong") {
+      onPong(data);
+      return;
+    }
+    if (data.t === "call") {
+      onCallEvent(data);
+      return;
+    }
     if (data.t === "ready") {
       S.peers = {};
       (data.peers || []).forEach(function (p) {
-        S.peers[p.device] = { name: p.name, video: false };
+        S.peers[p.device] = { name: p.name, video: !!p.video, call: !!p.call };
       });
+      // A hub that sends `call` keeps the roster itself; one that does not is older and we
+      // fall back to announcing over the room and waiting for answers.
+      S.hubRoster = Object.prototype.hasOwnProperty.call(data, "call");
+      if (S.hubRoster) S.pendingRoster = data.call || [];
       S.joined = true;
+      S.reconnect.tries = 0;
       setStatus("Connected · " + hereCount() + " here", "on");
+      startPing();
+      flushOutbox();
       renderRail();
       renderMain();
+      // Back from a reconnect in the middle of a call: re-state it and re-offer.
+      if (S.call) {
+        if (S.hubRoster && S.socket) {
+          S.socket.send(JSON.stringify({ t: "call", state: "join", video: !!S.call.video }));
+        }
+        (data.call || []).forEach(function (p) {
+          joinedCall(p.device, { name: p.name, video: p.video, silent: true });
+        });
+        startStats();
+      }
       return;
     }
     if (data.t === "peer") {
@@ -785,6 +842,34 @@
         .catch(function () {
           addCallEvent("A message from " + (data.name || "someone") + " could not be read (different room key)");
         });
+    }
+  }
+
+  /// The hub's view of the call: a roster on join, a line per person in and out.
+  function onCallEvent(data) {
+    if (!data || !data.event) return;
+    if (data.event === "roster") {
+      if (!S.call) {
+        S.pendingRoster = data.peers || [];
+        return;
+      }
+      (data.peers || []).forEach(function (p) {
+        joinedCall(p.device, { name: p.name, video: p.video, silent: true });
+      });
+      return;
+    }
+    if (data.event === "join") {
+      if (!S.call) {
+        S.callPending[data.device] = { name: data.name, video: data.video };
+        return;
+      }
+      joinedCall(data.device, { name: data.name, video: data.video, silent: true });
+      return;
+    }
+    if (data.event === "leave" && S.call) {
+      S.call.members.delete(data.device);
+      dropPeer(data.device);
+      renderCall();
     }
   }
 
@@ -839,9 +924,18 @@
       return;
     }
     if (type === "call-offer") {
+      // The camera may still be opening: keep the offer and answer it when it is ready.
+      if (!S.call) {
+        S.pendingOffers[envelope.from] = payload;
+        return;
+      }
       answerOffer(envelope.from, payload).catch(function (e) {
         pushError("Answer", e);
       });
+      return;
+    }
+    if (type === "call-recover") {
+      if (S.call && S.identity.id < envelope.from) makeOffer(envelope.from, true);
       return;
     }
     if (type === "call-answer") {
@@ -899,22 +993,174 @@
 
   /* ---------------------------------------------------------------- 7. call */
 
+  /// A public STUN pair is enough to find the path between two home networks. A TURN
+  /// server can be added in Settings for networks that block everything but 443/TCP.
+  var DEFAULT_ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+
+  function iceServers() {
+    return S.iceServers && S.iceServers.length ? S.iceServers : DEFAULT_ICE;
+  }
+
   function rtcConfig() {
     return {
-      iceServers: S.iceServers || [],
+      iceServers: iceServers(),
       bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require",
+      // Gathering starts the moment the connection object exists, so the first offer
+      // already carries candidates instead of waiting for a fresh round of STUN.
+      iceCandidatePoolSize: 4,
+    };
+  }
+
+  /// One quality ladder for the whole call, chosen from how many people are in it.
+  /// Nine people all sending 720p would need ~9 Mbps of uplink each; nobody has that,
+  /// so the ladder trades pixels for the thing people actually notice — latency.
+  function tier() {
+    var people = S.call ? S.call.peers.size + 1 : 2;
+    if (people <= 2) return { name: "720p", maxBitrate: 900000, width: 1280, height: 720, fps: 30, audioKbps: 40 };
+    if (people <= 4) return { name: "540p", maxBitrate: 550000, width: 960, height: 540, fps: 30, audioKbps: 32 };
+    if (people <= 6) return { name: "360p", maxBitrate: 320000, width: 640, height: 360, fps: 24, audioKbps: 28 };
+    return { name: "240p", maxBitrate: 180000, width: 426, height: 240, fps: 15, audioKbps: 24 };
+  }
+
+  /// Opus defaults are tuned for streaming, not for talking: 20 ms packets, stereo, and a
+  /// bitrate that does not care about your uplink. This rewrites the fmtp line so packets
+  /// are 10 ms (half the time between mouth and ear), DTX is on, FEC protects loss, and
+  /// the bitrate matches the size of the call.
+  function tuneAudio(sdp, audioKbps) {
+    var map = /a=rtpmap:(\d+) opus\/48000\/2/.exec(sdp);
+    if (!map) return sdp;
+    var pt = map[1];
+    var params =
+      "minptime=10;useinbandfec=1;usedtx=1;stereo=0;sprop-stereo=0;ptime=10;maxptime=20;maxaveragebitrate=" +
+      audioKbps * 1000;
+    var line = new RegExp("a=fmtp:" + pt + " [^\\r\\n]*");
+    if (line.test(sdp)) return sdp.replace(line, "a=fmtp:" + pt + " " + params);
+    return sdp.replace(
+      "a=rtpmap:" + pt + " opus/48000/2",
+      "a=rtpmap:" + pt + " opus/48000/2\r\na=fmtp:" + pt + " " + params
+    );
+  }
+
+  function tuneSdp(sdp, what) {
+    var out = sdp;
+    if (what === "offer" || what === "answer") out = tuneAudio(out, tier().audioKbps);
+    return out;
+  }
+
+  /// Hardware decoding on Windows is H.264 through Media Foundation. Preferring it over
+  /// VP9/AV1 keeps a nine-way call off the CPU and shaves the decode queue.
+  var CODEC_ORDER = ["H264", "VP8", "VP9", "AV1"];
+
+  function preferCodecs(entry) {
+    if (!entry.pc.getTransceivers) return;
+    var caps = window.RTCRtpSender && RTCRtpSender.getCapabilities ? RTCRtpSender.getCapabilities("video") : null;
+    if (!caps || !caps.codecs || !caps.codecs.length) return;
+    var audio = window.RTCRtpReceiver && RTCRtpReceiver.getCapabilities ? RTCRtpReceiver.getCapabilities("audio") : null;
+    var ranked = caps.codecs.slice().sort(function (a, b) {
+      return CODEC_ORDER.indexOf(a.mimeType.split("/")[1]) - CODEC_ORDER.indexOf(b.mimeType.split("/")[1]);
+    });
+    entry.pc.getTransceivers().forEach(function (tr) {
+      if (!tr.setCodecPreferences) return;
+      var kind = tr.receiver && tr.receiver.track && tr.receiver.track.kind;
+      if (kind === "video") {
+        try {
+          tr.setCodecPreferences(ranked);
+        } catch (e) {}
+      } else if (kind === "audio" && audio && audio.codecs) {
+        try {
+          tr.setCodecPreferences(audio.codecs);
+        } catch (e) {}
+      }
+    });
+  }
+
+  /// Ask the browser to play as soon as it can: no playout smoothing, a small jitter buffer.
+  function tuneReceiver(receiver, kind) {
+    if (!receiver) return;
+    try {
+      receiver.playoutDelayHint = 0;
+    } catch (e) {}
+    try {
+      receiver.jitterBufferTarget = kind === "video" ? 80 : 40;
+    } catch (e) {}
+  }
+
+  function videoSender(pc) {
+    if (!pc || !pc.getSenders) return null;
+    return (
+      pc.getSenders().filter(function (s) {
+        return s.track && s.track.kind === "video";
+      })[0] || null
+    );
+  }
+
+  /// Push the ladder down to every outgoing video stream, and mark the audio senders as
+  /// speech so the browser's own pacer gives them priority.
+  function applyLimits() {
+    if (!S.call) return;
+    var t = tier();
+    S.call.peers.forEach(function (entry) {
+      var sender = videoSender(entry.pc);
+      if (sender && sender.setParameters && sender.getParameters) {
+        try {
+          var params = sender.getParameters();
+          params.degradationPreference = "balanced";
+          if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+          params.encodings[0].maxBitrate = t.maxBitrate;
+          params.encodings[0].maxFramerate = t.fps;
+          params.encodings[0].scaleResolutionDownBy = 1;
+          sender.setParameters(params);
+        } catch (e) {}
+      }
+      entry.pc.getSenders().forEach(function (s) {
+        if (s.track && s.track.kind === "audio" && "contentHint" in s.track) s.track.contentHint = "speech";
+        if (s.track && s.track.kind === "video" && "contentHint" in s.track) s.track.contentHint = "motion";
+      });
+    });
+  }
+
+  /// Capture settings that keep the microphone's own buffer short and its audio clean.
+  function mediaFor(withVideo) {
+    var audio = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1,
+      sampleRate: 48000,
+      latency: { ideal: 0.01 },
+    };
+    if (!withVideo) return { audio: audio };
+    var t = tier();
+    return {
+      audio: audio,
+      video: {
+        width: { ideal: t.width },
+        height: { ideal: t.height },
+        frameRate: { ideal: t.fps, max: t.fps },
+        facingMode: "user",
+      },
     };
   }
 
   function startCall(withVideo) {
+    // Never over a call: the invite is an invitation, the call is the conversation.
+    if (S.invite) S.invite = null;
     if (S.call) {
       if (withVideo && !S.call.video) return enableVideo();
       return Promise.resolve(false);
     }
-    var media = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
-    if (withVideo) media.video = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+    var began = Date.now();
+    // Ask the hub for the call roster *before* the camera opens. The answer arrives while
+    // getUserMedia is still running, so the first offer has a destination the instant the
+    // stream exists — no extra peer round trip between "call pressed" and "offer sent".
+    S.callIntent = true;
+    S.pendingRoster = null;
+    if (S.hubRoster && S.socket) {
+      S.socket.send(JSON.stringify({ t: "call", state: "join", video: !!withVideo }));
+    }
     return navigator.mediaDevices
-      .getUserMedia(media)
+      .getUserMedia(mediaFor(withVideo))
       .then(function (stream) {
         S.call = {
           video: !!withVideo,
@@ -932,42 +1178,81 @@
         }, 1000);
         renderCall();
         addCallEvent((withVideo ? "Video" : "Voice") + " call started");
-        // Announce, then wait to hear who is already in the call. Only people who answer
-        // get a connection, so joining a call never dials the eight people still typing.
-        var pending = S.callPending;
-        S.callPending = {};
-        return frame("call-join", { type: "call-join", video: !!withVideo }).then(function () {
-          Object.keys(pending).forEach(function (device) {
-            joinedCall(device, pending[device]);
-          });
-          // Whoever was not listening yet gets another chance: re-announce a few times
-          // and re-offer to anyone we are supposed to dial, until the mesh is up.
-          S.call.tries = 0;
-          S.call.retry = setInterval(function () {
-            if (!S.call) return;
-            S.call.tries += 1;
-            if (S.call.tries > 6) {
-              clearInterval(S.call.retry);
-              return;
-            }
-            if (!S.call.peers.size && S.call.tries <= 4) {
-              frame("call-join", { type: "call-join", video: S.call.video, ack: true });
-            }
-            S.call.members.forEach(function (device) {
-              maybeOffer(device, true);
-            });
-          }, 2500);
+        startStats();
+        startPing();
+        S.callIntent = false;
+        var setupMs = Date.now() - began;
+        S.call.setupMs = setupMs;
+        return announceCall(withVideo).then(function () {
+          S.call.announceMs = Date.now() - began;
           return true;
         });
       })
       .catch(function (e) {
+        S.callIntent = false;
         pushError(withVideo ? "Camera" : "Microphone", e);
         return false;
       });
   }
 
+  /// Tell the room we are in the call, and start connecting to everyone already in it.
+  function announceCall(withVideo) {
+    var roster = S.pendingRoster;
+    S.pendingRoster = null;
+    // Anything that arrived while we were opening the camera is replayed now.
+    Object.keys(S.pendingOffers).forEach(function (device) {
+      var payload = S.pendingOffers[device];
+      delete S.pendingOffers[device];
+      answerOffer(device, payload).catch(function () {});
+    });
+    var pending = S.callPending;
+    S.callPending = {};
+
+    if (S.hubRoster && S.socket) {
+      // The hub already knows we are in, and its roster came with the answer.
+      (roster || []).forEach(function (p) {
+        joinedCall(p.device, { name: p.name, video: p.video, silent: true });
+      });
+      // Somebody may have joined the call while our camera was still opening: their
+      // arrival was buffered and is replayed here, not thrown away.
+      Object.keys(pending).forEach(function (device) {
+        joinedCall(device, pending[device]);
+      });
+      // Camera opening can outlast the roster answer; if it has not arrived yet, the
+      // socket handler replays it the moment it does.
+      applyLimits();
+      return Promise.resolve(true);
+    }
+
+    // A hub too old to keep call state: announce over the room and wait to be answered.
+    return frame("call-join", { type: "call-join", video: !!withVideo }).then(function () {
+      Object.keys(pending).forEach(function (device) {
+        joinedCall(device, pending[device]);
+      });
+      S.call.tries = 0;
+      S.call.retry = setInterval(function () {
+        if (!S.call) return;
+        S.call.tries += 1;
+        if (S.call.tries > 6) {
+          clearInterval(S.call.retry);
+          return;
+        }
+        if (!S.call.peers.size && S.call.tries <= 4) {
+          frame("call-join", { type: "call-join", video: S.call.video, ack: true });
+        }
+        S.call.members.forEach(function (device) {
+          maybeOffer(device, true);
+        });
+      }, 2500);
+      return true;
+    });
+  }
+
   function enableVideo() {
-    return navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } }).then(function (stream) {
+    var t = tier();
+    return navigator.mediaDevices
+      .getUserMedia({ video: { width: { ideal: t.width }, height: { ideal: t.height }, frameRate: { ideal: t.fps } } })
+      .then(function (stream) {
       var track = stream.getVideoTracks()[0];
       S.call.video = true;
       S.call.camOn = true;
@@ -988,26 +1273,64 @@
     if (!S.call) return null;
     if (S.call.peers.has(device)) return S.call.peers.get(device);
     var pc = new RTCPeerConnection(rtcConfig());
-    var entry = { pc: pc, device: device, name: name || (S.peers[device] && S.peers[device].name) || "Guest", stream: null, video: false };
+    var entry = {
+      pc: pc,
+      device: device,
+      name: name || (S.peers[device] && S.peers[device].name) || "Guest",
+      stream: null,
+      video: false,
+      restarts: 0,
+      connected: false,
+    };
     S.call.local.getTracks().forEach(function (track) {
       pc.addTrack(track, S.call.local);
     });
+    preferCodecs(entry);
     pc.onicecandidate = function (ev) {
       if (ev.candidate) frame("call-ice", { type: "call-ice", candidate: ev.candidate.toJSON() }, device);
     };
     pc.ontrack = function (ev) {
       entry.stream = ev.streams[0];
       entry.video = ev.track.kind === "video";
+      tuneReceiver(ev.receiver, ev.track.kind);
       renderCall();
     };
     pc.onconnectionstatechange = function () {
-      if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-        addCallEvent(entry.name + " dropped");
-      }
+      watchConnection(device, entry);
     };
     S.call.peers.set(device, entry);
+    applyLimits();
     renderCall();
     return entry;
+  }
+
+  /// A dropped connection is not the end of a call: restart ICE, and let the other side
+  /// ask us to restart if it is the one that noticed first.
+  function watchConnection(device, entry) {
+    if (!S.call || !entry || !entry.pc) return;
+    var state = entry.pc.connectionState;
+    if (state === "connected") {
+      entry.restarts = 0;
+      if (!entry.connected) {
+        entry.connected = true;
+        renderCall();
+      }
+      return;
+    }
+    if (state !== "failed" && state !== "disconnected") return;
+    if (entry.recoverTimer) return;
+    entry.recoverTimer = setTimeout(function () {
+      entry.recoverTimer = null;
+      if (!S.call || S.call.peers.get(device) !== entry) return;
+      if (entry.pc.connectionState === "connected") return;
+      entry.restarts += 1;
+      if (entry.restarts > 4) {
+        addCallEvent(entry.name + " dropped");
+        return;
+      }
+      if (S.identity.id < device) makeOffer(device, true);
+      else frame("call-recover", { type: "call-recover" }, device);
+    }, 1200);
   }
 
   /// Record a device as being in this call, greet it, and start negotiating if it is our turn.
@@ -1015,14 +1338,17 @@
     if (!S.call || !device) return;
     var first = !S.call.members.has(device);
     S.call.members.add(device);
-    if (first && !payload.ack) addCallEvent((payload.name || "Someone") + " joined the call");
+    if (first && !payload.ack && !payload.silent && !S.hubRoster) {
+      addCallEvent((payload.name || "Someone") + " joined the call");
+    }
     S.peers[device] = S.peers[device] || { name: payload.name };
     S.peers[device].video = !!payload.video;
-    // Tell a newcomer we are here, so it knows who to expect.
-    if (first && !payload.ack) {
+    // On a hub that keeps call state there is nothing to answer: the roster is the answer.
+    if (first && !payload.ack && !S.hubRoster) {
       frame("call-join", { type: "call-join", video: S.call.video, ack: true }, device);
     }
     maybeOffer(device);
+    applyLimits();
     renderCall();
   }
 
@@ -1040,17 +1366,20 @@
     });
   }
 
-  function makeOffer(device) {
+  function makeOffer(device, iceRestart) {
     var entry = peerFor(device);
     if (!entry || entry.offering) return Promise.resolve(false);
     entry.offering = true;
     return entry.pc
-      .createOffer()
+      .createOffer(iceRestart ? { iceRestart: true } : undefined)
       .then(function (offer) {
-        return entry.pc.setLocalDescription(offer).then(function () {
-          entry.local = offer.sdp;
+        var tuned = tuneSdp(offer.sdp, "offer");
+        return entry.pc.setLocalDescription({ type: "offer", sdp: tuned }).then(function () {
+          entry.local = tuned;
+          entry.remote = null;
           entry.offering = false;
-          return frame("call-offer", { type: "call-offer", sdp: offer.sdp }, device);
+          applyLimits();
+          return frame("call-offer", { type: "call-offer", sdp: tuned, restart: !!iceRestart }, device);
         });
       })
       .catch(function (e) {
@@ -1080,8 +1409,10 @@
         return entry.pc.createAnswer();
       })
       .then(function (answer) {
-        return entry.pc.setLocalDescription(answer).then(function () {
-          return frame("call-answer", { type: "call-answer", sdp: answer.sdp }, device);
+        var tuned = tuneSdp(answer.sdp, "answer");
+        return entry.pc.setLocalDescription({ type: "answer", sdp: tuned }).then(function () {
+          applyLimits();
+          return frame("call-answer", { type: "call-answer", sdp: tuned }, device);
         });
       });
   }
@@ -1094,6 +1425,7 @@
       entry.pc.close();
     } catch (e) {}
     S.call.peers.delete(device);
+    delete S.net[device];
     renderCall();
   }
 
@@ -1119,6 +1451,11 @@
 
   function endCall() {
     if (!S.call) return Promise.resolve(false);
+    if (S.hubRoster && S.socket) {
+      try {
+        S.socket.send(JSON.stringify({ t: "call", state: "leave", video: false }));
+      } catch (e) {}
+    }
     return frame("call-leave", { type: "call-leave", name: S.identity.name })
       .catch(function () {})
       .then(function () {
@@ -1133,6 +1470,7 @@
         var seconds = nowSec() - S.call.started;
         if (S.call.timer) clearInterval(S.call.timer);
         if (S.call.retry) clearInterval(S.call.retry);
+        stopStats();
         addCallEvent("Call ended · " + formatClock(seconds));
         S.call = null;
         var overlay = document.getElementById("social-call");
@@ -1140,6 +1478,159 @@
         renderMain();
         return true;
       });
+  }
+
+  /* ---- link + media telemetry --------------------------------------------- */
+
+  function netFor(device) {
+    if (!S.net[device]) S.net[device] = { rtt: null, jitter: null, loss: 0, kbpsIn: null, res: "", fps: null, level: 0 };
+    return S.net[device];
+  }
+
+  function ping() {
+    if (!S.socket) return;
+    S.link.seq += 1;
+    S.link.sent[S.link.seq] = Date.now();
+    try {
+      S.socket.send(JSON.stringify({ t: "ping", n: S.link.seq }));
+    } catch (e) {}
+  }
+
+  function startPing() {
+    stopPing();
+    S.link.rtt = null;
+    ping();
+    S.pinger = setInterval(ping, 2500);
+  }
+
+  function stopPing() {
+    if (S.pinger) clearInterval(S.pinger);
+    S.pinger = null;
+  }
+
+  /// The hub echoes our sequence number, so this is a true round trip — the number the
+  /// user reads next to the call timer is the same path the frames take.
+  function onPong(data) {
+    var sent = S.link.sent[data.n];
+    if (!sent) return;
+    delete S.link.sent[data.n];
+    var rtt = Date.now() - sent;
+    S.link.rtt = S.link.rtt == null ? rtt : Math.round(S.link.rtt * 0.7 + rtt * 0.3);
+    if (S.link.prev != null) S.link.jitter = Math.abs(rtt - S.link.prev);
+    S.link.prev = rtt;
+    paintNet();
+  }
+
+  function startStats() {
+    stopStats();
+    S.stats = setInterval(sampleStats, 1500);
+    setTimeout(sampleStats, 400);
+  }
+
+  function stopStats() {
+    if (S.stats) clearInterval(S.stats);
+    S.stats = null;
+  }
+
+  function sampleStats() {
+    if (!S.call) return;
+    S.call.peers.forEach(function (entry) {
+      if (!entry.pc || !entry.pc.getStats) return;
+      var device = entry.device;
+      entry.pc
+        .getStats()
+        .then(function (report) {
+          var net = netFor(device);
+          var now = Date.now();
+          report.forEach(function (stat) {
+            if (stat.type === "inbound-rtp") {
+              if (stat.kind === "audio") {
+                if (typeof stat.jitter === "number") net.jitter = Math.round(stat.jitter * 1000);
+                if (typeof stat.audioLevel === "number") net.level = stat.audioLevel;
+                if (typeof stat.packetsLost === "number") net.loss = stat.packetsLost;
+              }
+              if (stat.kind === "video") {
+                if (stat.frameWidth) net.res = stat.frameWidth + "×" + stat.frameHeight;
+                if (stat.framesPerSecond) net.fps = Math.round(stat.framesPerSecond);
+              }
+              if (typeof stat.bytesReceived === "number") {
+                if (net.bytesAt != null && net.at && now > net.at) {
+                  var kbps = ((stat.bytesReceived - net.bytesAt) * 8) / (now - net.at);
+                  net.kbpsIn = Math.max(0, Math.round(kbps));
+                }
+                net.bytesAt = stat.bytesReceived;
+                net.at = now;
+              }
+            } else if (stat.type === "candidate-pair" && stat.state === "succeeded") {
+              if ((stat.selected || stat.nominated) && typeof stat.currentRoundTripTime === "number") {
+                net.rtt = Math.round(stat.currentRoundTripTime * 1000);
+              }
+            }
+          });
+          paintNet();
+        })
+        .catch(function () {});
+    });
+  }
+
+  function qualityOf(net) {
+    if (!net) return "unknown";
+    if (net.rtt != null && net.rtt > 250) return "poor";
+    if (net.jitter != null && net.jitter > 60) return "poor";
+    if (net.loss != null && net.loss > 8) return "poor";
+    if (net.rtt != null && net.rtt > 120) return "fair";
+    return "good";
+  }
+
+  /// Repaint only the numbers, never the whole call surface: a stats tick must not
+  /// restart a video element or steal a click.
+  function paintNet() {
+    var link = document.getElementById("call-net");
+    if (link) link.textContent = S.link.rtt == null ? "measuring…" : S.link.rtt + " ms";
+    var strip = document.getElementById("social-rtt");
+    if (strip) strip.textContent = S.link.rtt == null ? "" : S.link.rtt + " ms";
+    var loudest = null;
+    var level = 0.02;
+    S.call &&
+      S.call.peers.forEach(function (entry) {
+        var net = S.net[entry.device];
+        var chip = document.querySelector('.call-tile[data-tile="' + entry.device + '"] .net');
+        if (chip) {
+          var bits = [];
+          if (net && net.rtt != null) bits.push(net.rtt + " ms");
+          if (net && net.res) bits.push(net.res);
+          if (net && net.kbpsIn) bits.push(net.kbpsIn + " kbps");
+          if (net && qualityOf(net) === "poor") bits.push("weak");
+          chip.textContent = bits.join(" · ");
+          chip.setAttribute("data-quality", qualityOf(net));
+        }
+        var tile = document.querySelector('.call-tile[data-tile="' + entry.device + '"]');
+        if (net && net.level > level) {
+          level = net.level;
+          loudest = entry.device;
+        }
+        if (tile) tile.classList.toggle("speaking", !!(net && net.level > 0.05 && S.call.active === entry.device));
+      });
+    if (S.call) {
+      S.call.active = loudest;
+      var grid = document.getElementById("call-grid");
+      if (grid) grid.setAttribute("data-active", loudest || "");
+    }
+  }
+
+  /* ---- outbox ------------------------------------------------------------- */
+
+  function flushOutbox() {
+    if (!S.socket || !S.outbox.length) return Promise.resolve(0);
+    var queued = S.outbox.slice();
+    S.outbox = [];
+    return queued.reduce(function (chain, item) {
+      return chain.then(function (count) {
+        return frame(item.kind, item.payload, item.to).then(function (ok) {
+          return count + (ok ? 1 : 0);
+        });
+      });
+    }, Promise.resolve(0));
   }
 
   function renderCall() {
@@ -1169,6 +1660,10 @@
       '<span class="call-title">' + (S.call.video ? "Video call" : "Voice call") +
       (S.active ? " · " + esc(S.active.name) : "") + "</span>" +
       '<span class="call-time" id="call-time">' + formatClock(nowSec() - S.call.started) + "</span>" +
+      '<span class="call-net" id="call-net" title="Round trip to the room">' +
+      (S.link.rtt == null ? "measuring…" : S.link.rtt + " ms") +
+      "</span>" +
+      '<span class="call-tier" title="Sending quality for this call size">' + esc(tier().name) + "</span>" +
       '<span class="spacer"></span>' +
       '<span class="call-count">' + (peers + 1) + " in the call</span>" +
       "</div>" +
@@ -1198,11 +1693,15 @@
   }
 
   function tileHtml(id, name, stream, hasVideo, tag) {
+    var net = S.net[id];
     return (
       '<div class="call-tile' + (hasVideo ? "" : " audioonly") + '" data-tile="' + esc(id) + '">' +
-      '<video autoplay playsinline muted data-stream="' + esc(id) + '"></video>' +
+      '<video autoplay playsinline' + (tag === "you" ? " muted" : "") + ' data-stream="' + esc(id) + '"></video>' +
       '<div class="face">' + esc(initials(name)) + "</div>" +
       '<span class="tag">' + esc(name) + (tag === "you" ? " (you)" : "") + "</span>" +
+      '<span class="net" data-quality="' + (net ? qualityOf(net) : "unknown") + '">' +
+      (net && net.rtt != null ? net.rtt + " ms" : "") +
+      "</span>" +
       "</div>"
     );
   }
@@ -1304,6 +1803,33 @@
       });
   }
 
+  /// A dropped socket is normal on a laptop that sleeps, a train, a hotel Wi-Fi. Come back
+  /// on your own, with backoff, and keep everything that was typed meanwhile.
+  function scheduleReconnect() {
+    if (!S.room || S.leaving) return;
+    if (S.reconnect.timer) clearTimeout(S.reconnect.timer);
+    S.reconnect.tries += 1;
+    if (S.reconnect.tries > 12) {
+      setStatus("Offline — the stored conversation is still here", "busy");
+      return;
+    }
+    var wait = Math.min(8000, Math.round(300 * Math.pow(1.55, S.reconnect.tries - 1)));
+    setStatus("Reconnecting · attempt " + S.reconnect.tries, "busy");
+    S.reconnect.timer = setTimeout(function () {
+      S.reconnect.timer = null;
+      reconnectNow();
+    }, wait);
+  }
+
+  function reconnectNow() {
+    var room = S.room;
+    if (!room) return Promise.resolve(false);
+    return connectSocket(room).catch(function () {
+      scheduleReconnect();
+      return false;
+    });
+  }
+
   function connectSocket(room) {
     var base = room.hub.replace(/\/+$/, "");
     var http = base.replace(/^ws/, "http");
@@ -1341,8 +1867,11 @@
           S.socket.onmessage(onMessage);
           S.socket.onclose(function () {
             S.socket = null;
-            setStatus("Disconnected — press Reconnect", "busy");
+            stopPing();
+            if (S.leaving) return;
+            setStatus("Reconnecting…", "busy");
             renderRail();
+            scheduleReconnect();
           });
           return true;
         });
@@ -1377,7 +1906,9 @@
     S.unread[id] = 0;
     invoke("social_mark_read", { thread: id }).catch(function () {});
     if (S.room && S.room.id !== id) {
-      // Leaving one room to open another: keep the socket only for the room we are in.
+      // Leaving one room to open another: end the call with it, then keep the socket
+      // only for the room we are in.
+      if (S.call) endCall();
       if (S.socket) {
         try {
           S.socket.close();
@@ -1444,6 +1975,10 @@
   }
 
   function close() {
+    // Closing the workspace closes what is in it: leaving a call running with no visible
+    // controls would keep the camera on with nothing on screen to stop it.
+    if (S.call) endCall();
+    if (S.invite) S.invite = null;
     var host = document.getElementById("social");
     if (host) host.hidden = true;
     return true;
@@ -1456,6 +1991,10 @@
   function boot() {
     var host = document.getElementById("social");
     if (!host) return;
+    try {
+      var saved = localStorage.getItem("g9.social.ice");
+      if (saved) S.iceServers = JSON.parse(saved);
+    } catch (e) {}
     mount();
     invoke("social_identity")
       .then(function (identity) {
@@ -1510,6 +2049,18 @@
     endCall: endCall,
     toggleMute: toggleMute,
     toggleCamera: toggleCamera,
+    reconnect: reconnectNow,
+    /// Point the calls at your own STUN/TURN pair. Anything reachable works; the default
+    /// is a public STUN service, which is enough for two home networks. Saved locally, so
+    /// a TURN server you add for a locked-down office survives a restart.
+    setIceServers: function (list) {
+      S.iceServers = Array.isArray(list) && list.length ? list : null;
+      try {
+        if (S.iceServers) localStorage.setItem("g9.social.ice", JSON.stringify(S.iceServers));
+        else localStorage.removeItem("g9.social.ice");
+      } catch (e) {}
+      return S.iceServers;
+    },
     selectThread: selectThread,
     sendFromComposer: sendFromComposer,
     _internal: {
@@ -1547,6 +2098,25 @@
         });
       },
       fetchJson: fetchJson,
+      frame: frame,
+      tier: tier,
+      tuneSdp: tuneSdp,
+      applyLimits: applyLimits,
+      rtcConfig: rtcConfig,
+      netFor: netFor,
+      paintNet: paintNet,
+      onPong: onPong,
+      onCallEvent: onCallEvent,
+      sampleStats: sampleStats,
+      startStats: startStats,
+      stopStats: stopStats,
+      scheduleReconnect: scheduleReconnect,
+      flushOutbox: flushOutbox,
+      announceCall: announceCall,
+      watchConnection: watchConnection,
+      qualityOf: qualityOf,
+      startPing: startPing,
+      stopPing: stopPing,
     },
   };
 

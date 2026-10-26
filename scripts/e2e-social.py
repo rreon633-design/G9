@@ -140,6 +140,17 @@ BRIDGE = r"""
 """
 
 
+def expected_tier(people):
+    """The same ladder as ui/social.js: what one device should send in a room this size."""
+    if people <= 2:
+        return "720p", 900000
+    if people <= 4:
+        return "540p", 550000
+    if people <= 6:
+        return "360p", 320000
+    return "240p", 180000
+
+
 def run(cmd, **kwargs):
     return subprocess.Popen(cmd, cwd=ROOT, **kwargs)
 
@@ -160,6 +171,13 @@ async def wait_for(url, seconds=20):
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--devices", type=int, default=9)
+    parser.add_argument(
+        "--mesh",
+        type=int,
+        default=5,
+        help="how many devices join the call itself (a full mesh costs N*(N-1) peer connections; "
+        "the sandbox this was written on saturates above five, a desktop does not)",
+    )
     parser.add_argument("--keep", action="store_true")
     args = parser.parse_args()
 
@@ -266,11 +284,11 @@ async def main():
             metrics["chat_fanout_seconds"] = round(time.time() - sent_at, 2)
             print(f"one message reached {args.devices - 1} devices in {metrics['chat_fanout_seconds']}s")
 
-            # A video call between the first two, over the same room.
+            # ---- a two-way video call, timed from the button press ----
             call_started = time.time()
-            for context, page, name in clients[:2]:
-                await page.evaluate("() => window.G9Social.startCall(true)")
-            connected = True
+            await asyncio.gather(*[
+                page.evaluate("() => window.G9Social.startCall(true)") for _c, page, _n in clients[:2]
+            ])
             for context, page, name in clients[:2]:
                 try:
                     await page.wait_for_function(
@@ -278,44 +296,140 @@ async def main():
                             const call = window.G9Social.state.call;
                             if (!call) return false;
                             const peers = Array.from(call.peers.values());
-                            return peers.length > 0 && peers.every((p) =>
-                                p.pc && (p.pc.connectionState === 'connected' || p.pc.iceConnectionState === 'connected'));
+                            return peers.length > 0 && peers.every((p) => p.pc && p.pc.connectionState === 'connected');
                         }""",
-                        timeout=20000,
+                        timeout=60000,
                     )
                 except Exception:
-                    connected = False
                     failures.append(f"{name} never reached a connected peer connection")
             metrics["call_connected_seconds"] = round(time.time() - call_started, 2)
             print(f"video call connected in {metrics['call_connected_seconds']}s")
 
-            if connected:
-                await asyncio.sleep(1.2)
-                for context, page, name in clients[:2]:
-                    video = await page.evaluate(
-                        """() => {
-                            const videos = Array.from(document.querySelectorAll('.call-tile video'));
-                            return videos.map((v) => ({ w: v.videoWidth, h: v.videoHeight, live: !!v.srcObject }));
-                        }"""
-                    )
-                    remote = [v for v in video if v["w"] > 0]
-                    if not remote:
-                        failures.append(f"{name} has no decoded video in the call ({json.dumps(video)})")
+            await asyncio.sleep(1.5)
+            for context, page, name in clients[:2]:
+                info = await page.evaluate(
+                    """() => {
+                        const videos = Array.from(document.querySelectorAll('.call-tile video'))
+                            .map((v) => ({ w: v.videoWidth, h: v.videoHeight, live: !!v.srcObject }));
+                        const sender = Array.from(window.G9Social.state.call.peers.values())
+                            .map((p) => (p.pc.getSenders().find((s) => s.track && s.track.kind === 'video') || { getParameters: () => ({}) }).getParameters())
+                            .filter((p) => p.encodings && p.encodings.length)[0] || { encodings: [{}] };
+                        return {
+                            videos,
+                            tier: document.querySelector('.call-tier') ? document.querySelector('.call-tier').textContent : null,
+                            maxBitrate: sender.encodings[0].maxBitrate,
+                            rtt: window.G9Social.state.link.rtt,
+                            audioMuted: Array.from(document.querySelectorAll('.call-tile video'))
+                                .filter((v) => v.getAttribute('data-stream') !== 'self')
+                                .map((v) => v.hasAttribute('muted')),
+                        };
+                    }"""
+                )
+                if not [v for v in info["videos"] if v["w"] > 0]:
+                    failures.append(f"{name} has no decoded video in the call ({json.dumps(info['videos'])})")
+                if info["tier"] != "720p":
+                    failures.append(f"{name} is not on the 720p tier for a two-way call ({info['tier']})")
+                if info["maxBitrate"] != 900000:
+                    failures.append(f"{name} did not cap its sender at 900 kbps ({info['maxBitrate']})")
+                if any(info["audioMuted"]):
+                    failures.append(f"{name} muted the remote audio - a call with no sound")
+                if info["rtt"] is None:
+                    failures.append(f"{name} never measured the hub round trip")
+                else:
+                    metrics[f"hub_rtt_ms_{name.replace(' ', '_')}"] = info["rtt"]
 
-                # Leaving is announced: the other side drops the peer and its media.
-                await clients[0][1].evaluate("() => window.G9Social.endCall()")
+            mesh = clients[: max(2, min(args.mesh, len(clients)))]
+            print(f"mesh: {len(mesh)} of {len(clients)} devices join the call")
+            # ---- the other mesh-2 join the same call, audio only ----
+            # A nine-way *video* mesh means 72 simultaneous encodes; that is what the SFU in
+            # docs/SOCIAL-PLAN.md §5 is for. What is proven here is that nine devices hold one
+            # call, and that the video senders already in it step down to the nine-way cap.
+            mesh_started = time.time()
+            await asyncio.gather(*[
+                page.evaluate("() => window.G9Social.startCall(false)") for _c, page, _n in mesh[2:]
+            ])
+            for context, page, name in mesh:
                 try:
-                    await clients[1][1].wait_for_function(
-                        "() => window.G9Social.state.call && window.G9Social.state.call.peers.size === 0",
-                        timeout=8000,
+                    await page.wait_for_function(
+                        f"""() => {{
+                            const call = window.G9Social.state.call;
+                            if (!call) return false;
+                            const peers = Array.from(call.peers.values());
+                            return peers.length === {len(mesh) - 1} &&
+                                peers.every((p) => p.pc && p.pc.connectionState === 'connected');
+                        }}""",
+                        timeout=120000,
+                    )
+                    print(f"  {name}: mesh complete")
+                except Exception:
+                    count = await page.evaluate(
+                        "() => window.G9Social.state.call ? window.G9Social.state.call.peers.size : -1"
+                    )
+                    failures.append(f"{name} reached {count} connected peers, expected {len(mesh) - 1}")
+            metrics["call_full_mesh_seconds"] = round(time.time() - mesh_started, 2)
+            metrics["call_mesh_size"] = len(mesh)
+            print(f"{len(mesh)} devices in one call in {metrics['call_full_mesh_seconds']}s")
+
+            # Every device must have spent as little uplink as the ladder promised.
+            await asyncio.sleep(3.5)
+            for context, page, name in mesh:
+                info = await page.evaluate(
+                    """() => {
+                        const call = window.G9Social.state.call;
+                        const peers = call ? Array.from(call.peers.values()) : [];
+                        const caps = peers.map((p) => {
+                            const s = p.pc.getSenders().find((x) => x.track && x.track.kind === 'video');
+                            const params = s && s.getParameters ? s.getParameters() : null;
+                            return params && params.encodings && params.encodings[0]
+                                ? params.encodings[0].maxBitrate : null;
+                        });
+                        const nets = Object.keys(window.G9Social.state.net).map((k) => window.G9Social.state.net[k]);
+                        return {
+                            people: peers.length + 1,
+                            audioBytes: Object.keys(window.G9Social.state.net)
+                                .map((k) => window.G9Social.state.net[k].kbpsIn)
+                                .filter((n) => n !== null && n !== undefined).length,
+                            tier: document.querySelector('.call-tier') ? document.querySelector('.call-tier').textContent : null,
+                            caps,
+                            connected: peers.filter((p) => p.pc.connectionState === 'connected').length,
+                            rtts: nets.map((n) => n.rtt).filter((n) => typeof n === 'number'),
+                            jitter: nets.map((n) => n.jitter).filter((n) => typeof n === 'number'),
+                            loss: nets.map((n) => n.loss).filter((n) => typeof n === 'number'),
+                            active: window.G9Social.state.call ? window.G9Social.state.call.active : null,
+                        };
+                    }"""
+                )
+                want_tier, want_cap = expected_tier(info["people"])
+                if info["tier"] != want_tier:
+                    failures.append(f"{name} kept the {info['tier']} tier with {info['people']} people, expected {want_tier}")
+                caps = [c for c in info["caps"] if c is not None]
+                if caps and any(c != want_cap for c in caps):
+                    failures.append(f"{name} is sending above the {want_cap} bps cap: {sorted(set(info['caps']))}")
+                if len(info["rtts"]) < info["people"] - 1:
+                    failures.append(f"{name} only measured {len(info['rtts'])} of {info['people'] - 1} peer round trips")
+                if info["audioBytes"] < info["people"] - 1:
+                    failures.append(f"{name} is receiving audio from {info['audioBytes']} of {info['people'] - 1} peers")
+                if "call_full_peak_rtt" not in metrics:
+                    metrics["call_full_peak_rtt"] = max(info["rtts"]) if info["rtts"] else None
+                    metrics["call_full_peak_jitter"] = max(info["jitter"]) if info["jitter"] else 0
+                    metrics["call_full_loss"] = sum(info["loss"]) if info["loss"] else 0
+                    metrics["call_active_speaker"] = info["active"]
+
+            # ---- one leaves: the rest keep their mesh ----
+            await mesh[0][1].evaluate("() => window.G9Social.endCall()")
+            for context, page, name in mesh[1:]:
+                try:
+                    await page.wait_for_function(
+                        f"() => window.G9Social.state.call && window.G9Social.state.call.peers.size === {len(mesh) - 2}",
+                        timeout=15000,
                     )
                 except Exception:
-                    failures.append("the other side kept the peer after the call ended")
+                    failures.append(f"{name} did not drop the device that left")
 
-            # Both sides leave; both are out and the thread remembers the call.
-            for context, page, name in clients[:2]:
+            for context, page, name in mesh[1:]:
                 await page.evaluate("() => window.G9Social.endCall()")
-            for context, page, name in clients[:2]:
+            await asyncio.sleep(0.6)
+            for context, page, name in mesh:
                 state = await page.evaluate(
                     """() => ({
                         call: !!window.G9Social.state.call,

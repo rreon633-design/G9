@@ -394,3 +394,118 @@ async fn a_second_device_can_rejoin_a_full_room() {
     let mut again = connect(&base, &room, &invite, "A").await;
     again.expect("ready").await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_caller_gets_the_roster_in_the_same_answer() {
+    let base = spawn().await;
+    let (room, _owner, invite) = room_with_invite(&base, 9).await;
+
+    let mut ada = connect(&base, &room, &invite, "Ada").await;
+    let _ = ada.expect("ready").await;
+    let mut linus = connect(&base, &room, &invite, "Linus").await;
+    let _ = linus.expect("ready").await;
+    let _ = ada.expect("peer").await; // Linus joined the room
+
+    // Ada is first into the call: the answer says the call is empty, in one round trip.
+    ada.send(serde_json::json!({ "t": "call", "state": "join", "video": true }))
+        .await;
+    let roster = ada.expect("call").await;
+    assert_eq!(roster["event"], "roster");
+    assert_eq!(roster["peers"].as_array().unwrap().len(), 0);
+
+    // Linus is told, and joining hands him Ada's entry — no peer has to answer anything.
+    let told = linus.expect("call").await;
+    assert_eq!(told["event"], "join");
+    assert_eq!(told["device"], ada.device);
+    assert_eq!(told["video"], true);
+
+    linus
+        .send(serde_json::json!({ "t": "call", "state": "join", "video": false }))
+        .await;
+    let roster = linus.expect("call").await;
+    assert_eq!(roster["event"], "roster");
+    let peers = roster["peers"].as_array().unwrap();
+    assert_eq!(peers.len(), 1);
+    assert_eq!(peers[0]["device"], ada.device);
+    assert_eq!(peers[0]["video"], true);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn leaving_the_call_and_the_socket_are_both_announced() {
+    let base = spawn().await;
+    let (room, _owner, invite) = room_with_invite(&base, 9).await;
+
+    let mut ada = connect(&base, &room, &invite, "Ada").await;
+    let _ = ada.expect("ready").await;
+    let mut linus = connect(&base, &room, &invite, "Linus").await;
+    let _ = linus.expect("ready").await;
+    let _ = ada.expect("peer").await;
+
+    ada.send(serde_json::json!({ "t": "call", "state": "join", "video": false }))
+        .await;
+    let _ = linus.expect("call").await;
+
+    // Ada presses Leave.
+    ada.send(serde_json::json!({ "t": "call", "state": "leave" }))
+        .await;
+    let gone = linus.expect("call").await;
+    assert_eq!(gone["event"], "leave");
+    assert_eq!(gone["device"], ada.device);
+
+    // And if Ada's socket dies mid-call instead, the call ends the same way.
+    ada.send(serde_json::json!({ "t": "call", "state": "join", "video": false }))
+        .await;
+    ada.stream.close(None).await.unwrap();
+    let left = ada;
+    let mut events = 0;
+    for _ in 0..8 {
+        let frame = linus.next().await;
+        if frame["t"] == "call" && frame["event"] == "leave" && frame["device"] == left.device {
+            events += 1;
+            break;
+        }
+    }
+    assert_eq!(events, 1, "a dropped socket leaves the call");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_ping_comes_back_with_its_own_sequence_number() {
+    let base = spawn().await;
+    let (room, _owner, invite) = room_with_invite(&base, 9).await;
+    let mut ada = connect(&base, &room, &invite, "Ada").await;
+    let _ = ada.expect("ready").await;
+
+    ada.send(serde_json::json!({ "t": "ping", "n": 7 })).await;
+    let pong = ada.expect("pong").await;
+    assert_eq!(pong["n"], 7);
+    assert!(pong["now"].as_i64().unwrap() > 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_roster_survives_a_reconnect() {
+    let base = spawn().await;
+    let (room, _owner, invite) = room_with_invite(&base, 9).await;
+
+    let mut ada = connect(&base, &room, &invite, "Ada").await;
+    let _ = ada.expect("ready").await;
+    let mut linus = connect(&base, &room, &invite, "Linus").await;
+    let ready = linus.expect("ready").await;
+    assert_eq!(
+        ready["call"].as_array().unwrap().len(),
+        0,
+        "nobody is in a call"
+    );
+    let _ = ada.expect("peer").await;
+
+    ada.send(serde_json::json!({ "t": "call", "state": "join", "video": true }))
+        .await;
+    let _ = ada.expect("call").await;
+
+    // A third device arriving mid-call is told the call is already running.
+    let mut grace = connect(&base, &room, &invite, "Grace").await;
+    let ready = grace.expect("ready").await;
+    let call = ready["call"].as_array().unwrap();
+    assert_eq!(call.len(), 1);
+    assert_eq!(call[0]["device"], ada.device);
+    assert_eq!(call[0]["video"], true);
+}

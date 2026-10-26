@@ -91,6 +91,15 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
   conversation is where you left it.
 - **No accounts, no pairing, no same-Wi-Fi** — Ed25519 handshake against a nonce, and `g9-hub`,
   a small relay you run anywhere reachable over HTTPS.
+- **Low latency by construction** — the hub answers a call join with the roster in the same
+  round trip (no broadcast-and-wait), ICE gathers before it is needed, Opus runs 10 ms packets
+  with FEC and DTX, H.264 is preferred so Windows decodes in hardware, and the encoder is capped
+  by a room-size ladder: 720p30 for two, 540p30 to four, 360p24 to six, 240p15 above.
+- **Honest numbers on screen** — real round trip to the hub, per-tile peer RTT / resolution /
+  bitrate on hover, a "weak" warning past 250 ms, and the sending tier shown in the call head.
+- **Recovers by itself** — socket reconnect with backoff and a flushed outbox, ICE restart
+  instead of a dropped call, arrivals buffered while the camera opens, and closing the workspace
+  releases the camera.
 - Not yet, stated plainly: mesh tops out around four people for video — a nine-person *video*
   call needs the SFU from `docs/SOCIAL-PLAN.md` §5, which is the next release. Camera-based QR
   scanning, TURN fallback and chat while both sides are offline follow it.

@@ -136,3 +136,14 @@ the rail never appears over video.
 
 The call overlay inside it is a *cinema* surface: `#0a0c11` in every theme, because a call is
 picture, and light chrome around a dark picture is how a video call starts to look cheap.
+
+### The call surface, and what it shows
+
+The call overlay is its own dark surface in every theme (`#0a0c11`), with a head that never lies
+about itself: **the call type and room**, the **clock**, the **live round trip to the hub**
+(measured from the hub's echo every 2.5 s), and the **sending tier** for this room size. Each
+peer tile carries its own chip on hover — peer RTT, received resolution, bitrate, and a `weak`
+mark past 250 ms or 60 ms of jitter. The loudest inbound audio level outlines that tile.
+
+The bottom bar is three controls and one statement: **Mute**, **Camera**, **Leave**, and
+`encrypted · mesh` — the last one being the honest description of how the call is carried.

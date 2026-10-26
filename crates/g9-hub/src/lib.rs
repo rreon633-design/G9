@@ -53,6 +53,10 @@ pub struct Room {
 pub struct Peer {
     pub name: String,
     pub tx: tokio::sync::mpsc::UnboundedSender<String>,
+    /// `Some(video)` while this device is in the room's call. The hub keeps it so a caller
+    /// gets the roster **in the same answer** as its own announcement: nobody has to wait
+    /// for eight peers to answer before the first offer goes out.
+    pub call: Option<bool>,
 }
 
 const NONCE_TTL: Duration = Duration::from_secs(120);
@@ -181,6 +185,28 @@ struct ClientFrame {
     body: String,
     #[serde(default)]
     id: String,
+    /// `call` control frames: "join" or "leave".
+    #[serde(default)]
+    state: String,
+    #[serde(default)]
+    video: bool,
+    /// `ping` sequence number, echoed back untouched so the client can time its own RTT.
+    #[serde(default)]
+    n: serde_json::Value,
+}
+
+/// Everyone in the room's call, as the client needs it to start offering immediately.
+fn roster(entry: &Room, except: &str) -> Vec<serde_json::Value> {
+    entry
+        .peers
+        .iter()
+        .filter(|(device, _)| device.as_str() != except)
+        .filter_map(|(device, peer)| {
+            peer.call.map(
+                |video| serde_json::json!({ "device": device, "name": peer.name, "video": video }),
+            )
+        })
+        .collect()
 }
 
 /// The webview (`http://tauri.localhost`) and the hub are different origins, and so is the
@@ -349,17 +375,27 @@ async fn session(hub: Arc<Hub>, room: String, device: String, name: String, sock
         let peers: Vec<serde_json::Value> = entry
             .peers
             .iter()
-            .map(|(d, p)| serde_json::json!({ "device": d, "name": p.name }))
+            .map(|(d, p)| {
+                serde_json::json!({
+                    "device": d,
+                    "name": p.name,
+                    "call": p.call.is_some(),
+                    "video": p.call.unwrap_or(false),
+                })
+            })
             .collect();
+        let call = roster(entry, &device);
         entry.peers.insert(
             device.clone(),
             Peer {
                 name: name.clone(),
                 tx: tx.clone(),
+                call: None,
             },
         );
         serde_json::json!({
-            "t": "ready", "room": room, "device": device, "name": name, "peers": peers
+            "t": "ready", "room": room, "device": device, "name": name, "peers": peers,
+            "call": call, "now": g9_social::now()
         })
         .to_string()
     };
@@ -388,10 +424,16 @@ async fn session(hub: Arc<Hub>, room: String, device: String, name: String, sock
                     Some(Ok(Message::Text(text))) => {
                         if text.len() > MAX_BODY + 4096 { continue; }
                         let Ok(frame) = serde_json::from_str::<ClientFrame>(&text) else { continue };
-                        if frame.t == "msg" {
-                            forward(&hub, &room, &device, &name, frame);
-                        } else if frame.t == "ping" {
-                            let _ = tx.send(serde_json::json!({ "t": "pong" }).to_string());
+                        match frame.t.as_str() {
+                            "msg" => forward(&hub, &room, &device, &name, frame),
+                            "ping" => {
+                                let _ = tx.send(
+                                    serde_json::json!({ "t": "pong", "n": frame.n, "now": g9_social::now() })
+                                        .to_string(),
+                                );
+                            }
+                            "call" => set_call(&hub, &room, &device, &name, &frame.state, frame.video, &tx),
+                            _ => {}
                         }
                     }
                     Some(Ok(Message::Close(_))) | None => break,
@@ -402,15 +444,81 @@ async fn session(hub: Arc<Hub>, room: String, device: String, name: String, sock
         }
     }
 
-    if let Some(entry) = hub.rooms.lock().expect("rooms lock").get_mut(&room) {
-        entry.peers.remove(&device);
-    }
+    let was_in_call = {
+        let mut rooms = hub.rooms.lock().expect("rooms lock");
+        match rooms.get_mut(&room) {
+            Some(entry) => entry
+                .peers
+                .remove(&device)
+                .map(|peer| peer.call.is_some())
+                .unwrap_or(false),
+            None => false,
+        }
+    };
     broadcast(
         &hub,
         &room,
         &device,
         serde_json::json!({ "t": "peer", "event": "leave", "device": device }),
     );
+    if was_in_call {
+        broadcast(
+            &hub,
+            &room,
+            &device,
+            serde_json::json!({ "t": "call", "event": "leave", "device": device }),
+        );
+    }
+}
+
+/// Mark a device as in or out of the room's call, and answer with the roster so the client
+/// can start negotiating on the same round trip instead of waiting for every peer to reply.
+fn set_call(
+    hub: &Arc<Hub>,
+    room: &str,
+    device: &str,
+    name: &str,
+    state: &str,
+    video: bool,
+    tx: &tokio::sync::mpsc::UnboundedSender<String>,
+) {
+    let (now, others) = {
+        let mut rooms = hub.rooms.lock().expect("rooms lock");
+        let Some(entry) = rooms.get_mut(room) else {
+            return;
+        };
+        let Some(peer) = entry.peers.get_mut(device) else {
+            return;
+        };
+        match state {
+            "join" => peer.call = Some(video),
+            "leave" => peer.call = None,
+            _ => return,
+        }
+        let roster = roster(entry, device);
+        let others: Vec<(String, tokio::sync::mpsc::UnboundedSender<String>)> = entry
+            .peers
+            .iter()
+            .filter(|(d, _)| d.as_str() != device)
+            .map(|(d, p)| (d.clone(), p.tx.clone()))
+            .collect();
+        (roster, others)
+    };
+    if state == "join" {
+        let _ = tx
+            .send(serde_json::json!({ "t": "call", "event": "roster", "peers": now }).to_string());
+    }
+    let out = serde_json::json!({
+        "t": "call",
+        "event": if state == "join" { "join" } else { "leave" },
+        "device": device,
+        "name": name,
+        "video": video,
+    })
+    .to_string();
+    for (_, peer_tx) in others {
+        let _ = peer_tx.send(out.clone());
+    }
 }
 
 /// Deliver one frame. The hub never looks at `body` — it is ciphertext, and that is the

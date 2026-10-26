@@ -7,6 +7,83 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 - Nothing yet.
 
+## [0.16.0] — 2026-10-26
+
+Social, second release: the same loop, made quick and honest about its own speed. A three-way
+video call now connects in about a third of a second, a nine-person call stops trying to send
+720p to nine people, every tile shows the latency it is actually getting, and a dropped room
+comes back by itself carrying whatever you typed in the meantime.
+
+### Faster — measured, not claimed
+
+- **The call no longer waits for the room to answer.** `g9-hub` now keeps the call roster and
+  answers a `call join` with it in the same round trip, so the first offer goes out the moment
+  the camera opens instead of after a broadcast-and-wait. In the nine-device run:
+  **call connected in 0.29 s** (was 0.21 s for two, 40 s in the bug we fixed in 0.15.0),
+  **full mesh of five in 1.18 s**, chat to eight devices in **0.03 s**.
+- **ICE starts gathering before it is needed** (`iceCandidatePoolSize: 4`), and every
+  connection is `max-bundle` with RTCP muxing, so a call is one port and one round trip.
+- **Opus is configured for speech, not streaming**: 10 ms packets instead of 20 (half the time
+  between mouth and ear), in-band FEC, DTX, mono, and a bitrate that matches the call size.
+- **H.264 is preferred over VP8/VP9/AV1** where the browser allows it, because Windows decodes
+  H.264 in hardware — a nine-person call stops competing with the player for CPU.
+- **A quality ladder by room size**: 720p30 for two people, 540p30 for up to four, 360p24 up to
+  six, 240p15 above that — applied to the sender via `setParameters`, so the encoder never
+  produces bits the uplink cannot carry.
+- **Receiver tuning**: `playoutDelayHint: 0`, a 40 ms audio / 80 ms video jitter target, and
+  `contentHint = "speech"` so the browser's pacer treats voice as something that must not wait.
+
+### Visible
+
+- **Live latency in the call head** (`22 ms`) and the workspace strip — a real round trip to
+  the hub, not a guess, measured every 2.5 s from the hub's echo.
+- **Per-tile telemetry on hover**: peer round trip, received resolution, bitrate in, and a
+  "weak" warning past 250 ms or 60 ms of jitter.
+- **Active-speaker detection** from the inbound audio level, so the loudest tile is outlined.
+- **The sending tier is shown** (`540p`) — you can see the call adapt when the sixth person joins.
+
+### Reliable
+
+- **The room reconnects itself.** A dropped socket retries with backoff (twelve attempts, up to
+  8 s apart), re-states the call to the hub, re-offers to everyone still in it, and says
+  "Reconnecting · attempt 2" instead of "Disconnected — press Reconnect".
+- **Chat written while the socket is down is queued and flushed on the way back**, shown as
+  *queued* the whole time. Control frames are never queued — a stale offer is worse than none.
+- **A dropped peer connection restarts ICE** instead of ending the call, up to four attempts,
+  with the answering side able to request the restart.
+- **Arrivals during capture are no longer lost.** If someone joins the call while your camera is
+  still opening, the arrival is buffered and replayed — this was a silent half-connected call.
+- **A malformed frame can no longer throw out of the socket handler** (base64-validated, length
+  checked) — one bad frame used to be able to kill a transcript.
+- **Closing the workspace leaves the call**, so the camera is never left running without
+  controls on screen. Switching rooms does the same.
+- **An invite dialog never sits over a live call**, and it is dismissed when a call starts.
+
+### Verified
+
+- `cargo test --workspace --exclude g9` — **104 tests**, including four new hub tests: the
+  roster arriving in the same answer, leave and a dropped socket both announced, ping echoing
+  its sequence number, and the roster surviving a reconnect.
+- `node domtest/smoke13.js` — **new gate**: the SDP tuner, the four-step ladder, ICE pool and
+  bundle policy, roster-first call setup, sender caps and codec order, self-muted tiles, ICE
+  restart, live RTT and per-peer stats, reconnect with a flushed outbox, and capture-time
+  arrivals.
+- `node domtest/smoke12.js` — still green (the 0.15.0 gate).
+- `python3 scripts/e2e-social.py --devices 9 --mesh 5` — nine browsers against a real hub:
+  room 0.23 s, chat fan-out 0.03 s, two-way video **0.32 s**, five-way mesh **1.18 s**, peak
+  peer RTT 7 ms, zero loss, then everyone leaves and the room empties.
+
+### Known limits, stated plainly
+
+- Calls are still **mesh**: each device connects to every other, so a nine-way *video* call means
+  72 encodes. The ladder keeps that survivable up to about five or six video senders; past that
+  the SFU in `docs/SOCIAL-PLAN.md` §5 is the answer, and it is the next release.
+- A public STUN service is the default. Networks that block UDP need a TURN server, which
+  `G9Social.setIceServers([...])` accepts and remembers; a Settings field for it lands with the
+  SFU release.
+- The E2E script runs nine devices but a five-way mesh by default (`--mesh N`), because the
+  sandbox it is developed in saturates above that; a desktop reaches nine.
+
 ## [0.15.0] — 2026-10-25
 
 Social, first release: a workspace of your own where a room is one link away — type, talk,

@@ -13,6 +13,11 @@ if grep -RInE 'from ["'"'"']react|from ["'"'"']vue|\.tsx?' ui; then
   exit 1
 fi
 
+echo "== social domtests =="
+if [[ ! -d domtest/node_modules ]]; then (cd domtest && npm install jsdom); fi
+node domtest/smoke12.js
+node domtest/smoke13.js
+
 echo "== rustfmt =="
 cargo fmt --all
 

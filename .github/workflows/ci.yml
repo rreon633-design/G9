@@ -73,3 +73,9 @@ jobs:
           node --check ui/social.js
           node --check ui/theme.js
           echo "vanilla UI ok"
+      - name: Social gates (jsdom)
+        run: |
+          cd domtest
+          npm install --no-audit --no-fund --ignore-scripts jsdom
+          node smoke12.js
+          node smoke13.js

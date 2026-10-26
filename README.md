@@ -11,13 +11,13 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.15.0)
+## Windows release (v0.16.0)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.15.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.16.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
 | `G9_0.15.0_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
@@ -40,8 +40,12 @@ download small.
   share the **link or the QR** — that is the whole invite. Every frame is sealed with
   AES-256-GCM before it leaves the app, the room key travels in the link's fragment so the hub
   never sees it, and voice or video starts from the room itself with mute, camera and a clean
-  leave. Conversations live in SQLite, so closing G9 loses nothing. `g9-hub` — a small relay
-  you run anywhere — is the only server, and no two devices ever need the same network.
+  leave. Calls are tuned for latency rather than resolution — 10 ms Opus packets, H.264 for
+  hardware decode, a quality ladder that steps down as the room fills, live round-trip and
+  per-tile telemetry on screen, automatic reconnect with queued messages, and ICE restarts
+  instead of dropped calls. Conversations live in SQLite, so closing G9 loses nothing.
+  `g9-hub` — a small relay you run anywhere — is the only server, and no two devices ever need
+  the same network.
 
 - **Fun Mode** — movies, web series, anime, drama, manga / manhwa / manhua on one Netflix-shaped
   wall. It opens **already populated** from the Internet Archive's public-domain film collections
