@@ -5,7 +5,25 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 ## [Unreleased]
 
-- Nothing yet.
+### Tools — checking which public links still play
+
+- **`scripts/g9_check.py`** — standard-library Python 3.8+, no dependencies. Reads any number of
+  M3U files or URLs, follows a master playlist to its first variant, **downloads a media segment**,
+  and only then calls a stream alive. Writes `working.m3u` (exactly what passed, already deduped by
+  URL — the file you import), `new_to_add.m3u` (`--mine` diffs it against your playlist),
+  `failed.csv` (reason per failure, plus a `suspect_host` flag) and `report.txt`.
+  `--telugu`, `--filter`, `--workers`, `--timeout`, `--out`.
+- **[docs/STREAMS.md](docs/STREAMS.md)** — what the public indexes actually contain, why the site
+  playlist is a filtered subset of the source list, the 2026-10-26 Telugu audit (166 streams, 139
+  alive, 83 channels, 16 dead outright), which hosts the survivors live on, and the honest reading
+  of each group.
+- Naming the dead rather than pretending: the ETV main feeds (`ETV AP / Telangana / Cinema / Plus`)
+  are gone at the hostname level (NXDOMAIN, not a geo-block); **DD Saptagiri, DD Yadagiri, Studio N,
+  Bharat Today, Zee Cinemalu and Kushi TV are not in the source list at all**, and Kushi TV is
+  Irdeto-encrypted on Measat 3d, so a free stream of it is not to be expected.
+
+The shipped app is unchanged by this entry — the checker is a repo tool, so the 0.17.0 installers
+are still the 0.17.0 binaries.
 
 ## [0.17.0] — 2026-10-26
 

@@ -38,6 +38,11 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
   no Sky / DAZN / ESPN; Kushi TV is Irdeto-encrypted on Measat 3d and has no reliable free
   stream. Merge several sources by importing each, or by joining their `#EXTM3U` files into one
   master `.m3u` (dedupe by URL) and importing that once
+- **`scripts/g9_check.py`** — offline-friendly playlist auditor (Python 3.8+, stdlib): follows a
+  master playlist to a variant, downloads a segment, and only then calls a stream alive. Writes
+  `working.m3u` (import this), `new_to_add.m3u` (`--mine`), `failed.csv` with the reason per stream
+  and a `suspect_host` flag, `report.txt`. `--telugu` / `--filter` / `--workers` / `--timeout`.
+  Findings and the honest host-by-host reading: `docs/STREAMS.md`
 - **TV Mode channel browser** (YouTube-shaped): logo grid, search, Country / Language / Quality
   chips with counts, sort by order / name / country / quality / group, now/next per card
 - TV Mode tunes the last watched channel on entry and keeps a **Channels** pill while watching

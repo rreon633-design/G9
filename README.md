@@ -88,6 +88,9 @@ download small.
   ships no channels and no credentials — a link that dies is a link whose owner stopped
   streaming. Merge several sources by importing each one, or by joining the `#EXTM3U` files into
   one master `.m3u` and importing that once
+- **`scripts/g9_check.py`** — tests a whole playlist for real (manifest, then a segment download)
+  and writes `working.m3u` with only what answered, plus `failed.csv` saying why each one died.
+  What the public indexes actually contain, and what has quietly gone: **[docs/STREAMS.md](docs/STREAMS.md)**
 - Online subtitles (OpenSubtitles hash + title, TheSubDB, Podnapisi) with a **picker** or
   auto-apply; sidecar SRT/VTT/ASS; subtitle browser; live cue translation
 - Chapters, playlist queue, always-on-top, 360° look-around, transcript pane (no PiP by design)
