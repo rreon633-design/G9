@@ -30,6 +30,14 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - Local files (Open file, Open path / SMB UNC)
 - Direct HTTP(S) URL / stream
 - IPTV: user-supplied M3U / M3U8 playlists
+- **Public playlist indexes** (v0.17.0) — eight chips in *Add playlist / IPTV…* (Sports, India,
+  News, Movies, Documentary, Music, Kids, All countries) that fill the URL from the open
+  [iptv-org](https://github.com/iptv-org/iptv) lists. Choosing one fetches nothing; **Import**
+  still has to be pressed. G9 ships no channels, no credentials and no scraped premium feeds —
+  the sheet says so in as many words. The sports index lists 800-odd free-to-air feeds and has
+  no Sky / DAZN / ESPN; Kushi TV is Irdeto-encrypted on Measat 3d and has no reliable free
+  stream. Merge several sources by importing each, or by joining their `#EXTM3U` files into one
+  master `.m3u` (dedupe by URL) and importing that once
 - **TV Mode channel browser** (YouTube-shaped): logo grid, search, Country / Language / Quality
   chips with counts, sort by order / name / country / quality / group, now/next per card
 - TV Mode tunes the last watched channel on entry and keeps a **Channels** pill while watching
@@ -77,8 +85,18 @@ History: [CHANGELOG.md](CHANGELOG.md) · Gap list: [Listed by you — not implem
 - Focus rings on every control and automatic `prefers-reduced-motion` support
 
 ### Social (v0.15.0)
-- **Workspace** (`Ctrl+Shift+S`) with its own rail — rooms, who is in the room now, saved
-  contacts, unread counts, a filter box, and your identity at the foot. The one sidebar in G9.
+- **A sidebar, not a takeover** (v0.17.0) — `Ctrl+Shift+S` docks social to the right at 380 px
+  (resizable 288–720 px, remembered). The player narrows to make room, so the transport, volume
+  and seek bar stay visible and usable while you talk. The room list opens as a drawer **over**
+  the transcript, not pushing it down. The player chrome itself still has no sidebars.
+- **Workspace rail** — rooms, who is in the room now, saved contacts, unread counts, a filter
+  box, and your identity at the foot.
+- **Chat works on a fresh install** (v0.17.0) — "Create a room" starts its own `g9-hub` if none
+  answers (`social_hub_start`: health probe, free-port fallback), and rooms are created against
+  the LAN **share URL**, never loopback. Failures are sentences ("no hub answered at … — press
+  Start hub"), never `Failed to fetch`.
+- **Docked call tiles are 16:9 cards** (v0.17.0), one per row, with the Expand button still
+  giving the full grid (1 / 2 / 3 columns by call size, self view as a corner PiP).
 - **A room is one link** — a signed, expiring invite carrying the hub, the room, the seats and
   the room key in the URL fragment, drawn as a **QR code** too. Re-inviting never locks out
   anyone who already has a link.

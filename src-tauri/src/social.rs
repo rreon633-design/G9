@@ -198,6 +198,85 @@ pub struct DeviceJson {
 }
 
 /// `g9:…`, the public key and the display name. Called once when the workspace opens.
+/// What the UI needs to talk to a hub that is running on this machine.
+#[derive(serde::Serialize)]
+pub struct HubJson {
+    /// Loopback address, what this app itself uses.
+    pub url: String,
+    /// Address other devices on the same network can use. Falls back to `url`.
+    pub share_url: String,
+    pub port: u16,
+    /// false when a hub was already listening — nothing was started twice.
+    pub started: bool,
+}
+
+/// Best-effort LAN address: the source address the OS would use to reach the internet.
+/// No traffic is sent (a connected UDP socket only picks a route).
+fn lan_ip() -> Option<std::net::IpAddr> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let ip = socket.local_addr().ok()?.ip();
+    if ip.is_loopback() || ip.is_unspecified() {
+        None
+    } else {
+        Some(ip)
+    }
+}
+
+fn hub_json(port: u16, started: bool) -> HubJson {
+    let url = format!("http://127.0.0.1:{port}");
+    let share_url = lan_ip()
+        .map(|ip| format!("http://{ip}:{port}"))
+        .unwrap_or_else(|| url.clone());
+    HubJson {
+        url,
+        share_url,
+        port,
+        started,
+    }
+}
+
+async fn hub_answers(port: u16) -> bool {
+    let url = format!("http://127.0.0.1:{port}/health");
+    match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(700))
+        .build()
+    {
+        Ok(client) => client
+            .get(url)
+            .send()
+            .await
+            .map(|r| r.status().is_success())
+            .unwrap_or(false),
+        Err(_) => false,
+    }
+}
+
+/// Make sure there is a hub to talk to, starting one in this process if there is not.
+///
+/// This is the difference between "Create a room: Failed to fetch" and a room: a fresh
+/// install has no server, so G9 becomes one. It binds every interface when it can so a
+/// second device on the same network can reach it, and falls back to a free port when the
+/// usual one is taken.
+#[tauri::command]
+pub async fn social_hub_start(port: Option<u16>) -> Result<HubJson, String> {
+    let preferred = port.unwrap_or(8787);
+    if hub_answers(preferred).await {
+        return Ok(hub_json(preferred, false));
+    }
+    let addr = g9_hub::spawn_local(preferred)
+        .await
+        .map_err(|e| format!("could not start a hub on port {preferred}: {e}"))?;
+    // Wait for the listener to be answering before handing the address to the UI.
+    for _ in 0..40 {
+        if hub_answers(addr.port()).await {
+            return Ok(hub_json(addr.port(), true));
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    Ok(hub_json(addr.port(), true))
+}
+
 #[tauri::command]
 pub fn social_identity(state: State<'_, SocialState>) -> IdentityInfo {
     let name = state

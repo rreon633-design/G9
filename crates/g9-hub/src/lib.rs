@@ -245,6 +245,25 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .with_state(hub)
 }
 
+/// Start a hub in the background and return where it is listening.
+///
+/// This is what makes "Create a room" work on a fresh install: the desktop app calls this
+/// when nothing is answering on the configured port, so there is no separate install step
+/// and no terminal. An ephemeral port is used when the preferred one is taken.
+pub async fn spawn_local(prefer: u16) -> std::io::Result<SocketAddr> {
+    let listener =
+        match tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], prefer))).await {
+            Ok(listener) => listener,
+            Err(_) => tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], 0))).await?,
+        };
+    let addr = listener.local_addr()?;
+    let hub = Hub::new();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, router(hub)).await;
+    });
+    Ok(addr)
+}
+
 /// Bind and serve until the process ends.
 pub async fn serve(hub: Arc<Hub>, addr: SocketAddr) -> std::io::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;

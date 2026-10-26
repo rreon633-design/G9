@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.16.0"
+version = "0.17.0"
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 authors = ["G9 contributors"]
@@ -24,6 +24,7 @@ g9-iptv = { path = "crates/g9-iptv" }
 g9-store = { path = "crates/g9-store" }
 g9-sources = { path = "crates/g9-sources" }
 g9-social = { path = "crates/g9-social" }
+g9-hub = { path = "crates/g9-hub" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

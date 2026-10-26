@@ -11,14 +11,14 @@ Vite, or frontend npm libraries). You supply the files, streams, and playlists.
 
 > G9 is a player. It ships **no channels**, playlists, or provider credentials.
 
-## Windows release (v0.16.0)
+## Windows release (v0.17.0)
 
 Optimized **Windows 10 / 11 64-bit** builds are published by GitHub Actions when a `v*` tag is pushed:
 
 | File | What |
 |---|---|
-| `G9_0.16.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
-| `G9_0.15.0_x64_en-US.msi` | MSI for managed deployment |
+| `G9_0.17.0_x64-setup.exe` | NSIS installer — per-user, LZMA, no admin |
+| `G9_0.17.0_x64_en-US.msi` | MSI for managed deployment |
 | `G9-windows-x64-portable.zip` | Portable `G9.exe`, no install |
 
 Download: **[Releases](https://github.com/rreon633-design/G9/releases)**
@@ -35,8 +35,10 @@ download small.
   name and avatar, a notification centre that keeps what a toast said, and three start-screen
   widgets (clock, continue watching, library) that can each be switched off
 
-- **Social — chat, voice and video, one link away.** A workspace of its own (`Ctrl+Shift+S`)
-  with a rail: rooms, who is in them right now, saved contacts, unread counts. Create a room and
+- **Social — chat, voice and video, one link away.** A sidebar docked to the right (`Ctrl+Shift+S`)
+  that you keep open while you watch: the player narrows to make room, so the transport and the
+  volume stay under your cursor. The rail lists rooms, who is in them right now, saved contacts
+  and unread counts, and it opens as a drawer over the transcript. Create a room and
   share the **link or the QR** — that is the whole invite. Every frame is sealed with
   AES-256-GCM before it leaves the app, the room key travels in the link's fragment so the hub
   never sees it, and voice or video starts from the room itself with mute, camera and a clean
@@ -80,6 +82,12 @@ download small.
   in About; and a dropped live stream that retries three times before saying so
 - Local files, HTTP(S) streams, HLS, UNC / SMB paths
 - IPTV from an M3U **you are allowed to use**; live sheet with favourites, groups, search
+- **One-click public indexes** in *Add playlist / IPTV…* — Sports, India, News, Movies,
+  Documentary, Music, Kids and All countries from the open [iptv-org](https://github.com/iptv-org/iptv)
+  lists. A chip fills the URL; **Import** is still yours to press, and the URL is editable. G9
+  ships no channels and no credentials — a link that dies is a link whose owner stopped
+  streaming. Merge several sources by importing each one, or by joining the `#EXTM3U` files into
+  one master `.m3u` and importing that once
 - Online subtitles (OpenSubtitles hash + title, TheSubDB, Podnapisi) with a **picker** or
   auto-apply; sidecar SRT/VTT/ASS; subtitle browser; live cue translation
 - Chapters, playlist queue, always-on-top, 360° look-around, transcript pane (no PiP by design)

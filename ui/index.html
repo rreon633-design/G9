@@ -664,8 +664,13 @@
       <div class="modal" role="dialog">
         <h3>Add playlist</h3>
         <p class="legal" id="legal"></p>
+        <p class="imp-note">G9 ships no channels. These are open indexes of publicly listed streams; a link that stops working is a link whose owner stopped streaming it.</p>
         <label for="imp-name">Name</label>
         <input id="imp-name" type="text" value="My playlist" />
+        <div class="imp-presets" id="imp-presets" role="group" aria-label="Public playlist indexes">
+          <span class="imp-presets-label">Public indexes — one click, then Import</span>
+          <div class="imp-presets-row" id="imp-presets-row"></div>
+        </div>
         <label for="imp-url">Playlist URL</label>
         <input id="imp-url" type="text" placeholder="https://…/playlist.m3u" />
         <label for="imp-text">Or paste M3U</label>

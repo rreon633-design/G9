@@ -3,13 +3,19 @@
 **Supersedes:** the first draft of this document. Where v2 and v1 disagree (sidebar, device
 count, joining by link, transport ladder), **v2 wins**.
 
+**0.17.0 shipped the sidebar**: social is docked to the right of the player (288–720 px,
+remembered) and the player narrows to make room; the room list is a drawer over the transcript;
+the docked call is one 16:9 card per row with Expand for the full grid. It also fixed the reason
+"Create a room" failed on a fresh install — `social_hub_start` starts a local hub and rooms are
+created against the LAN share URL, never loopback — and made every failure a sentence.
+
 **Status.** §10 is the release ladder. **0.15.0 shipped the loop** — workspace, link/QR rooms,
 sealed chat, mesh voice and video, clean leave and reopen — with nine devices proven against a
 real hub. **0.16.0 shipped the speed and the honesty**: hub-side call roster (one round trip to
 the first offer), 10 ms Opus with FEC and DTX, H.264 preference, a room-size quality ladder,
 live RTT and per-tile telemetry, socket reconnect with a flushed outbox, and ICE restarts.
 
-The rest of this document is the plan for **0.17.0 → 0.19.0**; nothing below has been quietly
+The rest of this document is the plan for **0.18.0 → 0.19.0**; nothing below has been quietly
 dropped, and where the shipped code took a simpler path first, §10 says so. The one number still
 out of reach is the one §5 exists for: nine people all sending video needs the SFU, and mesh
 tops out around five or six senders.
@@ -507,9 +513,10 @@ Every release ships with its test, as with every release so far.
 |---|---|---|
 | **0.15.0 — Foundation** | `crates/g9-social` (identity, Olm/Megolm, outbox, devices, invites), `crates/g9-hub` binary (`/v1/hello`, `/v1/ws`, `/v1/invite/*`, mailbox), SQLite v6, contact cards, QR encode/decode, `g9://` deep link + single instance. **No UI beyond a debug panel** | Rust tests; smoke12; hub runs from `cargo run` and from a container |
 | **0.16.0 — Workspace + chat** | Sidebar workspace shell, threads 1..32, composer, ticks, attachments (device-to-device), voice notes, search, typing, presence, edit/redact, unread badges, notification-centre integration, **invite by QR/link with preview**, device list + linking | smoke13; invite redemption incl. **inviter offline**; 10 k-device scroll is not this release |
-| **0.17.0 — Calls 1:1** | Voice + video mesh, device pickers with meters, screen share, mute/cam, quality ladder + honest badge, call log, SFrame E2EE, permission handler, TURN config, **transport ladder L0–L4** | smoke14; chaos-hub (drop, UDP-block, WSS-only); recorded glass-to-glass and mouth-to-ear numbers in the release notes |
-| **0.18.0 — Rooms up to 9** | `str0m` SFU in the hub, rooms, simulcast, layer choice, spotlight, pinning, grid + strip, seat caps, **9-device soak** | smoke15 + `soak-9devices.py` green at 9 video / 32 audio |
-| **0.19.0 — Polish & operators** | Reactions, hand raise, background blur (budget permitting), call-in-thread, TV Mode call UI, recovery UX, hub operator docs (systemd unit, container, coturn recipe, backup/restore), About → Social transparency page | full chaos suite, 1-hour soak, memory ceilings, docs review |
+| **0.17.0 — Sidebar (shipped)** | Social docked right (288–720 px, remembered), player narrows to make room, room list as a drawer over the transcript, docked 16:9 call tiles + Expand grid, `social_hub_start` (works with nothing installed), share-URL rooms, failures as sentences, **public playlist indexes** in the import sheet | smoke13 §17; 9-device e2e; 2-browser UI chat |
+| **0.18.0 — Calls 1:1** | Voice + video mesh, device pickers with meters, screen share, mute/cam, quality ladder + honest badge, call log, SFrame E2EE, permission handler, TURN config, **transport ladder L0–L4** | smoke14; chaos-hub (drop, UDP-block, WSS-only); recorded glass-to-glass and mouth-to-ear numbers in the release notes |
+| **0.19.0 — Rooms up to 9** | `str0m` SFU in the hub, rooms, simulcast, layer choice, spotlight, pinning, grid + strip, seat caps, **9-device soak** | smoke15 + `soak-9devices.py` green at 9 video / 32 audio |
+| **0.20.0 — Polish & operators** | Reactions, hand raise, background blur (budget permitting), call-in-thread, TV Mode call UI, recovery UX, hub operator docs (systemd unit, container, coturn recipe, backup/restore), About → Social transparency page | full chaos suite, 1-hour soak, memory ceilings, docs review |
 
 **Version floor:** `rust-version` 1.77 → **1.85** (`vodozemac` 0.10 and `str0m` 0.24 both need it).
 Windows-only release, so this costs nothing.

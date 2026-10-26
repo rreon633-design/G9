@@ -274,6 +274,41 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms || 40));
   if (!$("glsl").hidden) errors.push("the canvas was shown without a WebGL context");
   window.HTMLCanvasElement.prototype.getContext = realGet;
 
+  /* 14. the import sheet offers public indexes, and nothing is fetched by choosing one */
+  const presetRow = $("imp-presets-row");
+  if (!presetRow) errors.push("the import sheet has no public index shortcuts");
+  else {
+    const buttons = Array.from(presetRow.querySelectorAll("[data-preset]"));
+    if (buttons.length < 5) errors.push("too few public indexes: " + buttons.length);
+    const before = window.__fetchCount || 0;
+    const first = buttons[0];
+    if (!first) errors.push("no preset button was drawn");
+    else {
+      first.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      await tick(20);
+      const url = $("imp-url");
+      if (!url || url.value.indexOf("iptv-org.github.io") < 0) {
+        errors.push("a preset did not fill the playlist URL: " + (url && url.value));
+      }
+      if (!first.classList.contains("on")) errors.push("the chosen preset is not marked");
+      const marked = buttons.filter((b) => b.classList.contains("on")).length;
+      if (marked !== 1) errors.push(marked + " presets are marked at once");
+      if ((window.__fetchCount || 0) !== before) errors.push("choosing a preset fetched something");
+      // and the second one replaces the first, it does not add to it
+      const second = buttons[1];
+      if (second) {
+        second.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+        await tick(20);
+        if ($("imp-url").value !== second.getAttribute("title")) {
+          errors.push("the second preset did not replace the first: " + $("imp-url").value);
+        }
+        if (buttons.filter((b) => b.classList.contains("on")).length !== 1) {
+          errors.push("two presets are marked after picking the second");
+        }
+      }
+    }
+  }
+
   if (errors.length) {
     console.log("SMOKE10 FAIL");
     errors.slice(0, 14).forEach((e) => console.log(" -", e));

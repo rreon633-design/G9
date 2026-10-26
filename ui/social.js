@@ -124,6 +124,7 @@
 
   function pushError(where, err) {
     var text = where + ": " + (err && err.message ? err.message : err);
+    if (unreachable(err) && /hub/i.test(where)) text = where + ": " + hubHint(S.hub, err);
     S.errors.push(text);
     if (S.errors.length > 20) S.errors.shift();
     setStatus(text, "busy");
@@ -335,26 +336,34 @@
   function mount() {
     var host = document.getElementById("social");
     if (!host) return null;
+    // Build the shell once. Rebuilding it on every open() replaced the elements the
+    // listeners were attached to, so the room drawer and the close button went dead.
+    if (host.querySelector(".social-top")) return host;
     host.innerHTML =
       '<div class="social-top">' +
+      '<button class="social-icon" id="social-rooms" title="Rooms and people" aria-expanded="false">' +
+      '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>' +
+      "</button>" +
       '<span class="social-dot" id="social-dot"></span>' +
-      "<b>G9 Social</b>" +
+      "<b>Social</b>" +
       '<span class="social-status" id="social-status">Not connected</span>' +
       '<span class="social-rtt" id="social-rtt" title="Round trip to the room"></span>' +
       '<span class="spacer"></span>' +
-      '<button class="top-btn" id="social-close" title="Close (Esc)">Close</button>' +
+      '<button class="social-icon" id="social-close" title="Close (Esc)" aria-label="Close social">' +
+      '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+      "</button>" +
       "</div>" +
-      '<div class="social-body">' +
-      '<aside class="social-rail" id="social-rail">' +
+      '<div class="social-rail" id="social-rail" hidden>' +
       '<div class="social-search">' +
       '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>' +
       '<input id="social-filter" placeholder="Search rooms and people" />' +
       "</div>" +
       '<div class="social-list" id="social-list"></div>' +
       '<div class="social-rail-foot" id="social-foot"></div>' +
-      "</aside>" +
+      "</div>" +
       '<main class="social-main" id="social-main"></main>' +
-      "</div>";
+      '<div class="social-grip" id="social-grip" title="Drag to widen"></div>';
+    wireShell();
     return host;
   }
 
@@ -506,8 +515,9 @@
       '<button class="top-btn" id="social-call-video">Video</button>' +
       "</div>" +
       '<div class="social-msgs" id="social-msgs"></div>' +
+      '<div class="social-hint" id="social-hint" hidden></div>' +
       '<div class="social-compose">' +
-      '<textarea id="social-input" rows="1" placeholder="Message ' +
+      '<textarea id="social-input" rows="1" placeholder="Message" title="Message ' +
       esc(t.name) +
       ' — Enter to send"></textarea>' +
       '<button class="top-btn" id="social-send">Send</button>' +
@@ -539,6 +549,11 @@
       });
     var send = document.getElementById("social-send");
     if (send) send.addEventListener("click", sendFromComposer);
+    var hint = document.getElementById("social-hint");
+    if (hint && !S.socket) {
+      hint.textContent = "Not connected to the hub — messages are saved and will send when it is back.";
+      hint.hidden = false;
+    }
     var input = document.getElementById("social-input");
     if (input) {
       input.addEventListener("keydown", function (ev) {
@@ -582,9 +597,10 @@
       '<div class="social-card">' +
       "<label for=\"social-hub\">Hub</label>" +
       '<input type="text" id="social-hub" value="' +
-      esc(S.hub || "http://127.0.0.1:8787") +
-      '" placeholder="http://127.0.0.1:8787" />' +
-      '<div class="row"><button class="top-btn" id="social-create">Create a room</button></div>' +
+      esc(S.hub || DEFAULT_HUB) +
+      '" placeholder="' + DEFAULT_HUB + '" />' +
+      '<div class="row"><button class="top-btn accent" id="social-create">Create a room</button></div>' +
+      '<small class="hint">No server yet? G9 starts one on this PC when you press Create.</small>' +
       "</div>" +
       '<div class="social-card">' +
       "<label for=\"social-link\">Or join with a link</label>" +
@@ -1170,6 +1186,7 @@
           started: nowSec(),
           muted: false,
           camOn: !!withVideo,
+          full: false,
         };
         S.call.timer = setInterval(function () {
           var clock = document.getElementById("call-time");
@@ -1647,6 +1664,7 @@
       host.appendChild(overlay);
     }
     overlay.hidden = false;
+    overlay.classList.toggle("full", !!S.call.full);
 
     var tiles = [];
     var peers = S.call.peers.size;
@@ -1666,8 +1684,16 @@
       '<span class="call-tier" title="Sending quality for this call size">' + esc(tier().name) + "</span>" +
       '<span class="spacer"></span>' +
       '<span class="call-count">' + (peers + 1) + " in the call</span>" +
+      '<button class="call-btn ghost" id="call-full" title="' +
+      (S.call.full ? "Back to the sidebar" : "Expand to full screen") +
+      '" aria-label="Toggle full screen call">' +
+      (S.call.full
+        ? '<svg viewBox="0 0 24 24"><path d="M9 4v5H4M15 20v-5h5"/></svg>'
+        : '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 15v5h-5"/></svg>') +
+      "</button>" +
       "</div>" +
-      '<div class="call-grid' + (peers ? " has-peers" : " solo") + '" id="call-grid">' + tiles.join("") +
+      '<div class="call-grid' + (peers ? " has-peers" : " solo") +
+      '" style="--call-cols:' + (peers <= 1 ? 1 : peers <= 4 ? 2 : 3) + '" id="call-grid">' + tiles.join("") +
       (peers ? "" : '<div class="call-wait" id="call-wait">Waiting for the others — share the room link and they appear here.</div>') +
       "</div>" +
       '<div class="call-bar">' +
@@ -1687,6 +1713,11 @@
 
     document.getElementById("call-mute").addEventListener("click", toggleMute);
     document.getElementById("call-cam").addEventListener("click", toggleCamera);
+    document.getElementById("call-full").addEventListener("click", function () {
+      if (!S.call) return;
+      S.call.full = !S.call.full;
+      renderCall();
+    });
     document.getElementById("call-end").addEventListener("click", function () {
       endCall();
     });
@@ -1708,20 +1739,77 @@
 
   /* ---------------------------------------------------------------- 8. actions */
 
-  function createRoom(hub) {
-    if (!hub) throw new Error("A hub address is needed — run g9-hub and use http://127.0.0.1:8787");
-    var base = hub.replace(/\/+$/, "").replace(/^ws/, "http");
-    return fetchJson(base + "/v1/rooms", {
+  var DEFAULT_HUB = "http://127.0.0.1:8787";
+
+  /// A `fetch` that failed to reach anything looks like a TypeError with no status. That is
+  /// the difference between "the server said no" and "there is no server", and the two need
+  /// different words.
+  function unreachable(err) {
+    return !err || err.name === "TypeError" || /failed to fetch|network|load failed/i.test(String(err.message || ""));
+  }
+
+  function hubHint(hub, err) {
+    var where = hub || DEFAULT_HUB;
+    if (unreachable(err)) {
+      return "No hub is answering at " + where + ". Press Create again and G9 will start one on this PC.";
+    }
+    return (err && err.message) || String(err);
+  }
+
+  /// Ask Rust to put a hub on this machine. Returns where it can be reached.
+  function startLocalHub(port) {
+    if (!TAURI) return Promise.reject(new Error("Starting a hub needs the desktop app"));
+    return invoke("social_hub_start", { port: port || null }).then(function (info) {
+      if (!info || !info.url) throw new Error("The hub did not report an address");
+      S.localHub = info;
+      return info;
+    });
+  }
+
+  function createRoomAt(base) {
+    return fetchJson(base.replace(/\/+$/, "").replace(/^ws/, "http") + "/v1/rooms", {
       method: "POST",
       body: JSON.stringify({ name: (S.identity && S.identity.name) + "'s room", seats: 9 }),
-    })
+    });
+  }
+
+  function createRoom(hub) {
+    if (!hub) hub = DEFAULT_HUB;
+    var base = hub.replace(/\/+$/, "").replace(/^ws/, "http");
+    return createRoomAt(base)
+      .catch(function (err) {
+        // Nothing on this machine answers: become the server instead of telling the user to
+        // go and start one. This is what makes a fresh install work with one click.
+        if (!unreachable(err)) throw err;
+        setStatus("Starting a hub on this PC…", "busy");
+        return startLocalHub().then(function (info) {
+          S.hub = info.share_url || info.url;
+          // The address inside the invite must be one other devices can reach, so the room
+          // is created against the network address when there is one.
+          return createRoomAt(info.share_url || info.url).then(function (room) {
+            room.local = true;
+            return room;
+          });
+        });
+      })
       .then(function (room) {
-        S.pendingRoom = { hub: hub, id: room.room, token: room.token, name: room.name, seats: room.seats };
+        var chosen = S.hub || base;
+        S.pendingRoom = {
+          hub: chosen,
+          id: room.room,
+          token: room.token,
+          name: room.name,
+          seats: room.seats,
+        };
         return makeInvite();
       })
       .then(function () {
         setStatus("Room ready — share the link", "on");
         return true;
+      })
+      .catch(function (err) {
+        S.hub = hub;
+        throw new Error(hubHint(hub, err));
       });
   }
 
@@ -1882,6 +1970,18 @@
       });
   }
 
+  /// Reconnect a thread whose room was opened on a previous run: the hub may be gone.
+  function reviveRoom(thread) {
+    if (!thread || !thread.hub) return Promise.resolve(false);
+    return connectSocket({
+      id: thread.id,
+      token: thread.token || "",
+      hub: thread.hub,
+    }).catch(function () {
+      return false;
+    });
+  }
+
   function loadMessages(threadId) {
     return invoke("social_messages", { thread: threadId, limit: 200 })
       .then(function (list) {
@@ -1918,6 +2018,7 @@
       S.room = null;
     }
     S.active = thread;
+    toggleRooms(false); // picking a room closes the drawer: it is a drawer, not a column
     renderRail();
     renderMain();
     loadMessages(id).then(function () {
@@ -2030,8 +2131,78 @@
         S.filter = filter.value;
         renderRail();
       });
+  }
+
+  /// Listeners for the parts of the panel that never change: close, the room drawer,
+  /// the filter box and the resize grip.
+  function wireShell() {
     var closeBtn = document.getElementById("social-close");
     if (closeBtn) closeBtn.addEventListener("click", close);
+    var roomsBtn = document.getElementById("social-rooms");
+    if (roomsBtn) {
+      roomsBtn.addEventListener("click", function () {
+        toggleRooms();
+      });
+    }
+    var filter = document.getElementById("social-filter");
+    if (filter)
+      filter.addEventListener("input", function () {
+        S.filter = filter.value;
+        renderRail();
+      });
+    wireGrip();
+    try {
+      var saved = parseFloat(localStorage.getItem("g9.social.width"));
+      if (saved >= 300 && saved <= 720) setWidth(saved);
+    } catch (e) {}
+  }
+
+  /// The room list is a drawer inside the panel, not a second column: this is a sidebar.
+  function toggleRooms(force) {
+    var rail = document.getElementById("social-rail");
+    var button = document.getElementById("social-rooms");
+    if (!rail) return false;
+    var open = typeof force === "boolean" ? force : rail.hidden;
+    rail.hidden = !open;
+    if (button) button.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      renderRail();
+      var filter = document.getElementById("social-filter");
+      if (filter) filter.focus();
+    }
+    return open;
+  }
+
+  function setWidth(px) {
+    var host = document.getElementById("social");
+    if (!host) return;
+    host.style.width = Math.round(px) + "px";
+    document.documentElement.style.setProperty("--social-w", Math.round(px) + "px");
+  }
+
+  function wireGrip() {
+    var grip = document.getElementById("social-grip");
+    if (!grip) return;
+    grip.addEventListener("pointerdown", function (ev) {
+      ev.preventDefault();
+      var host = document.getElementById("social");
+      if (!host) return;
+      var startX = ev.clientX;
+      var startW = host.getBoundingClientRect().width;
+      var move = function (e) {
+        var width = Math.min(720, Math.max(300, startW + (startX - e.clientX)));
+        setWidth(width);
+      };
+      var up = function () {
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        try {
+          localStorage.setItem("g9.social.width", String(Math.round(host.getBoundingClientRect().width)));
+        } catch (e) {}
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+    });
   }
 
   window.G9Social = {

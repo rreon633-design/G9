@@ -3567,3 +3567,319 @@ input[type="range"]::-webkit-slider-thumb {
   max-height: 100%;
 }
 .call-grid.has-peers .call-tile[data-tile="self"] { aspect-ratio: 16 / 9; }
+
+/* ---------- social is a sidebar, not a takeover ---------- */
+/* One column on the right edge: the picture keeps playing, the conversation sits beside
+   it. Width is draggable (300–720 px) and remembered. */
+.social {
+  position: absolute;
+  inset: 40px 0 0 auto;
+  right: 0;
+  width: var(--social-w, 380px);
+  max-width: 62vw;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  color: var(--ink);
+  border-left: 1px solid var(--line);
+  box-shadow: -18px 0 42px rgba(0, 0, 0, 0.28);
+  animation: social-in 140ms ease-out;
+}
+@keyframes social-in {
+  from { transform: translateX(18px); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .social { animation: none; }
+}
+.social[hidden] { display: none !important; }
+.social-grip {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 2;
+}
+.social-grip:hover { background: rgba(var(--accent-rgb), 0.35); }
+
+/* the top strip: icon buttons, no words */
+.social-top { height: 44px; gap: 8px; padding: 0 10px; }
+.social-top b { font-size: 12.5px; letter-spacing: 0.01em; }
+.social-top .social-status { font-size: 11px; }
+.social-icon {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  background: transparent;
+}
+.social-icon:hover { background: rgba(var(--ink-rgb), 0.08); color: var(--ink); }
+.social-icon[aria-expanded="true"] { background: rgba(var(--ink-rgb), 0.1); color: var(--ink); }
+.social-icon svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+
+/* the room drawer lives inside the column */
+.social-rail {
+  position: relative;
+  flex: none;
+  width: auto;
+  max-height: 46%;
+  border-right: 0;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.social-rail[hidden] { display: none !important; }
+.social-rail .social-list { overflow-y: auto; }
+.social-main { min-width: 0; }
+
+/* tighter furniture for a narrow column */
+.social-head { padding: 9px 12px; gap: 8px; flex-wrap: wrap; }
+.social-head h2 { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.social-head .sub { font-size: 10.5px; }
+.social-head .lock { display: none; }
+.social-head .top-btn { height: 26px; padding: 0 9px; font-size: 11.5px; }
+.social-msgs { padding: 12px 12px 6px; gap: 7px; }
+.msg { max-width: 88%; }
+.social-compose { padding: 8px 10px 10px; gap: 6px; }
+.social-compose textarea { min-height: 34px; font-size: 12.5px; }
+.social-compose .top-btn { height: 34px; padding: 0 12px; }
+.social-welcome { padding: 22px 16px; gap: 10px; }
+.social-welcome h3 { font-size: 15px; }
+.social-welcome p { font-size: 11.5px; }
+.social-card { width: 100%; padding: 12px; }
+.social-actions { flex-direction: column; }
+.social-modal { border-radius: 0; }
+.social-invite .qr { width: 150px; height: 150px; }
+
+/* ---------- the call, docked ---------- */
+.social-call {
+  inset: 44px 0 0 0;
+  z-index: 3;
+  border-radius: 0;
+}
+.social-call .call-head { padding: 9px 12px; gap: 8px; flex-wrap: wrap; }
+.social-call .call-title { font-size: 12px; }
+.social-call .call-count { display: none; }
+.social-call .call-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  align-content: start;
+  padding: 8px;
+  gap: 8px;
+  overflow-y: auto;
+}
+.social-call .call-tile,
+.social-call .call-grid:not(.solo) .call-tile {
+  aspect-ratio: 16 / 9;
+  height: auto;
+}
+.social-call .call-grid.has-peers .call-tile[data-tile="self"] {
+  position: absolute;
+  right: 14px;
+  bottom: 74px;
+  width: 34%;
+  z-index: 4;
+}
+.social-call .call-bar { padding: 8px 10px 12px; gap: 8px; flex-wrap: wrap; }
+.social-call .call-btn { height: 34px; padding: 0 12px; font-size: 12px; }
+.social-call .call-badge { font-size: 10px; }
+
+/* …and optional full screen for when the call is the point */
+.social-call.full {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  border-radius: 0;
+}
+.social-call.full .call-grid {
+  grid-template-columns: repeat(var(--call-cols, 1), minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch;
+  padding: 12px;
+}
+.social-call.full .call-grid .call-tile { aspect-ratio: auto; height: 100%; min-height: 0; }
+.social-call.full .call-grid.has-peers .call-tile[data-tile="self"] {
+  position: absolute;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  width: min(240px, 26%);
+  right: 22px;
+  bottom: 88px;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.55);
+  z-index: 4;
+}
+.social-call.full .call-grid.solo { grid-template-columns: minmax(0, 760px); justify-content: center; }
+.social-call.full .call-grid.solo { grid-template-columns: minmax(0, 720px); place-content: center; }
+.social-call.full .call-grid.has-peers .call-tile[data-tile="self"] {
+  width: min(220px, 24%);
+  right: 18px;
+  bottom: 18px;
+}
+.social-call.full .call-count { display: inline; }
+
+.social-hint {
+  padding: 6px 12px 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.social-hint[hidden] { display: none; }
+.social-card .hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--muted-2);
+}
+.social-card .top-btn.accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* the call head never wraps: the title gives way instead */
+.social-call .call-head {
+  flex-wrap: nowrap;
+  gap: 7px;
+  overflow: hidden;
+}
+.social-call .call-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+.social-call .call-time,
+.social-call .call-net,
+.social-call .call-tier { flex: none; }
+.social-call .call-btn.ghost {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border-color: transparent;
+  color: rgba(238, 242, 247, 0.6);
+  font-size: 11px;
+}
+.social-call .call-btn.ghost:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+
+/* in the sidebar the tiles simply stack; floating is for the expanded surface only */
+.social-call:not(.full) .call-grid.has-peers .call-tile[data-tile="self"] {
+  position: static;
+  width: auto;
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.social-call:not(.full) .call-grid { padding-bottom: 6px; }
+.social-call .call-btn.ghost svg {
+  width: 14px; height: 14px;
+  fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* ---------- the player makes room for the sidebar instead of hiding under it ---------- */
+:root { --social-w: 380px; }
+body.social-open #app { width: calc(100% - var(--social-w)); }
+body.social-open #app > video,
+body.social-open #app > canvas { right: 0; }
+body.social-open .social { width: var(--social-w); }
+.social-compose { align-items: center; }
+.social-compose textarea { padding: 7px 10px; }
+
+/* The drawer floats over the conversation instead of squeezing it. */
+.social-rail {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  max-height: min(62%, 460px);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.social-rail[hidden] { display: none !important; }
+.social-rail .social-list { overflow-y: auto; flex: 1; min-height: 0; }
+.social-rail .social-search { flex: none; }
+.social-rail .social-rail-foot { flex: none; }
+
+/* the docked grid: one column, tiles stacked, nothing floating over them */
+.social-call:not(.full) .call-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  align-content: start;
+}
+
+/* In the docked grid a tile is a 16:9 card, never a stretched column. */
+.social-call:not(.full) .call-grid .call-tile {
+  height: auto !important;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+}
+.social-call:not(.full) .call-grid { overflow-y: auto; }
+
+/* The global `video { position:absolute; inset:0 }` applied to call tiles too, which
+   stretched the remote picture down the whole sidebar. A tile's video is a card. */
+.social-call .call-tile video {
+  position: static;
+  inset: auto;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #0d1117;
+}
+
+/* ---------- public playlist indexes in the import sheet ---------- */
+.imp-presets {
+  margin: 2px 0 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.imp-presets-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.imp-presets-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.imp-preset {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.imp-preset:hover { background: rgba(var(--ink-rgb), 0.08); }
+.imp-preset.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.imp-note {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted-2);
+}

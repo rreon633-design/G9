@@ -19,6 +19,7 @@ g9-core = { workspace = true }
 g9-iptv = { workspace = true }
 g9-store = { workspace = true }
 g9-social = { workspace = true }
+g9-hub = { workspace = true }
 g9-sources = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1417,6 +1417,7 @@ version = "0.16.0"
 dependencies = [
  "flate2",
  "g9-core",
+ "g9-hub",
  "g9-iptv",
  "g9-social",
  "g9-sources",

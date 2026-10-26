@@ -3282,6 +3282,54 @@
       maybeAutoSubs();
     });
   });
+  /* Public playlist indexes. G9 ships no channels — these are links to open, community
+     maintained indexes (the iptv-org project) that list free-to-air streams. One click fills
+     the URL field; Import still has to be pressed, so nothing is fetched by accident. */
+  var PLAYLIST_PRESETS = [
+    { label: "Sports", url: "https://iptv-org.github.io/iptv/categories/sports.m3u" },
+    { label: "India", url: "https://iptv-org.github.io/iptv/countries/in.m3u" },
+    { label: "News", url: "https://iptv-org.github.io/iptv/categories/news.m3u" },
+    { label: "Movies", url: "https://iptv-org.github.io/iptv/categories/movies.m3u" },
+    { label: "Documentary", url: "https://iptv-org.github.io/iptv/categories/documentary.m3u" },
+    { label: "Music", url: "https://iptv-org.github.io/iptv/categories/music.m3u" },
+    { label: "Kids", url: "https://iptv-org.github.io/iptv/categories/kids.m3u" },
+    { label: "All countries", url: "https://iptv-org.github.io/iptv/index.m3u" },
+  ];
+
+  function paintPresets() {
+    var row = document.getElementById("imp-presets-row");
+    if (!row) return;
+    row.innerHTML = PLAYLIST_PRESETS.map(function (preset, i) {
+      return (
+        '<button type="button" class="imp-preset" data-preset="' +
+        i +
+        '" title="' +
+        preset.url +
+        '">' +
+        preset.label +
+        "</button>"
+      );
+    }).join("");
+    row.querySelectorAll("[data-preset]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var preset = PLAYLIST_PRESETS[Number(btn.getAttribute("data-preset"))];
+        if (!preset) return;
+        row.querySelectorAll(".imp-preset").forEach(function (b) {
+          b.classList.toggle("on", b === btn);
+        });
+        var name = document.getElementById("imp-name");
+        var url = document.getElementById("imp-url");
+        var text = document.getElementById("imp-text");
+        if (name && (!name.value || name.value === "My playlist")) name.value = preset.label;
+        if (url) url.value = preset.url;
+        if (text) text.value = "";
+        if (url) url.focus();
+        toast(preset.label + " playlist ready — press Import");
+      });
+    });
+  }
+  paintPresets();
+
   document.getElementById("btn-import").addEventListener("click", function () {
     importModal.hidden = false;
     showChrome();
@@ -3632,10 +3680,9 @@
     var open = window.G9Social.toggle();
     var button = document.getElementById("social-btn");
     if (button) button.setAttribute("aria-expanded", open ? "true" : "false");
-    // The film keeps playing; the workspace sits above it and the transport is hidden
-    // underneath so nobody types into a composer while a seek bar has focus.
-    if (open) hideChrome();
-    else showChrome();
+    // The film keeps playing and its chrome stays usable: social docks beside the picture
+    // instead of replacing it, so the transport is never hidden by opening a chat.
+    document.body.classList.toggle("social-open", !!open);
   }
   document.getElementById("social-btn").addEventListener("click", toggleSocial);
   document.getElementById("btn-fav").addEventListener("click", function () {

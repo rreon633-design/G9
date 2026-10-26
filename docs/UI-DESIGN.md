@@ -129,10 +129,34 @@ G9Notify.list() / unread() / readAll() / clear() / paint()
 ## The one sidebar: the social workspace
 
 Social is the exception, and only social. A conversation list is not chrome over a picture — it
-is the page. So `#social` is its own surface (`Ctrl+Shift+S`) with a persistent 264 px rail:
-rooms, people in the room right now, saved contacts, unread counts, a filter box, and your
-identity at the foot. Everything else in G9 is unchanged: the player still has no sidebar, and
-the rail never appears over video.
+is the page. So `#social` is its own surface (`Ctrl+Shift+S`) with a rail: rooms, people in the
+room right now, saved contacts, unread counts, a filter box, and your identity at the foot.
+Everything else in G9 is unchanged: the player still has no sidebar, and the rail never appears
+over video.
+
+### The social sidebar (v0.17.0) — the layout contract
+
+Social is **docked to the right of the player**, never a takeover:
+
+```css
+.social            { position:absolute; inset:40px 0 0 auto; width:var(--social-w,380px);
+                     max-width:62vw; z-index:6 }
+body.social-open #app { width:calc(100% - var(--social-w)) }
+.social-rail       { position:absolute; top:44px; left:0; right:0; z-index:5;
+                     max-height:min(62%,460px) }
+.social-call       { inset:44px 0 0 0 }     /* one 16:9 tile per row, scrolls */
+.social-call.full  { position:fixed; inset:0; z-index:60 }
+```
+
+- **The player makes room.** `body.social-open` narrows `#app`, so the seek bar, the transport
+  and the volume are never covered — the sidebar sits beside the picture, not on it.
+- **The rail is a drawer.** It floats over the transcript (`position:absolute`), so opening the
+  room list never reflows the conversation, and picking a room closes it again.
+- **Width is yours.** The grip drags `--social-w` between 288 and 720 px; the choice is kept.
+  Closed buttons are 26 px ghost icon buttons so the call head fits on one line at 288 px.
+- **Tiles are 16:9 cards** in the dock — the app-level `video { position:absolute; inset:0 }`
+  rule is reset to `position:static` for `.call-tile video`; without that reset the pixels are
+  painted at the wrong size even when the frame geometry is right.
 
 The call overlay inside it is a *cinema* surface: `#0a0c11` in every theme, because a call is
 picture, and light chrome around a dark picture is how a video call starts to look cheap.

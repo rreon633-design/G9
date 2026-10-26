@@ -76,6 +76,7 @@ pub fn run() {
             social::social_contacts,
             social::social_devices,
             social::social_data_dir,
+            social::social_hub_start,
             commands::find_subtitles,
             commands::apply_subtitle,
             commands::update_check,

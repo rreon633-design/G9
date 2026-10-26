@@ -509,3 +509,43 @@ async fn the_roster_survives_a_reconnect() {
     assert_eq!(call[0]["device"], ada.device);
     assert_eq!(call[0]["video"], true);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_hub_can_be_started_in_process_and_is_immediately_usable() {
+    let addr = g9_hub::spawn_local(0).await.expect("hub starts");
+    let base = format!("http://{addr}");
+    for _ in 0..40 {
+        if get(&base, "/health").await.0 == 200 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    let (status, body) = get(&base, "/health").await;
+    assert_eq!(status, 200);
+    assert_eq!(body["ok"], true);
+
+    // And it is a real hub: a room can be created on it straight away.
+    let (status, created) = post(
+        &base,
+        "/v1/rooms",
+        serde_json::json!({ "name": "In process", "seats": 9 }),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert!(!created["room"].as_str().unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_second_hub_takes_another_port_instead_of_failing() {
+    let first = g9_hub::spawn_local(0).await.expect("first hub");
+    let second = g9_hub::spawn_local(first.port()).await.expect("second hub");
+    assert_ne!(first, second, "the busy port was reused");
+    let base = format!("http://{second}");
+    for _ in 0..40 {
+        if get(&base, "/health").await.0 == 200 {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    panic!("the fallback hub never answered");
+}

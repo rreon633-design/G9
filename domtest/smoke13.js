@@ -1,4 +1,4 @@
-/* Smoke test for G9 Social v0.16.0 — latency, media tuning and coming back from a drop.
+/* Smoke test for G9 Social v0.17.0 — latency, media tuning and coming back from a drop.
  *
  * jsdom has no WebRTC, no camera and no WebSocket, so everything below is a fake that
  * records what the app asks for. That is the point: this test asserts the *decisions*
@@ -34,6 +34,8 @@ const roomKeyBytes = crypto.randomBytes(32);
 
 /* ------------------------------------------------------------------ bridge */
 
+let hubStarts = 0;
+let failFetch = 0;
 const db = {
   identity: { id: "g9:AAAAAAAAAAAAAAAAAAAAAAAAAAA", public: "pk", name: "Ada" },
   threads: [],
@@ -82,6 +84,9 @@ window.__TAURI__ = {
           };
         case "social_qr":
           return "<svg></svg>";
+        case "social_hub_start":
+          hubStarts += 1;
+          return { url: "http://127.0.0.1:8787", share_url: "http://192.168.1.20:8787", port: 8787, started: true };
         default:
           return null;
       }
@@ -91,6 +96,12 @@ window.__TAURI__ = {
 
 window.fetch = async (url) => {
   const text = String(url);
+  if (failFetch > 0) {
+    failFetch -= 1;
+    const err = new TypeError("Failed to fetch");
+    err.name = "TypeError";
+    throw err;
+  }
   let body = {};
   if (text.endsWith("/v1/rooms")) body = { room: "ROOM1", token: "owner-token", name: "Ada's room", seats: 9 };
   else if (text.endsWith("/invites")) body = { invite: "invite-token", exp: 9999999999 };
@@ -481,6 +492,88 @@ async function run() {
     errors.push("the buffered arrival never became a connection");
   }
   await G9.endCall();
+
+  /* ---- 15. a fresh install with no server: Create must become the server ---- */
+  G9.close();
+  S.threads = [];
+  S.active = null;
+  S.invite = null;
+  S.errors = [];
+  S.room = null;
+  S.socket = null;
+  G9.open();
+  await tick(40);
+  if (!$("social-create")) errors.push("the empty state offers no way to create a room");
+  failFetch = 1;
+  $("social-hub").value = "http://127.0.0.1:8787";
+  click($("social-create"));
+  await tick(400);
+  if (!hubStarts) errors.push("with no hub running, G9 did not start one");
+  if (!S.room) errors.push("the room was never opened on the hub that G9 started");
+  if (!S.pendingRoom && !S.invite) errors.push("no invite was made after the local hub came up");
+  if (S.invite && String(S.invite.link).indexOf("127.0.0.1") >= 0 && hubStarts) {
+    // The invite must be reachable from another device, not just from this one.
+    const shared = S.room && S.room.hub;
+    if (shared && String(shared).indexOf("127.0.0.1") >= 0) {
+      errors.push("the invite carries a loopback address: another device could never join");
+    }
+  }
+  if (S.errors.length && /Failed to fetch/i.test(S.errors[S.errors.length - 1])) {
+    errors.push("the user was shown 'Failed to fetch' instead of an explanation");
+  }
+
+  /* ---- 16. a real failure is still explained in words ---- */
+  G9.close();
+  S.room = null;
+  S.socket = null;
+  S.active = null;
+  S.threads = [];
+  S.invite = null;
+  S.errors = [];
+  G9.open();
+  await tick(30);
+  if (!$("social-create")) errors.push("the empty state did not come back");
+  failFetch = 1;
+  hubStarts = 0;
+  window.__TAURI__.core.invoke = ((orig) => async (cmd, args) => {
+    if (cmd === "social_hub_start") throw new Error("starting a hub needs the desktop app");
+    return orig(cmd, args);
+  })(window.__TAURI__.core.invoke);
+  click($("social-create"));
+  await tick(600);
+  const shown = S.errors[S.errors.length - 1] || $("social-errors") && $("social-errors").textContent || "";
+  if (!/No hub is answering|desktop app/i.test(shown)) {
+    errors.push("a dead hub produced an unhelpful message: " + shown);
+  }
+
+  /* ---- 17. the panel is a sidebar, and its controls survive being reopened ---- */
+  G9.close();
+  S.room = null;
+  S.socket = null;
+  G9.open();
+  await tick(40);
+  const host = $("social");
+  const box = host.getBoundingClientRect();
+  if (box.width > 720) errors.push("the social panel is not a sidebar: " + Math.round(box.width) + "px wide");
+  if (!$("social-create")) errors.push("the empty state is missing after reopening");
+  const rail = $("social-rail");
+  if (!rail || !rail.hidden) errors.push("the room drawer is open when it should start closed");
+  click($("social-rooms"));
+  await tick(40);
+  if (rail.hidden) errors.push("the room drawer button did nothing");
+  click($("social-rooms"));
+  await tick(20);
+  if (!rail.hidden) errors.push("the room drawer would not close again");
+  G9.close();
+  G9.open();
+  await tick(40);
+  if (!$("social-rooms")) errors.push("reopening lost the panel shell");
+  click($("social-rooms"));
+  await tick(40);
+  if ($("social-rail").hidden) errors.push("the drawer went dead after closing and reopening");
+  click($("social-close"));
+  await tick(20);
+  if (!$("social").hidden) errors.push("the close button did nothing");
 
   const real = errors.filter((e) => !/Reconnecting|no socket/i.test(e));
   if (real.length) {

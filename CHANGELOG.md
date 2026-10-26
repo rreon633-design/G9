@@ -7,6 +7,73 @@ G9 uses `MAJOR.MINOR.PATCH` and the Windows installers are always built from a `
 
 - Nothing yet.
 
+## [0.17.0] — 2026-10-26
+
+Social stops being a takeover and becomes a **sidebar you keep open while you watch**, chat works
+on an install where nothing is running yet, and the playlist sheet now carries the public
+indexes that were asked for — as links, never as bundled channels.
+
+### Social lives in a sidebar
+
+- **Chat and the call are docked to the right**, `380 px` by default and resizable by its grip
+  (`288–720 px`, remembered between runs). The player does not sit underneath it: the app
+  narrows to `calc(100% - sidebar)`, so the transport, the volume and the seek bar stay visible
+  and usable while you talk. Only the social surface gets a sidebar; the player chrome is still
+  overlays only.
+- **The room drawer floats over the transcript** instead of pushing it down — one click on the
+  rail button opens the list of rooms (with who is in them and unread counts), picking one
+  closes it again.
+- **The camera tiles are 16:9 cards inside the dock**, one per row, and the call head never
+  wraps: the peer count, the latency, the sending tier and the Expand button fit on one line at
+  `288 px`. Expand still gives the full grid (`1 / 2 / 3` columns by call size, self view as a
+  corner picture-in-picture) and Shrink brings it back to the dock.
+- **Fixed a class of bug, not an instance:** the panel used to rebuild its own DOM every time it
+  was opened, which silently detached the close button, the room drawer, the filter and the
+  resize grip — the panel worked once and then went dead. `mount()` is now idempotent and the
+  shell is wired once (`wireShell()`), so close → reopen → drawer → close works indefinitely.
+- **Fixed the global `video` rule leaking into the call**: `video { position:absolute; inset:0 }`
+  is right for the player and wrong for a call tile, so the tile media now resets to
+  `position:static` with `object-fit:cover`. The frame geometry was already correct — the pixels
+  were simply being painted at the wrong size.
+
+### Chat that works with nothing else running
+
+- **Room creation starts its own hub.** "Create a room" on a fresh install used to fail with
+  `Failed to fetch` because there was no hub to talk to. Now `social_hub_start` probes `/health`,
+  spawns `g9-hub` on the requested port (falling back to a free one), and returns the room URL.
+  Rooms are then created against the **share URL** — the LAN address a guest can actually reach,
+  never `127.0.0.1`.
+- **Failures are sentences now.** No hub, a dead hub and a refused invite each say what happened
+  and what to do ("no hub answered at … — press Start hub", "the host's hub is not answering;
+  the invite is still valid"), instead of an unhandled fetch error.
+
+### Public playlist indexes in the import sheet
+
+- **Eight one-click presets** in *Add playlist / IPTV…*: **Sports**, **India**, News, Movies,
+  Documentary, Music, Kids and All countries, from the open [iptv-org](https://github.com/iptv-org/iptv)
+  indexes (`categories/sports.m3u`, `countries/in.m3u`, …). Choosing one fills the name and the
+  URL field and marks the chip; **Import** still has to be pressed, so nothing is fetched by
+  clicking, and the URL stays editable.
+- **The sheet says what it is**: *"G9 ships no channels. These are open indexes of publicly
+  listed streams; a link that stops working is a link whose owner stopped streaming it."* The
+  sports index lists 800-odd free-to-air feeds — it has no Sky, DAZN, ESPN or other paid
+  carriage, and availability changes weekly. **Kushi TV** is Telugu on Measat 3d (4080 V,
+  MPEG-4 SD, **Irdeto**-encrypted); there is no reliable free stream of it, and G9 will not
+  pretend otherwise. The National Geographic feeds that circulate as bare `.m3u8` links can be
+  pasted into the same URL field — they are single channels, not a playlist.
+- **Merging is the documented pattern**: import each source as its own playlist, or concatenate
+  several `#EXTM3U` files into one master `.m3u` (dedupe by URL) and import that once — one
+  playlist, one channel list, every group in the TV sheet.
+
+### Under the hood
+
+- `Cargo.toml` now declares `g9-hub` in `[workspace.dependencies]` — the app crate inherited a
+  workspace dependency the workspace never declared, which broke `cargo fmt`, `clippy` and any
+  non-Tauri workspace build from a clean checkout.
+- Ninth smoke suite extended: the sidebar width, the drawer opening, closing and surviving a
+  close/reopen, the close button, and the preset chips (one marked at a time, second replaces
+  first, nothing fetched by choosing).
+
 ## [0.16.0] — 2026-10-26
 
 Social, second release: the same loop, made quick and honest about its own speed. A three-way
