@@ -1413,7 +1413,7 @@ dependencies = [
 
 [[package]]
 name = "g9"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "flate2",
  "g9-core",
@@ -1433,13 +1433,14 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-notification",
  "thiserror 2.0.21",
+ "tokio",
  "url",
  "zip",
 ]
 
 [[package]]
 name = "g9-core"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1448,7 +1449,7 @@ dependencies = [
 
 [[package]]
 name = "g9-hub"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "axum",
  "futures-util",
@@ -1462,7 +1463,7 @@ dependencies = [
 
 [[package]]
 name = "g9-iptv"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "g9-core",
  "serde",
@@ -1472,7 +1473,7 @@ dependencies = [
 
 [[package]]
 name = "g9-social"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -1489,7 +1490,7 @@ dependencies = [
 
 [[package]]
 name = "g9-sources"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1498,7 +1499,7 @@ dependencies = [
 
 [[package]]
 name = "g9-store"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "g9-core",
  "g9-iptv",
